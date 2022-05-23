@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "allowSyntheticDefaultImports": true,
+        "module": "commonjs",
+        "lib": [
+            "ES2016"
+        ],
+        "target": "es6",
+        "declaration": true,
+        "noImplicitAny": true,
+        "sourceMap": true,
+        "outDir": "./lib",
+        "moduleResolution": "node",
+        "esModuleInterop": true
+    },
+    "include": [
+        "./src/*"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
