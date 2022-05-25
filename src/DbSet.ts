@@ -227,7 +227,12 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         return result;
     }
 
-    match(items:IDbRecordBase[]) {
+    /**
+     * Matches items with the same document type
+     * @param items 
+     * @returns Entity array
+     */
+    match(items: IDbRecordBase[]) {
         return items.filter(w => w.DocumentType === this.DocumentType) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
     }
 
