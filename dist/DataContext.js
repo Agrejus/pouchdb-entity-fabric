@@ -13,7 +13,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DataContext = void 0;
-/// <reference path="./DataContext.d.ts" />
 const pouchdb_1 = __importDefault(require("pouchdb"));
 const DbSet_1 = require("./DbSet");
 const pouchdb_find_1 = __importDefault(require("pouchdb-find"));

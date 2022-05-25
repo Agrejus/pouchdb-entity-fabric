@@ -1,8 +1,8 @@
-/// <reference path="../src/DataContext.d.ts" />
 /// <reference types="pouchdb-find" />
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
+import { IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IdKeys } from './typings';
 export declare class DataContext<TDocumentType extends string> implements IDataContext {
     protected _db: PouchDB.Database;
     protected _removals: IDbRecordBase[];
