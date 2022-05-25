@@ -23,7 +23,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     /**
      * Gets all data from the data store
      */
-     protected async getAllData(documentType?: TDocumentType) {
+    protected async getAllData(documentType?: TDocumentType) {
 
         const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
             selector: {
@@ -40,23 +40,33 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         return result.docs as IDbRecordBase[];
     }
 
+    async getAllDocs() {
+        return this.getAllData();
+    }
+
     /**
      * Gets an instance of IDataContext to be used with DbSets
      */
-     protected getContext() { return this; }
+    protected getContext() { return this; }
 
     /**
      * Inserts entity into the data store, this is used by DbSet
      * @param entity 
      * @param onComplete 
      */
-     protected async insertEntity(entity: IDbAdditionRecord<any>, onComplete: (result: IDbRecord<any>) => void) {
+    protected async insertEntity(entity: IDbAdditionRecord<any>, onComplete?: (result: IDbRecord<any>) => void) {
         const response = await this._db.post(entity);
         const result: IDbRecord<any> = entity as any;
 
         (result as any)._rev = response.rev;
 
-        onComplete(result);
+        if (!result._id) {
+            (result as any)._id = response.id;
+        }
+
+        if (onComplete != null) {
+            onComplete(result);
+        }
 
         return response.ok;
     }
@@ -66,7 +76,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * @param entity 
      * @param onComplete 
      */
-     protected async updateEntity(entity: IDbRecordBase, onComplete: (result: IDbRecord<any>) => void): Promise<boolean> {
+    protected async updateEntity(entity: IDbRecordBase, onComplete: (result: IDbRecord<any>) => void): Promise<boolean> {
 
         try {
             const response = await this._db.put(entity);
@@ -98,9 +108,9 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * Does a bulk operation in the data store
      * @param entities 
      */
-     protected async bulkDocs(entities: IDbRecordBase[]): Promise<IBulkDocsResponse[]> {
+    protected async bulkDocs(entities: IDbRecordBase[]): Promise<IBulkDocsResponse[]> {
 
-        const response = await  this._db.bulkDocs(entities);
+        const response = await this._db.bulkDocs(entities);
 
         return response.map(w => {
 
@@ -129,7 +139,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * Remove entity in the data store, this is used by DbSet
      * @param entity 
      */
-     protected async removeEntity(entity: IDbRecordBase) {
+    protected async removeEntity(entity: IDbRecordBase) {
         const response = await this._db.remove(entity as any);
         return response.ok;
     }
@@ -138,7 +148,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * Remove entity in the data store, this is used by DbSet
      * @param entity 
      */
-     protected async removeEntityById(id: string) {
+    protected async removeEntityById(id: string) {
         const entity = await this._db.get(id);
         const response = await this._db.remove(entity);
         return response.ok;
@@ -148,16 +158,12 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * Get entity from the data store, this is used by DbSet
      * @param id 
      */
-     protected async getEntity(id: string) {
+    protected async getEntity(id: string) {
         try {
             return await this._db.get<IDbRecordBase>(id);
         } catch (e) {
             return null
         }
-    }
-
-    private _addEntity(entity: IDbRecordBase) {
-        this._additions.push(entity);
     }
 
     /**
@@ -173,6 +179,43 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         }
     }
 
+    /**
+     * Used by the context api
+     * @param data 
+     * @param matcher 
+     */
+     private _detach(data: IDbRecordBase[], matcher: (first: IDbRecordBase, second: IDbRecordBase) => boolean) {
+
+        const result = [];
+        for (let i = 0; i < data.length; i++) {
+            const detachment = data[i];
+            const index = this._attachments.findIndex(w => matcher(detachment, w));
+
+            if (index === -1) {
+                continue;
+            }
+
+            const clone: IDbRecordBase = JSON.parse(JSON.stringify(this._attachments[index]));
+
+            this._attachments[index] = clone;
+
+            result.push(clone);
+        }
+
+        return result;
+    }
+
+    /**
+     * Used by the context api
+     * @param data 
+     */
+    private _sendData(data: IDbRecordBase[]) {
+        this._attachments = [...this._attachments, ...data].filter((w, i, self) => self.indexOf(w) === i);
+    }
+
+    /**
+     * Used by the context api
+     */
     private _getTrackedData() {
         return {
             add: this._additions,
@@ -182,8 +225,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         } as ITrackedData;
     }
 
-    private async reinitialize() {
-
+    private reinitialize() {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
@@ -221,39 +263,6 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     }
 
     /**
-     * Used via "reflection" by DbSet to send data from the DbSet to the context
-     * @param data 
-     */
-    private _sendData(data: IDbRecordBase[]) {
-        this._attachments = [...this._attachments, ...data].filter((w, i, self) => self.indexOf(w) === i);
-    }
-
-    /**
-     * Used via "reflection" by DbSet to detach a reference from a DbSet result
-     * @param data 
-     */
-    private _detach(data: IDbRecordBase[], matcher: (first: IDbRecordBase, second: IDbRecordBase) => boolean) {
-
-        const result = [];
-        for (let i = 0; i < data.length; i++) {
-            const detachment = data[i];
-            const index = this._attachments.findIndex(w => matcher(detachment, w));
-
-            if (index === -1) {
-                continue;
-            }
-
-            const clone: IDbRecordBase = JSON.parse(JSON.stringify(this._attachments[index]));
-
-            this._attachments[index] = clone;
-
-            result.push(clone);
-        }
-
-        return result;
-    }
-
-    /**
      * Persist changes to the underlying data store
      * @returns number
      */
@@ -274,7 +283,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
                 const pristineKeys = Object.keys(indexableEntity[PRISTINE_ENTITY_KEY]);
 
-                for(let pristineKey of pristineKeys) {
+                for (let pristineKey of pristineKeys) {
                     if (indexableEntity[PRISTINE_ENTITY_KEY][pristineKey] != indexableEntity[pristineKey]) {
                         return true
                     }
@@ -290,7 +299,9 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
                 return indexableEntity as IDbRecordBase;
             });
 
-            const modifications = [...updated, ...add, ...remove.map(w => ({ ...w, _deleted: true }))];
+            const addsWithIds = add.filter(w => !!w._id);
+            const addsWithoutIds = add.filter(w => w._id == null);
+            const modifications = [...updated, ...addsWithIds, ...remove.map(w => ({ ...w, _deleted: true }))];
             const modificationResult = await this.bulkDocs(modifications);
             const successfulModifications = modificationResult.filter(w => w.ok === true);
 
@@ -303,15 +314,28 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
                 }
             }
 
+            const additionsWithGeneratedIds = await Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)))
             const removalsById = await Promise.all(removeById.map(w => this.removeEntityById(w)));
 
-            await this.reinitialize()
+            this.reinitialize()
 
-            return [...removalsById, ...modificationResult.map(w => w.ok)].filter(w => w === true).length;
+            return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => w.ok)].filter(w => w === true).length;
         } catch (e) {
-            await this.reinitialize()
+            this.reinitialize()
             throw e;
         }
+    }
+
+    protected addEntityWithoutId(entity: IDbRecordBase) {
+        return new Promise<IBulkDocsResponse>(async (resolve, reject) => {
+            try {
+                const result = await this.insertEntity(entity);
+                resolve({ ok: result, id: "", rev: "" })
+            } catch (e) {
+                console.error(e);
+                reject({ ok: false, id: "", rev: "" })
+            }
+        })
     }
 
     protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>> {

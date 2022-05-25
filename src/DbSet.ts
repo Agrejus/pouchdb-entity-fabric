@@ -76,7 +76,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
             if (ids.includes(id)) {
                 throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
             }
-    
+
             (addItem as any)._id = id;
         }
 
@@ -88,6 +88,11 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
     }
 
     private getKeyFromEntity(entity: TEntity) {
+
+        if (this._idKeys.length === 0) {
+            return null;
+        }
+
         const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => (entity as any)[w])
         return [this.DocumentType, ...keyData].join("/");
     }
@@ -138,7 +143,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * Remove all entities from underlying Data Context, saveChanges must be called to persist these items to the store
      */
     async removeAll() {
-        const items = await this.toList();
+        const items = await this.all();
         await this.removeRange(items);
     }
 
@@ -165,19 +170,11 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         await Promise.all(ids.map(w => this.removeById(w)))
     }
 
-    /**
-     * Sends data over to the underlying data context
-     * @param data 
-     */
-    private sendData(data: IDbRecordBase[]) {
-        (this._context as any)["_sendData"](data);
+    private detachItems(data: AttachedEntity<TEntity, TDocumentType, TEntityType>[], matcher: (first: AttachedEntity<TEntity, TDocumentType, TEntityType>, second: AttachedEntity<TEntity, TDocumentType, TEntityType>) => boolean) {
+        return this._api.detach(data, matcher);
     }
 
-    private detachItems(data: TEntity[], matcher: (first: TEntity, second: TEntity) => boolean) {
-        return (this._context as any)["_detach"](data, matcher) as TEntity[];
-    }
-
-    private makeTrackable<T extends Object>(entity: T) : T {
+    private makeTrackable<T extends Object>(entity: T): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
@@ -207,10 +204,10 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         return data.map(w => this.makeTrackable(w) as AttachedEntity<TEntity, TDocumentType, TEntityType>);
     }
 
-    async toList() {
+    async all() {
         const result = await this._all();
 
-        this.sendData(result);
+        this._api.send(result)
 
         return result;
     }
@@ -225,9 +222,13 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
 
         const result = [...data].filter(selector);
 
-        this.sendData(result);
+        this._api.send(result)
 
         return result;
+    }
+
+    match(items:IDbRecordBase[]) {
+        return items.filter(w => w.DocumentType === this.DocumentType) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
     }
 
     /**
@@ -235,12 +236,12 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * @param selector 
      * @returns Entity
      */
-    async firstOrDefault(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean) {
+    async find(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean) {
         const data = await this._all();
         const result = [...data].find(selector);
 
         if (result) {
-            this.sendData([result]);
+            this._api.send([result])
         }
 
         return result;

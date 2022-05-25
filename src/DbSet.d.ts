@@ -3,12 +3,13 @@ declare interface IDbSet<TDocumentType extends string, TEntity, TEntityType exte
     addRange(entities: TEntity[]): Promise<void>;
     remove(entity: TEntity) : Promise<void>;
     removeRange(entities: TEntity[]) : Promise<void>;
-    toList(): Promise<(TEntityType & TEntity)[]>;
+    all(): Promise<(TEntityType & TEntity)[]>;
     filter(selector: (entity: (TEntityType & TEntity), index?: number, array?: (TEntityType & TEntity)[]) => boolean): Promise<(TEntityType & TEntity)[]>;
-    firstOrDefault(selector: (entity: (TEntityType & TEntity), index?: number, array?: (TEntityType & TEntity)[]) => boolean) : Promise<(TEntityType & TEntity) | undefined>
+    find(selector: (entity: (TEntityType & TEntity), index?: number, array?: (TEntityType & TEntity)[]) => boolean) : Promise<(TEntityType & TEntity) | undefined>
     onBeforeAdd(action: (entity: TEntity & TEntityType) => void): void;
     isMatch(first: TEntity, second: TEntity): boolean;
     detach(entities: TEntity[]): (TEntity & TEntityType)[];
+    match(entities:IDbRecordBase[]): (TEntityType & TEntity)[]
 }
 
 declare type KeyOf<T> = keyof T;

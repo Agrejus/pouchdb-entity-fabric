@@ -34,6 +34,7 @@ declare type DataContextInitialized = boolean | IDbSetInitialized
 
 declare interface IDataContext {
     saveChanges(): Promise<number>;
+    getAllDocs(): Promise<IDbRecordBase[]>
 }
 
 declare interface ITrackedData {
