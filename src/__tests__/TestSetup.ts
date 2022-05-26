@@ -1,3 +1,4 @@
+/// <reference path="./Entities.d.ts" />
 import { DataContext } from '../DataContext'; 
 
 export enum DocumentTypes {
