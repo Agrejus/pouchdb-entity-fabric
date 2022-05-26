@@ -13,10 +13,11 @@
         "outDir": "./dist",
         "moduleResolution": "node",
         "esModuleInterop": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "baseUrl": "../dist"
     },
     "include": [
-        "./src/*"
+        "./src/index.ts"
     ],
     "exclude": [
         "node_modules",

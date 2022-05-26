@@ -1,7 +1,7 @@
-/// <reference path="./DataContext.d.ts" />
 import PouchDB from 'pouchdb';
 import { DbSet, IIndexableEntity, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
+import { IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IdKeys, ITrackedData } from './typings';
 
 PouchDB.plugin(findAdapter);
 

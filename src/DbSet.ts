@@ -1,5 +1,4 @@
-/// <reference path="./DataContext.d.ts" />
-/// <reference path="./DbSet.d.ts" />
+import { IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys } from './typings';
 
 export type AttachedEntity<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = TEntityType & TEntity;
 
