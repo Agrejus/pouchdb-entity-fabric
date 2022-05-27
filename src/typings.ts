@@ -49,10 +49,6 @@ export interface IBulkDocsResponse {
     error?: string;
 }
 
-export interface IDbSetInitialized {
-    [key: string]: boolean
-}
-
 export interface IDataContext {
     saveChanges(): Promise<number>;
     getAllDocs(): Promise<IDbRecordBase[]>
