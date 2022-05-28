@@ -6,14 +6,27 @@ export interface IDbSet<TDocumentType extends string, TEntity, TEntityType exten
     all(): Promise<(TEntityType & TEntity)[]>;
     filter(selector: (entity: (TEntityType & TEntity), index?: number, array?: (TEntityType & TEntity)[]) => boolean): Promise<(TEntityType & TEntity)[]>;
     find(selector: (entity: (TEntityType & TEntity), index?: number, array?: (TEntityType & TEntity)[]) => boolean) : Promise<(TEntityType & TEntity) | undefined>
-    onBeforeAdd(action: (entity: TEntity & TEntityType) => void): void;
     isMatch(first: TEntity, second: TEntity): boolean;
-    detach(entities: TEntity[]): (TEntity & TEntityType)[];
-    match(entities:IDbRecordBase[]): (TEntityType & TEntity)[]
+    detach(...entities: TEntity[]): (TEntity & TEntityType)[];
+    attach(...entites: (TEntityType & TEntity)[]): void;
+    match(entities:IDbRecordBase[]): (TEntityType & TEntity)[];
+    on(event: DbSetEvent, callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
 }
+
+export type DataContextEventCallback<TDocumentType> = ({ DocumentType }: { DocumentType: TDocumentType }) => void;
+export type DataContextEvent = 'entity-created' | 'entity-removed' | 'entity-updated';
+
+export type DbSetEventCallback<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void
+export type DbSetEvent = "add" | "remove";
 
 export type KeyOf<T> = keyof T;
 export type IdKeys<T> = KeyOf<T>[];
+
+export type AttachedEntity<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = TEntityType & TEntity;
+
+export interface IIndexableEntity {
+    [key: string]: any;
+}
 
 export interface IDbSetBase<TDocumentType extends string> {
     get DocumentType(): TDocumentType;
@@ -51,7 +64,7 @@ export interface IBulkDocsResponse {
 
 export interface IDataContext {
     saveChanges(): Promise<number>;
-    getAllDocs(): Promise<IDbRecordBase[]>
+    getAllDocs(): Promise<IDbRecordBase[]>;
 }
 
 export interface ITrackedData {

@@ -175,14 +175,14 @@ describe('DataContext Tests', () => {
         expect(all.length).toBe(3);
     });
 
-    it('onBeforeAdd should set sync status', async () => {
+    it('should call add event and should set sync status', async () => {
 
         const context = createContext();
         await seedDb(context, {
             notes: []
         });
 
-        context.notes.onBeforeAdd(entity => {
+        context.notes.on("add", entity => {
             (entity as any)._id = "ONE";
         })
 
@@ -368,7 +368,7 @@ describe('DataContext Tests', () => {
 
         const item = await context.notes.find(w => w.userId === "jdemeuse");
 
-        context.notes.detach([item]);
+        context.notes.detach(item);
 
         item.contents = "Updated";
 
@@ -378,4 +378,28 @@ describe('DataContext Tests', () => {
 
         expect(updated.contents).toBe("Note One");
     });
+
+    it('should attach entities to context', async () => {
+
+        const context = createContext();
+        await seedDb(context, {
+            contacts: [{ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }]
+        });
+
+        const contact = await context.contacts.find(w => w.address === "1234 Test St");
+
+        context.contacts.detach(contact);
+
+        context.contacts.attach(contact);
+
+        contact.phone = "222-222-2222";
+
+        await context.saveChanges();
+
+        const updated = await context.contacts.find(w => w.address === "1234 Test St");
+
+        expect(updated.phone).toBe("222-222-2222");
+    });
+
+    // test on functions too
 });

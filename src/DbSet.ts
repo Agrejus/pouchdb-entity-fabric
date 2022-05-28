@@ -1,10 +1,4 @@
-import { IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys } from './typings';
-
-export type AttachedEntity<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = TEntityType & TEntity;
-
-export interface IIndexableEntity {
-    [key: string]: any;
-}
+import { AttachedEntity, DbSetEvent, DbSetEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity } from './typings';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -24,7 +18,10 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
-    private _onBeforeAdd: ((entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void) | null = null;
+    private _events: { [key in DbSetEvent]: DbSetEventCallback<TEntity, TDocumentType, TEntityType>[] } = { 
+        "add": [],
+        "remove": []
+     }
 
     /**
      * Constructor
@@ -37,17 +34,6 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         this._context = context as IPrivateContext<TDocumentType>;
         this._idKeys = idKeys;
         this._api = this._context._getApi();
-    }
-
-    /**
-     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async attach(entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) {
-        const data = this._api.getTrackedData();
-        const { attach } = data;
-
-        attach.push(entity);
     }
 
     /**
@@ -79,9 +65,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
             (addItem as any)._id = id;
         }
 
-        if (this._onBeforeAdd != null) {
-            this._onBeforeAdd(entity as any)
-        }
+        this._events["add"].forEach(w => w(entity as any));
 
         add.push(addItem);
     }
@@ -92,16 +76,21 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
             return null;
         }
 
-        const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => (entity as any)[w])
+        const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => {
+
+            const value = (entity as any)[w];
+
+            if (value instanceof Date) {
+                return value.toISOString();
+            }
+
+            return value
+        })
         return [this.DocumentType, ...keyData].join("/");
     }
 
     isMatch(first: TEntity, second: TEntity) {
         return this.getKeyFromEntity(first) === this.getKeyFromEntity(second);
-    }
-
-    onBeforeAdd(action: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void) {
-        this._onBeforeAdd = action;
     }
 
     /**
@@ -126,6 +115,8 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         if (ids.includes(indexableEntity._id)) {
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`)
         }
+
+        this._events["remove"].forEach(w => w(entity as any));
 
         remove.push(entity as any);
     }
@@ -255,7 +246,22 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * Detaches specified array of items from the context
      * @param entities 
      */
-    detach(entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
+    detach(...entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
         return this.detachItems(entities, this.isMatch.bind(this)) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
+    }
+
+    /**
+     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * @param entites 
+     */
+     attach(...entites: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
+        const data = this._api.getTrackedData();
+        const { attach } = data;
+
+        data.attach = [...attach, ...entites];
+    }
+
+    on(event: DbSetEvent, callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>) {
+        this._events[event].push(callback);
     }
 }
