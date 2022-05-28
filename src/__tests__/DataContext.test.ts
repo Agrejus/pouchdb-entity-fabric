@@ -300,6 +300,22 @@ describe('DataContext Tests', () => {
     it('should change entity by reference', async () => {
 
         const context = createContext();
+        const note: INote = { contents: "New Note", createdDate: new Date(), userId: "jdemeuse" };
+        await context.notes.add(note);
+
+        await context.saveChanges();
+
+        expect(note.contents).toBe("New Note");
+        note.contents = "Updated";
+        await context.saveChanges();
+
+        expect(note.contents).toBe("Updated");
+        expect(context.hasPendingChanges()).toBe(false);
+    });
+
+    it('should change entity by reference after adding', async () => {
+
+        const context = createContext();
         await seedDb(context, {
             notes: [{ contents: "Note One", createdDate: new Date(), userId: "jdemeuse" }]
         });
@@ -313,6 +329,7 @@ describe('DataContext Tests', () => {
         const updated = await context.notes.find(w => w.userId === "jdemeuse");
 
         expect(updated.contents).toBe("Updated");
+        expect(context.hasPendingChanges()).toBe(false);
     });
 
     it('should show no changes when property is the same as start', async () => {
@@ -386,7 +403,10 @@ describe('DataContext Tests', () => {
             contacts: [{ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }]
         });
 
-        const contact = await context.contacts.find(w => w.address === "1234 Test St");
+        //const contact = await context.contacts.find(w => w.address === "1234 Test St");
+        const contact = await context.contacts.find(function(w) {
+            return w.address === "1234 Test St";
+        });
 
         context.contacts.detach(contact);
 
@@ -401,5 +421,154 @@ describe('DataContext Tests', () => {
         expect(updated.phone).toBe("222-222-2222");
     });
 
-    // test on functions too
+    it('should call entity created event', async () => {
+
+        const context = createContext();
+
+        const onEntityCreated = jest.fn();
+        context.on("entity-created", onEntityCreated);
+
+        await context.notes.addRange([
+            { contents: "contents", createdDate: new Date(), userId: 'jdemeuse' }
+        ]);
+
+        await context.contacts.addRange([
+            { address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }
+        ]);
+
+        await context.books.addRange([
+            { author: "James DeMeuse", rejectedCount: 1 }
+        ]);
+
+        await context.saveChanges();
+
+        expect(onEntityCreated).toHaveBeenCalledTimes(3);
+    });
+
+    it('should call entity removed event', async () => {
+
+        const context = createContext();
+        const onEntityRemoved = jest.fn();
+        context.on("entity-removed", onEntityRemoved);
+        await seedDb(context, {
+            notes: [
+                { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" },
+                { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }
+            ]
+        });
+
+        const itemToRemove = await context.notes.all();
+
+        await context.notes.removeRange(itemToRemove)
+
+        await context.saveChanges();
+
+        expect(onEntityRemoved).toHaveBeenCalledTimes(2)
+    });
+
+    it('should call entity updated event', async () => {
+
+        const context = createContext();
+        const onEntityUpdated = jest.fn();
+        context.on("entity-updated", onEntityUpdated);
+        await seedDb(context, {
+            notes: [
+                { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" },
+                { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }
+            ]
+        });
+
+        const notes = await context.notes.all();
+        
+        for(let note of notes) {
+            note.userId = "changed";
+        }
+
+        await context.saveChanges();
+
+        expect(onEntityUpdated).toHaveBeenCalledTimes(2)
+    });
+
+    it('should call entity remove event on dbset when remove range', async () => {
+
+        const context = createContext();
+        const onEntityRemove = jest.fn();
+        context.notes.on("remove", onEntityRemove)
+
+        await seedDb(context, {
+            notes: [
+                { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" },
+                { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }
+            ]
+        });
+
+        const itemToRemove = await context.notes.all();
+
+        await context.notes.removeRange(itemToRemove)
+
+
+        expect(onEntityRemove).toHaveBeenCalledTimes(2)
+    });
+
+    it('should call entity remove event on dbset when remove', async () => {
+
+        const context = createContext();
+        const onEntityRemove = jest.fn();
+        context.notes.on("remove", onEntityRemove)
+
+        await seedDb(context, {
+            notes: [
+                { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" },
+                { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }
+            ]
+        });
+
+        const itemToRemove = await context.notes.all();
+
+        await context.notes.remove(itemToRemove[0])
+
+
+        expect(onEntityRemove).toHaveBeenCalledTimes(1)
+    });
+
+    it('should call entity remove event on dbset when remove range by id', async () => {
+
+        const context = createContext();
+        const onEntityRemove = jest.fn();
+        context.notes.on("remove", onEntityRemove)
+
+        await seedDb(context, {
+            notes: [
+                { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" },
+                { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }
+            ]
+        });
+
+        const itemToRemove = await context.notes.all();
+
+        await context.notes.removeRangeById(itemToRemove.map(w => w._id));
+
+
+        expect(onEntityRemove).toHaveBeenCalledTimes(2)
+    });
+
+    it('should call entity remove event on dbset when remove by id', async () => {
+
+        const context = createContext();
+        const onEntityRemove = jest.fn();
+        context.notes.on("remove", onEntityRemove)
+
+        await seedDb(context, {
+            notes: [
+                { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" },
+                { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }
+            ]
+        });
+
+        const itemToRemove = await context.notes.all();
+
+        await context.notes.removeById(itemToRemove.map(w => w._id)[0]);
+
+        expect(onEntityRemove).toHaveBeenCalledTimes(1)
+    });
 });

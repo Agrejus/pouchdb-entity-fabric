@@ -1,8 +1,4 @@
-import { IDataContext, IDbRecord, IDbRecordBase, IDbSet, IdKeys } from './typings';
-export declare type AttachedEntity<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = TEntityType & TEntity;
-export interface IIndexableEntity {
-    [key: string]: any;
-}
+import { AttachedEntity, DbSetEventCallback, DbSetIdOnlyEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IdKeys } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -14,7 +10,7 @@ export declare class DbSet<TDocumentType extends string, TEntity, TEntityType ex
     private _documentType;
     private _context;
     private _api;
-    private _onBeforeAdd;
+    private _events;
     /**
      * Constructor
      * @param documentType Type of Document this DbSet accepts
@@ -23,18 +19,12 @@ export declare class DbSet<TDocumentType extends string, TEntity, TEntityType ex
      */
     constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: IdKeys<TEntity>);
     /**
-     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity
-     */
-    attach(entity: AttachedEntity<TEntity, TDocumentType, TEntityType>): Promise<void>;
-    /**
      * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity
      */
     add(entity: TEntity): Promise<void>;
     private getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;
-    onBeforeAdd(action: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void): void;
     /**
      * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entities
@@ -65,7 +55,6 @@ export declare class DbSet<TDocumentType extends string, TEntity, TEntityType ex
      */
     removeRangeById(ids: string[]): Promise<void>;
     private detachItems;
-    private makeTrackable;
     private _all;
     all(): Promise<AttachedEntity<TEntity, TDocumentType, TEntityType>[]>;
     /**
@@ -90,5 +79,12 @@ export declare class DbSet<TDocumentType extends string, TEntity, TEntityType ex
      * Detaches specified array of items from the context
      * @param entities
      */
-    detach(entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]): AttachedEntity<TEntity, TDocumentType, TEntityType>[];
+    detach(...entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]): AttachedEntity<TEntity, TDocumentType, TEntityType>[];
+    /**
+     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * @param entites
+     */
+    attach(...entites: AttachedEntity<TEntity, TDocumentType, TEntityType>[]): void;
+    on(event: "add", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
+    on(event: "remove", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback): void;
 }

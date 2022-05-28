@@ -23,6 +23,11 @@ class DataContext {
         this._additions = [];
         this._attachments = [];
         this._removeById = [];
+        this._events = {
+            "entity-created": [],
+            "entity-removed": [],
+            "entity-updated": []
+        };
         this._dbSets = [];
         this._db = new pouchdb_1.default(name, options);
     }
@@ -140,6 +145,7 @@ class DataContext {
         return __awaiter(this, void 0, void 0, function* () {
             const entity = yield this._db.get(id);
             const response = yield this._db.remove(entity);
+            this._events["entity-removed"].forEach(w => w(entity));
             return response.ok;
         });
     }
@@ -166,7 +172,8 @@ class DataContext {
             getTrackedData: this._getTrackedData.bind(this),
             getAllData: this.getAllData.bind(this),
             send: this._sendData.bind(this),
-            detach: this._detach.bind(this)
+            detach: this._detach.bind(this),
+            makeTrackable: this._makeTrackable.bind(this)
         };
     }
     /**
@@ -174,16 +181,16 @@ class DataContext {
      * @param data
      * @param matcher
      */
-    _detach(data, matcher) {
+    _detach(data) {
         const result = [];
         for (let i = 0; i < data.length; i++) {
             const detachment = data[i];
-            const index = this._attachments.findIndex(w => matcher(detachment, w));
+            const index = this._attachments.findIndex(w => w._id === detachment._id);
             if (index === -1) {
                 continue;
             }
             const clone = JSON.parse(JSON.stringify(this._attachments[index]));
-            this._attachments[index] = clone;
+            this._attachments.splice(index, 1);
             result.push(clone);
         }
         return result;
@@ -192,7 +199,13 @@ class DataContext {
      * Used by the context api
      * @param data
      */
-    _sendData(data) {
+    _sendData(data, shouldThrowOnDuplicate) {
+        if (shouldThrowOnDuplicate) {
+            const duplicate = this._attachments.find(w => data.some(x => x._id === w._id));
+            if (duplicate) {
+                throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
+            }
+        }
         this._attachments = [...this._attachments, ...data].filter((w, i, self) => self.indexOf(w) === i);
     }
     /**
@@ -206,10 +219,27 @@ class DataContext {
             removeById: this._removeById
         };
     }
-    reinitialize() {
+    reinitialize(removals = [], removalsById = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
+        // remove attached tracking changes
+        for (let item of this._attachments) {
+            const indexableEntity = item;
+            delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
+        }
+        for (let removal of removals) {
+            const index = this._attachments.findIndex(w => w._id === removal._id);
+            if (index !== -1) {
+                this._attachments.splice(index, 1);
+            }
+        }
+        for (let removalById of removalsById) {
+            const index = this._attachments.findIndex(w => w._id === removalById);
+            if (index !== -1) {
+                this._attachments.splice(index, 1);
+            }
+        }
     }
     /**
      * Provides equality comparison for Entities
@@ -235,6 +265,75 @@ class DataContext {
             return first[w] != second[w];
         }) === false;
     }
+    _makeTrackable(entity) {
+        const proxyHandler = {
+            set: (entity, property, value) => {
+                const indexableEntity = entity;
+                const key = String(property);
+                if (property !== DbSet_1.PRISTINE_ENTITY_KEY) {
+                    const oldValue = indexableEntity[key];
+                    if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] === undefined) {
+                        indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] = {};
+                    }
+                    if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY][key] === undefined) {
+                        indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY][key] = oldValue;
+                    }
+                }
+                indexableEntity[key] = value;
+                return true;
+            }
+        };
+        return new Proxy(entity, proxyHandler);
+    }
+    _getPendingChanges() {
+        const { add, remove, removeById } = this._getTrackedData();
+        const updated = this._attachments.filter(w => {
+            const indexableEntity = w;
+            if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] === undefined) {
+                return false;
+            }
+            const pristineKeys = Object.keys(indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY]);
+            for (let pristineKey of pristineKeys) {
+                if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY][pristineKey] != indexableEntity[pristineKey]) {
+                    return true;
+                }
+            }
+            return false;
+        }).map(w => {
+            const indexableEntity = w;
+            delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
+            // remove the pristine entity, this will get re-added 
+            // after any change happens because this is a proxy
+            return indexableEntity;
+        });
+        return {
+            add,
+            remove,
+            removeById,
+            updated
+        };
+    }
+    _tryCallEvents(modification, changes) {
+        const { remove, addsWithIds, updated } = changes;
+        if (this._events["entity-removed"].length > 0) {
+            const foundRemoval = remove.find(w => w._id === modification._id);
+            if (foundRemoval) {
+                this._events["entity-removed"].forEach(w => w(foundRemoval));
+            }
+        }
+        if (this._events["entity-created"].length > 0) {
+            const foundAdd = addsWithIds.find(w => w._id === modification._id);
+            if (foundAdd) {
+                this._events["entity-created"].forEach(w => w(foundAdd));
+            }
+        }
+        if (this._events["entity-updated"].length > 0) {
+            const foundUpdated = updated.find(w => w._id === modification._id);
+            if (foundUpdated) {
+                this._events["entity-updated"].forEach(w => w(foundUpdated));
+            }
+        }
+    }
     /**
      * Persist changes to the underlying data store
      * @returns number
@@ -242,35 +341,18 @@ class DataContext {
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const data = this._getTrackedData();
-                const { add, remove, removeById } = data;
-                // Check to see if we have any updates, let's not needlessly update
-                // if we don't need to
-                const updated = this._attachments.filter(w => {
-                    const indexableEntity = w;
-                    if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] === undefined) {
-                        return false;
-                    }
-                    const pristineKeys = Object.keys(indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY]);
-                    for (let pristineKey of pristineKeys) {
-                        if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY][pristineKey] != indexableEntity[pristineKey]) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }).map(w => {
-                    const indexableEntity = w;
-                    delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
-                    // remove the pristine entity, this will get re-added 
-                    // after any change happens because this is a proxy
-                    return indexableEntity;
-                });
+                const { add, remove, removeById, updated } = this._getPendingChanges();
+                for (let item of add) {
+                    this._makeTrackable(item);
+                }
                 const addsWithIds = add.filter(w => !!w._id);
                 const addsWithoutIds = add.filter(w => w._id == null);
                 const modifications = [...updated, ...addsWithIds, ...remove.map(w => (Object.assign(Object.assign({}, w), { _deleted: true })))];
                 const modificationResult = yield this.bulkDocs(modifications);
                 const successfulModifications = modificationResult.filter(w => w.ok === true);
                 for (let modification of modifications) {
+                    this._tryCallEvents(modification, { remove, addsWithIds, updated });
+                    9;
                     const found = successfulModifications.find(w => w.id === modification._id);
                     // update the rev in case we edit the record again
                     if (found && found.ok === true) {
@@ -279,8 +361,10 @@ class DataContext {
                 }
                 const additionsWithGeneratedIds = yield Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)));
                 const removalsById = yield Promise.all(removeById.map(w => this.removeEntityById(w)));
-                this.reinitialize();
-                return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => w.ok)].filter(w => w === true).length;
+                this.reinitialize(remove, removeById);
+                return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
+                        return w.ok;
+                    })].filter(w => w === true).length;
             }
             catch (e) {
                 this.reinitialize();
@@ -292,6 +376,7 @@ class DataContext {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const result = yield this.insertEntity(entity);
+                this._events["entity-created"].forEach(w => w(entity));
                 resolve({ ok: result, id: "", rev: "" });
             }
             catch (e) {
@@ -309,6 +394,13 @@ class DataContext {
         return __awaiter(this, void 0, void 0, function* () {
             return yield callback(this._db);
         });
+    }
+    hasPendingChanges() {
+        const { add, remove, removeById, updated } = this._getPendingChanges();
+        return [add.length, remove.length, removeById.length, updated.length].some(w => w > 0);
+    }
+    on(event, callback) {
+        this._events[event].push(callback);
     }
     [Symbol.iterator]() {
         let index = -1;

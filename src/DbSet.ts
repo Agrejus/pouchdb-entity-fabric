@@ -1,4 +1,4 @@
-import { AttachedEntity, DbSetEvent, DbSetEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity } from './typings';
+import { AttachedEntity, DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity } from './typings';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -18,7 +18,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
-    private _events: { [key in DbSetEvent]: DbSetEventCallback<TEntity, TDocumentType, TEntityType>[] } = { 
+    private _events: { [key in DbSetEvent]: (DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback)[] } = { 
         "add": [],
         "remove": []
      }
@@ -149,6 +149,8 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${id}`)
         }
 
+        this._events["remove"].forEach(w => w(id as any));
+
         removeById.push(id);
     }
 
@@ -160,44 +162,19 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         await Promise.all(ids.map(w => this.removeById(w)))
     }
 
-    private detachItems(data: AttachedEntity<TEntity, TDocumentType, TEntityType>[], matcher: (first: AttachedEntity<TEntity, TDocumentType, TEntityType>, second: AttachedEntity<TEntity, TDocumentType, TEntityType>) => boolean) {
-        return this._api.detach(data, matcher);
-    }
-
-    private makeTrackable<T extends Object>(entity: T): T {
-        const proxyHandler: ProxyHandler<T> = {
-            set: (entity, property, value) => {
-
-                const indexableEntity: IIndexableEntity = entity as any;
-                const key = String(property);
-                const oldValue = indexableEntity[key];
-
-                if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
-                    indexableEntity[PRISTINE_ENTITY_KEY] = {};
-                }
-
-                if (indexableEntity[PRISTINE_ENTITY_KEY][key] === undefined) {
-                    indexableEntity[PRISTINE_ENTITY_KEY][key] = oldValue;
-                }
-
-                indexableEntity[key] = value;
-
-                return true;
-            }
-        }
-
-        return new Proxy(entity, proxyHandler) as any
+    private detachItems(data: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
+        return this._api.detach(data);
     }
 
     private async _all() {
         const data = await this._api.getAllData(this._documentType)
-        return data.map(w => this.makeTrackable(w) as AttachedEntity<TEntity, TDocumentType, TEntityType>);
+        return data.map(w => this._api.makeTrackable(w) as AttachedEntity<TEntity, TDocumentType, TEntityType>);
     }
 
     async all() {
         const result = await this._all();
 
-        this._api.send(result)
+        this._api.send(result, false)
 
         return result;
     }
@@ -212,7 +189,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
 
         const result = [...data].filter(selector);
 
-        this._api.send(result)
+        this._api.send(result, false)
 
         return result;
     }
@@ -236,7 +213,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         const result = [...data].find(selector);
 
         if (result) {
-            this._api.send([result])
+            this._api.send([result], false)
         }
 
         return result;
@@ -247,7 +224,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * @param entities 
      */
     detach(...entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
-        return this.detachItems(entities, this.isMatch.bind(this)) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
+        return this.detachItems(entities) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
     }
 
     /**
@@ -255,12 +232,12 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * @param entites 
      */
      attach(...entites: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
-        const data = this._api.getTrackedData();
-        const { attach } = data;
-
-        data.attach = [...attach, ...entites];
+        entites.forEach(w => this._api.makeTrackable(w));
+        this._api.send(entites, true)
     }
 
+    on(event: "add", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
+    on(event: "remove", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback): void;
     on(event: DbSetEvent, callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>) {
         this._events[event].push(callback);
     }

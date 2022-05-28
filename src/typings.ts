@@ -16,7 +16,8 @@ export interface IDbSet<TDocumentType extends string, TEntity, TEntityType exten
 export type DataContextEventCallback<TDocumentType> = ({ DocumentType }: { DocumentType: TDocumentType }) => void;
 export type DataContextEvent = 'entity-created' | 'entity-removed' | 'entity-updated';
 
-export type DbSetEventCallback<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void
+export type DbSetEventCallback<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void;
+export type DbSetIdOnlyEventCallback = (entity: string) => void;
 export type DbSetEvent = "add" | "remove";
 
 export type KeyOf<T> = keyof T;
@@ -38,8 +39,9 @@ export interface IDbSetBase<TDocumentType extends string> {
 export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (documentType: TDocumentType) => Promise<IDbRecordBase[]>;
-    send: (data: IDbRecordBase[]) => void;
-    detach: (data: IDbRecordBase[], matcher: (first: IDbRecordBase, second: IDbRecordBase) => boolean) => IDbRecordBase[]
+    send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
+    detach: (data: IDbRecordBase[]) => IDbRecordBase[];
+    makeTrackable<T extends Object>(entity: T): T;
 }
 
 export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentType> {

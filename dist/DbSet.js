@@ -22,7 +22,10 @@ class DbSet {
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
     constructor(documentType, context, ...idKeys) {
-        this._onBeforeAdd = null;
+        this._events = {
+            "add": [],
+            "remove": []
+        };
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys;
@@ -30,17 +33,6 @@ class DbSet {
     }
     get IdKeys() { return this._idKeys; }
     get DocumentType() { return this._documentType; }
-    /**
-     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity
-     */
-    attach(entity) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const data = this._api.getTrackedData();
-            const { attach } = data;
-            attach.push(entity);
-        });
-    }
     /**
      * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity
@@ -63,9 +55,7 @@ class DbSet {
                 }
                 addItem._id = id;
             }
-            if (this._onBeforeAdd != null) {
-                this._onBeforeAdd(entity);
-            }
+            this._events["add"].forEach(w => w(entity));
             add.push(addItem);
         });
     }
@@ -73,14 +63,17 @@ class DbSet {
         if (this._idKeys.length === 0) {
             return null;
         }
-        const keyData = Object.keys(entity).filter((w) => this._idKeys.includes(w)).map(w => entity[w]);
+        const keyData = Object.keys(entity).filter((w) => this._idKeys.includes(w)).map(w => {
+            const value = entity[w];
+            if (value instanceof Date) {
+                return value.toISOString();
+            }
+            return value;
+        });
         return [this.DocumentType, ...keyData].join("/");
     }
     isMatch(first, second) {
         return this.getKeyFromEntity(first) === this.getKeyFromEntity(second);
-    }
-    onBeforeAdd(action) {
-        this._onBeforeAdd = action;
     }
     /**
      * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
@@ -104,6 +97,7 @@ class DbSet {
             if (ids.includes(indexableEntity._id)) {
                 throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`);
             }
+            this._events["remove"].forEach(w => w(entity));
             remove.push(entity);
         });
     }
@@ -136,6 +130,7 @@ class DbSet {
             if (removeById.includes(id)) {
                 throw new Error(`Cannot remove entity with same id more than once.  _id: ${id}`);
             }
+            this._events["remove"].forEach(w => w(id));
             removeById.push(id);
         });
     }
@@ -148,37 +143,19 @@ class DbSet {
             yield Promise.all(ids.map(w => this.removeById(w)));
         });
     }
-    detachItems(data, matcher) {
-        return this._api.detach(data, matcher);
-    }
-    makeTrackable(entity) {
-        const proxyHandler = {
-            set: (entity, property, value) => {
-                const indexableEntity = entity;
-                const key = String(property);
-                const oldValue = indexableEntity[key];
-                if (indexableEntity[exports.PRISTINE_ENTITY_KEY] === undefined) {
-                    indexableEntity[exports.PRISTINE_ENTITY_KEY] = {};
-                }
-                if (indexableEntity[exports.PRISTINE_ENTITY_KEY][key] === undefined) {
-                    indexableEntity[exports.PRISTINE_ENTITY_KEY][key] = oldValue;
-                }
-                indexableEntity[key] = value;
-                return true;
-            }
-        };
-        return new Proxy(entity, proxyHandler);
+    detachItems(data) {
+        return this._api.detach(data);
     }
     _all() {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._api.getAllData(this._documentType);
-            return data.map(w => this.makeTrackable(w));
+            return data.map(w => this._api.makeTrackable(w));
         });
     }
     all() {
         return __awaiter(this, void 0, void 0, function* () {
             const result = yield this._all();
-            this._api.send(result);
+            this._api.send(result, false);
             return result;
         });
     }
@@ -191,7 +168,7 @@ class DbSet {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._all();
             const result = [...data].filter(selector);
-            this._api.send(result);
+            this._api.send(result, false);
             return result;
         });
     }
@@ -213,7 +190,7 @@ class DbSet {
             const data = yield this._all();
             const result = [...data].find(selector);
             if (result) {
-                this._api.send([result]);
+                this._api.send([result], false);
             }
             return result;
         });
@@ -222,8 +199,19 @@ class DbSet {
      * Detaches specified array of items from the context
      * @param entities
      */
-    detach(entities) {
-        return this.detachItems(entities, this.isMatch.bind(this));
+    detach(...entities) {
+        return this.detachItems(entities);
+    }
+    /**
+     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * @param entites
+     */
+    attach(...entites) {
+        entites.forEach(w => this._api.makeTrackable(w));
+        this._api.send(entites, true);
+    }
+    on(event, callback) {
+        this._events[event].push(callback);
     }
 }
 exports.DbSet = DbSet;

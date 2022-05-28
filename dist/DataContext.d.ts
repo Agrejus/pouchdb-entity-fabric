@@ -2,7 +2,7 @@
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
-import { IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IdKeys } from './typings';
+import { DataContextEvent, DataContextEventCallback, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IdKeys } from './typings';
 export declare class DataContext<TDocumentType extends string> implements IDataContext {
     protected _db: PouchDB.Database;
     protected _removals: IDbRecordBase[];
@@ -10,6 +10,7 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
     protected _attachments: IDbRecordBase[];
     protected _removeById: string[];
     protected _collectionName: string;
+    private _events;
     private _dbSets;
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration);
     /**
@@ -81,6 +82,9 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
      * @returns boolean
      */
     private areEqual;
+    private _makeTrackable;
+    private _getPendingChanges;
+    private _tryCallEvents;
     /**
      * Persist changes to the underlying data store
      * @returns number
@@ -89,6 +93,8 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
     protected addEntityWithoutId(entity: IDbRecordBase): Promise<IBulkDocsResponse>;
     protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>>;
     query<TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<(TEntity & TEntityType)[]>): Promise<(TEntity & TEntityType)[]>;
+    hasPendingChanges(): boolean;
+    on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;
     [Symbol.iterator](): {
         next: () => {
             value: IDbSetBase<string>;

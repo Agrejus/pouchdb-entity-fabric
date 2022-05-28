@@ -1,2 +1,3 @@
 export { DataContext } from './DataContext';
-export { DbSet, AttachedEntity, IIndexableEntity } from './DbSet';
+export { DbSet } from './DbSet';
+export { IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, AttachedEntity, IIndexableEntity } from './typings';

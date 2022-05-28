@@ -13,11 +13,11 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     protected _attachments: IDbRecordBase[] = [];
     protected _removeById: string[] = [];
     protected _collectionName!: string;
-    private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = { 
+    private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = {
         "entity-created": [],
         "entity-removed": [],
         "entity-updated": []
-     }
+    }
 
     private _dbSets: IDbSetBase<string>[] = [];
 
@@ -183,7 +183,8 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             getTrackedData: this._getTrackedData.bind(this),
             getAllData: this.getAllData.bind(this),
             send: this._sendData.bind(this),
-            detach: this._detach.bind(this)
+            detach: this._detach.bind(this),
+            makeTrackable: this._makeTrackable.bind(this)
         }
     }
 
@@ -192,12 +193,12 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * @param data 
      * @param matcher 
      */
-    private _detach(data: IDbRecordBase[], matcher: (first: IDbRecordBase, second: IDbRecordBase) => boolean) {
+    private _detach(data: IDbRecordBase[]) {
 
-        const result = [];
+        const result: IDbRecordBase[] = [];
         for (let i = 0; i < data.length; i++) {
             const detachment = data[i];
-            const index = this._attachments.findIndex(w => matcher(detachment, w));
+            const index = this._attachments.findIndex(w => w._id === detachment._id)
 
             if (index === -1) {
                 continue;
@@ -205,7 +206,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
             const clone: IDbRecordBase = JSON.parse(JSON.stringify(this._attachments[index]));
 
-            this._attachments[index] = clone;
+            this._attachments.splice(index, 1);
 
             result.push(clone);
         }
@@ -217,7 +218,15 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * Used by the context api
      * @param data 
      */
-    private _sendData(data: IDbRecordBase[]) {
+    private _sendData(data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) {
+        if (shouldThrowOnDuplicate) {
+            const duplicate = this._attachments.find(w => data.some(x => x._id === w._id));
+
+            if (duplicate) {
+                throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
+            }
+        }
+
         this._attachments = [...this._attachments, ...data].filter((w, i, self) => self.indexOf(w) === i);
     }
 
@@ -233,10 +242,32 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         } as ITrackedData;
     }
 
-    private reinitialize() {
+    private reinitialize(removals: IDbRecordBase[] = [], removalsById: string[] = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
+
+        // remove attached tracking changes
+        for(let item of this._attachments) {
+            const indexableEntity: IIndexableEntity = item as any;
+            delete indexableEntity[PRISTINE_ENTITY_KEY];
+        }
+
+        for(let removal of removals) {
+            const index = this._attachments.findIndex(w => w._id === removal._id);
+
+            if (index !== -1) {
+                this._attachments.splice(index, 1)
+            }
+        }
+
+        for(let removalById of removalsById) {
+            const index = this._attachments.findIndex(w => w._id === removalById);
+
+            if (index !== -1) {
+                this._attachments.splice(index, 1)
+            }
+        }
     }
 
     /**
@@ -268,6 +299,34 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
             return (first as any)[w] != (second as any)[w]
         }) === false;
+    }
+
+    private _makeTrackable<T extends Object>(entity: T): T {
+        const proxyHandler: ProxyHandler<T> = {
+            set: (entity, property, value) => {
+
+                const indexableEntity: IIndexableEntity = entity as any;
+                const key = String(property);
+
+                if (property !== PRISTINE_ENTITY_KEY) {
+                    const oldValue = indexableEntity[key];
+
+                    if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
+                        indexableEntity[PRISTINE_ENTITY_KEY] = {};
+                    }
+    
+                    if (indexableEntity[PRISTINE_ENTITY_KEY][key] === undefined) {
+                        indexableEntity[PRISTINE_ENTITY_KEY][key] = oldValue;
+                    }
+                }
+
+                indexableEntity[key] = value;
+
+                return true;
+            }
+        }
+
+        return new Proxy(entity, proxyHandler) as any
     }
 
     private _getPendingChanges() {
@@ -305,6 +364,34 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         }
     }
 
+    private _tryCallEvents(modification: IDbRecordBase, changes: { remove: IDbRecordBase[], addsWithIds: IDbRecordBase[], updated: IDbRecordBase[] }) {
+        const { remove, addsWithIds, updated } = changes;
+
+        if (this._events["entity-removed"].length > 0) {
+            const foundRemoval = remove.find(w => w._id === modification._id);
+
+            if (foundRemoval) {
+                this._events["entity-removed"].forEach(w => w(foundRemoval));
+            }
+        }
+
+        if (this._events["entity-created"].length > 0) {
+            const foundAdd = addsWithIds.find(w => w._id === modification._id);
+
+            if (foundAdd) {
+                this._events["entity-created"].forEach(w => w(foundAdd));
+            }
+        }
+
+        if (this._events["entity-updated"].length > 0) {
+            const foundUpdated = updated.find(w => w._id === modification._id);
+
+            if (foundUpdated) {
+                this._events["entity-updated"].forEach(w => w(foundUpdated));
+            }
+        }
+    }
+
     /**
      * Persist changes to the underlying data store
      * @returns number
@@ -314,6 +401,10 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
             const { add, remove, removeById, updated } = this._getPendingChanges();
 
+            for(let item of add) {
+                this._makeTrackable(item);
+            }
+
             const addsWithIds = add.filter(w => !!w._id);
             const addsWithoutIds = add.filter(w => w._id == null);
             const modifications = [...updated, ...addsWithIds, ...remove.map(w => ({ ...w, _deleted: true }))];
@@ -321,32 +412,10 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             const successfulModifications = modificationResult.filter(w => w.ok === true);
 
             for (let modification of modifications) {
+
+                this._tryCallEvents(modification, { remove, addsWithIds, updated });9
+
                 const found = successfulModifications.find(w => w.id === modification._id);
-
-                if (this._events["entity-removed"].length > 0) {
-                    const foundRemoval = remove.find(w => w._id === modification._id);
-
-                    if (foundRemoval) {
-                        this._events["entity-removed"].forEach(w => w(foundRemoval));
-                    }
-                }
-
-                if (this._events["entity-created"].length > 0) {
-                    const foundAdd = addsWithIds.find(w => w._id === modification._id);
-
-                    if (foundAdd) {
-                        this._events["entity-created"].forEach(w => w(foundAdd));
-                    }
-                }
-
-                if (this._events["entity-updated"].length > 0) {
-                    const foundUpdated = updated.find(w => w._id === modification._id);
-
-                    if (foundUpdated) {
-                        this._events["entity-updated"].forEach(w => w(foundUpdated));
-                    }
-                }
-
                 // update the rev in case we edit the record again
                 if (found && found.ok === true) {
                     (modification as any)._rev = found.rev;
@@ -356,7 +425,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             const additionsWithGeneratedIds = await Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)))
             const removalsById = await Promise.all(removeById.map(w => this.removeEntityById(w)));
 
-            this.reinitialize()
+            this.reinitialize(remove, removeById)
 
             return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
 
@@ -374,7 +443,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
                 const result = await this.insertEntity(entity);
 
                 this._events["entity-created"].forEach(w => w(entity as any));
-                
+
                 resolve({ ok: result, id: "", rev: "" })
             } catch (e) {
                 console.error(e);
