@@ -85,6 +85,7 @@ export declare class DbSet<TDocumentType extends string, TEntity, TEntityType ex
      * @param entites
      */
     attach(...entites: AttachedEntity<TEntity, TDocumentType, TEntityType>[]): void;
+    first(): Promise<AttachedEntity<TEntity, TDocumentType, TEntityType>>;
     on(event: "add", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
     on(event: "remove", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback): void;
 }

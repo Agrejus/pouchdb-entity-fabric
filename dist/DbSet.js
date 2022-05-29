@@ -210,6 +210,16 @@ class DbSet {
         entites.forEach(w => this._api.makeTrackable(w));
         this._api.send(entites, true);
     }
+    first() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const data = yield this._all();
+            const result = data[0];
+            if (result) {
+                this._api.send([result], false);
+            }
+            return result;
+        });
+    }
     on(event, callback) {
         this._events[event].push(callback);
     }
