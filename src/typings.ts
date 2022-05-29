@@ -10,6 +10,7 @@ export interface IDbSet<TDocumentType extends string, TEntity, TEntityType exten
     detach(...entities: TEntity[]): (TEntity & TEntityType)[];
     attach(...entites: (TEntityType & TEntity)[]): void;
     match(entities:IDbRecordBase[]): (TEntityType & TEntity)[];
+    first(): Promise<(TEntityType & TEntity)>;
     on(event: DbSetEvent, callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
 }
 

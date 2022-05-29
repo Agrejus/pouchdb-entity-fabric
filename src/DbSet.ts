@@ -236,6 +236,17 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         this._api.send(entites, true)
     }
 
+    async first() {
+        const data = await this._all();
+        const result = data[0];
+
+        if (result) {
+            this._api.send([result], false)
+        }
+
+        return result;
+    }
+
     on(event: "add", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
     on(event: "remove", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback): void;
     on(event: DbSetEvent, callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>) {
