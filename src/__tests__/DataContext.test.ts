@@ -1,6 +1,8 @@
 import PouchDB from 'pouchdb';
 import { clearDb, createContext, seedDb } from './TestSetup'
 import memoryAdapter from 'pouchdb-adapter-memory';
+import { OmittedEntity } from '../typings';
+import { IBook, INote } from './Entities';
 
 PouchDB.plugin(memoryAdapter);
 
@@ -64,14 +66,12 @@ describe('DataContext Tests', () => {
         await seedDb(context, {
             notes: [{ contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }]
         });
-
-        const note: INote = { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" }
-
+        
         const notesBeforeAdd = await context.notes.all();
 
         expect(notesBeforeAdd.length).toBe(1);
 
-        await context.notes.add(note);
+        await context.notes.add({ contents: "Note One", createdDate: new Date(), userId: "jdemeuse" });
 
         await context.saveChanges();
 
@@ -87,11 +87,9 @@ describe('DataContext Tests', () => {
     it('should add entities with a generated ids', async () => {
 
         const context = createContext();
-        const bookOne: IBook = { author: "James DeMeuse", rejectedCount: 1 };
-        const bookTwo: IBook = { author: "Agrejus", rejectedCount: 2 };
 
-        await context.books.add(bookOne);
-        await context.books.add(bookTwo);
+        const bookOne = await context.books.add({ author: "James DeMeuse", rejectedCount: 1 });
+        const bookTwo = await context.books.add({ author: "Agrejus", rejectedCount: 2 });
 
         await context.saveChanges();
 
@@ -105,21 +103,19 @@ describe('DataContext Tests', () => {
 
         const agrejusBook = books.find(w => w.author === bookOne.author);
         const jamesDeMeuseBook = books.find(w => w.author === bookTwo.author);
-        expect((bookOne as any)._id).toBe(agrejusBook._id)
-        expect((bookTwo as any)._id).toBe(jamesDeMeuseBook._id)
+        expect(bookOne._id).toBe(agrejusBook._id)
+        expect(bookTwo._id).toBe(jamesDeMeuseBook._id)
     });
 
     it('should add entities without a generated ids', async () => {
 
         const context = createContext();
-        const noteOne: INote = { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" };
-        const noteTwo: INote = { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" };
 
-        await context.notes.add(noteOne);
-        await context.notes.add(noteTwo);
+        const noteOne = await context.notes.add({ contents: "Note One", createdDate: new Date(), userId: "jdemeuse" });
+        const noteTwo = await context.notes.add({ contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" });
 
         await context.saveChanges();
-        debugger;
+;
         const notes = await context.notes.all();
         const contacts = await context.contacts.all();
         const books = await context.books.all();
@@ -130,8 +126,8 @@ describe('DataContext Tests', () => {
 
         const saveNoteOne = notes.find(w => w.userId === noteOne.userId);
         const saveNoteTwo = notes.find(w => w.userId === noteTwo.userId);
-        expect((noteOne as any)._id).toBe(saveNoteOne._id)
-        expect((noteTwo as any)._id).toBe(saveNoteTwo._id)
+        expect(noteOne._id).toBe(saveNoteOne._id)
+        expect(noteTwo._id).toBe(saveNoteTwo._id)
     });
 
     it('should add range of entities', async () => {
@@ -140,15 +136,12 @@ describe('DataContext Tests', () => {
         await seedDb(context, {
             notes: []
         });
-
-        const noteOne: INote = { contents: "Note One", createdDate: new Date(), userId: "jdemeuse" }
-        const noteTwo: INote = { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }
-
+        
         const notesBeforeAdd = await context.notes.all();
 
         expect(notesBeforeAdd.length).toBe(0);
 
-        await context.notes.addRange([noteOne, noteTwo]);
+        const [noteOne, noteTwo] = await context.notes.addRange([{ contents: "Note One", createdDate: new Date(), userId: "jdemeuse" }, { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }]);
 
         await context.saveChanges();
 
@@ -159,6 +152,8 @@ describe('DataContext Tests', () => {
         expect(notes.length).toBe(2);
         expect(contacts.length).toBe(0);
         expect(books.length).toBe(0);
+        expect(noteOne._id).toBeDefined();
+        expect(noteTwo._id).toBeDefined();
     });
 
     it('should get all data', async () => {
@@ -300,8 +295,8 @@ describe('DataContext Tests', () => {
     it('should change entity by reference', async () => {
 
         const context = createContext();
-        const note: INote = { contents: "New Note", createdDate: new Date(), userId: "jdemeuse" };
-        await context.notes.add(note);
+
+        const note = await context.notes.add({ contents: "New Note", createdDate: new Date(), userId: "jdemeuse" });
 
         await context.saveChanges();
 

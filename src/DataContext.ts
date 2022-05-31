@@ -452,15 +452,15 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         })
     }
 
-    protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>> {
-        const dbSet = new DbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>>(documentType, this, ...idKeys);
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity> {
+        const dbSet = new DbSet<TDocumentType, TEntity>(documentType, this, ...idKeys);
 
         this._dbSets.push(dbSet);
 
         return dbSet;
     }
 
-    async query<TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<(TEntity & TEntityType)[]>) {
+    async query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>) {
         return await callback(this._db);
     }
 

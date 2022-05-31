@@ -1,4 +1,4 @@
-import { AttachedEntity, DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -9,7 +9,7 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> implements IDbSet<TDocumentType, TEntity, TEntityType> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> implements IDbSet<TDocumentType, TEntity> {
 
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }
@@ -18,7 +18,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
-    private _events: { [key in DbSetEvent]: (DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback)[] } = { 
+    private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = { 
         "add": [],
         "remove": []
      }
@@ -40,7 +40,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity 
      */
-    async add(entity: TEntity) {
+    async add(entity: OmittedEntity<TEntity>) {
 
         const indexableEntity: IIndexableEntity = entity as any;
 
@@ -53,7 +53,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
 
         const addItem: IDbRecord<TDocumentType> = entity as any;
         addItem.DocumentType = this._documentType;
-        const id = this.getKeyFromEntity(entity);
+        const id = this.getKeyFromEntity(entity as TEntity);
 
         if (id != undefined) {
             const ids = add.map(w => w._id);
@@ -68,6 +68,8 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         this._events["add"].forEach(w => w(entity as any));
 
         add.push(addItem);
+
+        return addItem as TEntity
     }
 
     private getKeyFromEntity(entity: TEntity) {
@@ -97,8 +99,8 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entities 
      */
-    async addRange(entities: TEntity[]) {
-        await Promise.all(entities.map(w => this.add(w)));
+    async addRange(entities: OmittedEntity<TEntity>[]) {
+        return await Promise.all(entities.map(w => this.add(w)));
     }
 
     /**
@@ -162,13 +164,13 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         await Promise.all(ids.map(w => this.removeById(w)))
     }
 
-    private detachItems(data: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
+    private detachItems(data: TEntity[]) {
         return this._api.detach(data);
     }
 
     private async _all() {
         const data = await this._api.getAllData(this._documentType)
-        return data.map(w => this._api.makeTrackable(w) as AttachedEntity<TEntity, TDocumentType, TEntityType>);
+        return data.map(w => this._api.makeTrackable(w) as TEntity);
     }
 
     async all() {
@@ -184,7 +186,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * @param selector 
      * @returns Entity array
      */
-    async filter(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean) {
+    async filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) {
         const data = await this._all();
 
         const result = [...data].filter(selector);
@@ -200,7 +202,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * @returns Entity array
      */
     match(items: IDbRecordBase[]) {
-        return items.filter(w => w.DocumentType === this.DocumentType) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
+        return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
     /**
@@ -208,7 +210,7 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * @param selector 
      * @returns Entity
      */
-    async find(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean) {
+    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) {
         const data = await this._all();
         const result = [...data].find(selector);
 
@@ -223,15 +225,15 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * Detaches specified array of items from the context
      * @param entities 
      */
-    detach(...entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
-        return this.detachItems(entities) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
+    detach(...entities: TEntity[]) {
+        return this.detachItems(entities) as TEntity[]
     }
 
     /**
      * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites 
      */
-     attach(...entites: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
+     attach(...entites: TEntity[]) {
         entites.forEach(w => this._api.makeTrackable(w));
         this._api.send(entites, true)
     }
@@ -247,9 +249,9 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         return result;
     }
 
-    on(event: "add", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
-    on(event: "remove", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback): void;
-    on(event: DbSetEvent, callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>) {
+    on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+    on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
+    on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>) {
         this._events[event].push(callback);
     }
 }

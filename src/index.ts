@@ -6,6 +6,5 @@ export {
     IDbRecord, 
     IDbRecordBase, 
     IDbSet, 
-    AttachedEntity, 
     IIndexableEntity
 } from './typings';

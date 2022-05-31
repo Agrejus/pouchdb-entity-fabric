@@ -1,5 +1,5 @@
-/// <reference path="./Entities.d.ts" />
 import { DataContext } from '../DataContext'; 
+import { IBook, IContact, INote, ISeedOptions } from './Entities';
 
 export enum DocumentTypes {
     Notes = "Notes",
