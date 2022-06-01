@@ -452,8 +452,8 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         })
     }
 
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = any>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, TAddExclusions> {
-        const dbSet = new DbSet<TDocumentType, TEntity, TAddExclusions>(documentType, this, ...idKeys);
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, ...idKeys);
 
         this._dbSets.push(dbSet);
 

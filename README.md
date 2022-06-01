@@ -121,3 +121,71 @@ await context.saveChanges();
 | `saveChanges(): Promise<number>` | Persist all changes to PouchDB, returns a count of all documents modified |
 | `getAllDocs(): Promise<IDbRecordBase[]>` | Get all documents regardless of document type |
 | `protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, Entity, IDbRecord<TDocumentType>>` | Method used to create a DbSet in the context.  NOTE: This is a protected method |
+
+
+
+
+
+## Changes
+### 1.0.0 -> 1.1.0 
+- DbSet `add()` and `addRange()` method now return a refererence to added entity.  Can now be treated like a factory that creates the object
+- Entities need to inherit from `IDbRecord<TDocumentType>` or have the following properties:
+    - `readonly _id: string;`
+    - `readonly _rev: string;`
+    - `DocumentType: TDocumentType;`
+- Removed `AttachedEntity<>`, using above mechanism instead.  This will eliminate the need to recast types after they are added to the context
+- Added ability to exclude properties when using `add()` or `addRange()` methods on `DbSet<>`.  This allows users to exlucde properties and set them later.  Example:
+
+```javascript
+
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    SomeDocument = "SomeDocument"
+}
+
+interface ISomeEntity {
+    propertyOne: string;
+    propertyTwo: string;
+    status: "pending" | "succeeded"
+}
+
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    constructor() {
+        super('some-db');
+
+        this.someDbSet.on("add", entity => {
+            entity.status = "pending";
+        })
+    }
+
+    someDbSet = this.createDbSet<ISomeEntity, "status">(DocumentTypes.MyFirstDocument, "propertyOne", "propertyTwo");
+}
+
+const context = new PouchDbDataContext();
+
+// notice status is not required here, it will be set by the on event later
+const result = await context.someDbSet.add({ propertyOne: "some value", propertyTwo: "some value" });
+
+await context.saveChanges();
+
+// result
+{
+    _id: "SomeDocument/some value/some value",
+    _rev: "<generated>",
+    DocumentType: "SomeDocument",
+    status: "pending",
+    propertyOne: "some value",
+    propertyTwo: "some value"
+}
+```
+
+
+
+
+
+        
+    
+    
+

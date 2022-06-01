@@ -10,12 +10,12 @@ export enum DocumentTypes {
 
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
     constructor() {
-        super('test-db', { adapter: 'memory' })
+        super('test-db', { adapter: 'memory' });
     }
 
     notes = this.createDbSet<INote>(DocumentTypes.Notes, "userId", "createdDate");
     contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
-    books = new DbSet<DocumentTypes, IBook, "status">(DocumentTypes.Books, this);
+    books = this.createDbSet<IBook, "status">(DocumentTypes.Books);
 }
 
 export const seedDb = async (context: PouchDbDataContext, options: ISeedOptions) => {

@@ -9,7 +9,7 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = any> implements IDbSet<TDocumentType, TEntity, TAddExclusions> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
 
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }
@@ -40,7 +40,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity 
      */
-    async add(entity: OmittedEntity<TEntity, TAddExclusions>) {
+    async add(entity: OmittedEntity<TEntity, TExtraExclusions>) {
 
         const indexableEntity: IIndexableEntity = entity as any;
 
@@ -53,7 +53,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
         const addItem: IDbRecord<TDocumentType> = entity as any;
         addItem.DocumentType = this._documentType;
-        const id = this.getKeyFromEntity(entity as TEntity);
+        const id = this.getKeyFromEntity(entity as any);
 
         if (id != undefined) {
             const ids = add.map(w => w._id);
@@ -99,8 +99,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entities 
      */
-    async addRange(entities: OmittedEntity<TEntity, TAddExclusions>[]) {
-        return await Promise.all(entities.map(w => this.add(w)));
+    async addRange(entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
+        return await Promise.all(entities.map(w => this.add(w as any)));
     }
 
     /**
