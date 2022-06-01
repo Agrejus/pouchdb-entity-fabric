@@ -1,7 +1,7 @@
 import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
-import { DataContextEvent, DataContextEventCallback, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IdKeys, IIndexableEntity, ITrackedData } from './typings';
+import { DataContextEvent, DataContextEventCallback, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
 
 PouchDB.plugin(findAdapter);
 
@@ -448,7 +448,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         })
     }
 
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
         const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, ...idKeys);
 
         this._dbSets.push(dbSet);

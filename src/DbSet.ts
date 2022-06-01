@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -29,7 +29,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      * @param context Will be 'this' from the data context
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
-    constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: IdKeys<TEntity>) {
+    constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
         this._documentType = documentType;
         this._context = context as IPrivateContext<TDocumentType>;
         this._idKeys = idKeys;

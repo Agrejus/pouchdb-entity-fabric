@@ -92,6 +92,7 @@ export type DbSetEvent = "add" | "remove";
 
 export type KeyOf<T> = keyof T;
 export type IdKeys<T> = KeyOf<T>[];
+export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev">>;
 
 export interface IIndexableEntity {
     [key: string]: any;
