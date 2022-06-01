@@ -200,6 +200,48 @@ await context.saveChanges();
 }
 ```
 
+## Extending DbSet
+A `DbSet<>` can be extended to override or add functionality to it
+```javascript
+enum DocumentTypes {
+    Notes = "Notes",
+    Contacts = "Contacts",
+    Books = "Books"
+}
+
+interface ISomeDocument extends IDbRecord<TDocumentType> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+interface IExtendedDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+    replaceAll(entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<void>;
+}
+
+export class ExtendedDbSetContext extends DataContext<DocumentTypes> {
+    constructor() {
+        super('some-db')
+    }
+
+    protected createExtendedDbSet<TEntity extends IBaseEntity, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: DocumentTypes, ...idKeys: IdKeys<TEntity>) {
+        const dbSet = this.createDbSet<TEntity, TExtraExclusions>(documentType, ...idKeys);
+        const result: IExtendedDbSet<DocumentTypes, TEntity, TExtraExclusions> = dbSet as any;
+
+        // extra db set methods here
+        result.replaceAll = async (entities: TEntity[]) => {
+            const items = await result.all();
+            await result.removeRange(items);
+            await result.addRange(entities);
+            await this.saveChanges();
+        }
+
+        return result;
+    }
+
+    myExtendedDbSet = this.createExtendedDbSet<IMyFirstEntity>(DocumentTypes.MyFirstDocument, "propertyOne", "propertyTwo");
+}
+```
+
 ## DbSet Events
 DbSet's have two available event that can be subscribed to, `"add"`, `"remove"`.  
 - `"add"` event is called after the entity is queued for addition.

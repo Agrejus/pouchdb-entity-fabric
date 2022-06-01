@@ -14,5 +14,6 @@ export {
     DbSetEventCallback,
     DbSetIdOnlyEventCallback,
     IBulkDocsResponse,
-    IDbSetBase
+    IDbSetBase,
+    IdKeys
 } from './typings';
