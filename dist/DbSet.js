@@ -57,6 +57,7 @@ class DbSet {
             }
             this._events["add"].forEach(w => w(entity));
             add.push(addItem);
+            return addItem;
         });
     }
     getKeyFromEntity(entity) {
@@ -81,7 +82,7 @@ class DbSet {
      */
     addRange(entities) {
         return __awaiter(this, void 0, void 0, function* () {
-            yield Promise.all(entities.map(w => this.add(w)));
+            return yield Promise.all(entities.map(w => this.add(w)));
         });
     }
     /**

@@ -1,9 +1,9 @@
-import { AttachedEntity, DbSetEventCallback, DbSetIdOnlyEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IdKeys } from './typings';
+import { DbSetEventCallback, DbSetIdOnlyEventCallback, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IdKeys, OmittedEntity } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export declare class DbSet<TDocumentType extends string, TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> implements IDbSet<TDocumentType, TEntity, TEntityType> {
+export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> implements IDbSet<TDocumentType, TEntity> {
     get IdKeys(): IdKeys<TEntity>;
     get DocumentType(): TDocumentType;
     private _idKeys;
@@ -22,14 +22,14 @@ export declare class DbSet<TDocumentType extends string, TEntity, TEntityType ex
      * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity
      */
-    add(entity: TEntity): Promise<void>;
+    add(entity: OmittedEntity<TEntity>): Promise<TEntity>;
     private getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;
     /**
      * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entities
      */
-    addRange(entities: TEntity[]): Promise<void>;
+    addRange(entities: OmittedEntity<TEntity>[]): Promise<Awaited<TEntity>[]>;
     /**
      * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity
@@ -56,36 +56,36 @@ export declare class DbSet<TDocumentType extends string, TEntity, TEntityType ex
     removeRangeById(ids: string[]): Promise<void>;
     private detachItems;
     private _all;
-    all(): Promise<AttachedEntity<TEntity, TDocumentType, TEntityType>[]>;
+    all(): Promise<TEntity[]>;
     /**
      * Selects items from the data store, similar to Where in entity framework
      * @param selector
      * @returns Entity array
      */
-    filter(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean): Promise<AttachedEntity<TEntity, TDocumentType, TEntityType>[]>;
+    filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
     /**
      * Matches items with the same document type
      * @param items
      * @returns Entity array
      */
-    match(items: IDbRecordBase[]): AttachedEntity<TEntity, TDocumentType, TEntityType>[];
+    match(items: IDbRecordBase[]): TEntity[];
     /**
      * Selects a matching entity from the data store or returns null
      * @param selector
      * @returns Entity
      */
-    find(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean): Promise<AttachedEntity<TEntity, TDocumentType, TEntityType>>;
+    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity>;
     /**
      * Detaches specified array of items from the context
      * @param entities
      */
-    detach(...entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]): AttachedEntity<TEntity, TDocumentType, TEntityType>[];
+    detach(...entities: TEntity[]): TEntity[];
     /**
      * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites
      */
-    attach(...entites: AttachedEntity<TEntity, TDocumentType, TEntityType>[]): void;
-    first(): Promise<AttachedEntity<TEntity, TDocumentType, TEntityType>>;
-    on(event: "add", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType>): void;
-    on(event: "remove", callback: DbSetEventCallback<TEntity, TDocumentType, TEntityType> | DbSetIdOnlyEventCallback): void;
+    attach(...entites: TEntity[]): void;
+    first(): Promise<TEntity>;
+    on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+    on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
 }

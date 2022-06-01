@@ -91,8 +91,8 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
      */
     saveChanges(): Promise<number>;
     protected addEntityWithoutId(entity: IDbRecordBase): Promise<IBulkDocsResponse>;
-    protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>>;
-    query<TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<(TEntity & TEntityType)[]>): Promise<(TEntity & TEntityType)[]>;
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity>;
+    query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
     hasPendingChanges(): boolean;
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;
     [Symbol.iterator](): {
