@@ -1,6 +1,6 @@
 import { DataContext } from '../DataContext'; 
 import { DbSet } from '../DbSet';
-import { IBook, IContact, INote, ISeedOptions } from './Entities';
+import { IBook, IContact, INote, ISeedOptions } from './entities';
 
 export enum DocumentTypes {
     Notes = "Notes",

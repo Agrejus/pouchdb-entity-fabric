@@ -1,7 +1,7 @@
 import PouchDB from 'pouchdb';
 import { clearDb, createContext, seedDb } from './TestSetup'
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { INote } from './Entities';
+import { INote } from './entities';
 
 PouchDB.plugin(memoryAdapter);
 
