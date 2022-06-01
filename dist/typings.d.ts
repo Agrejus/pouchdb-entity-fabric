@@ -1,4 +1,4 @@
-export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = undefined> extends IDbSetBase<TDocumentType> {
+export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = any> extends IDbSetBase<TDocumentType> {
     add(entity: OmittedEntity<TEntity, TAddExclusions>): Promise<TEntity>;
     addRange(entities: OmittedEntity<TEntity, TAddExclusions>[]): Promise<TEntity[]>;
     remove(entity: TEntity): Promise<void>;
@@ -13,7 +13,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     first(): Promise<TEntity>;
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
 }
-export declare type OmittedEntity<TEntity, TExtraExclusions extends keyof TEntity = undefined> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
+export declare type OmittedEntity<TEntity, TExtraExclusions extends keyof TEntity = any> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
 export declare type DataContextEventCallback<TDocumentType> = ({ DocumentType }: {
     DocumentType: TDocumentType;
 }) => void;

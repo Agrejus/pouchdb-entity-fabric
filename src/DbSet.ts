@@ -9,7 +9,7 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = undefined> implements IDbSet<TDocumentType, TEntity, TAddExclusions> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = any> implements IDbSet<TDocumentType, TEntity, TAddExclusions> {
 
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }

@@ -3,7 +3,7 @@ export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = undefined> implements IDbSet<TDocumentType, TEntity, TAddExclusions> {
+export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = any> implements IDbSet<TDocumentType, TEntity, TAddExclusions> {
     get IdKeys(): IdKeys<TEntity>;
     get DocumentType(): TDocumentType;
     private _idKeys;
