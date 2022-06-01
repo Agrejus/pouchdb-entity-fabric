@@ -3,7 +3,7 @@ export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> implements IDbSet<TDocumentType, TEntity> {
+export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = undefined> implements IDbSet<TDocumentType, TEntity, TAddExclusions> {
     get IdKeys(): IdKeys<TEntity>;
     get DocumentType(): TDocumentType;
     private _idKeys;
@@ -22,14 +22,14 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
      * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity
      */
-    add(entity: OmittedEntity<TEntity>): Promise<TEntity>;
+    add(entity: OmittedEntity<TEntity, TAddExclusions>): Promise<TEntity>;
     private getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;
     /**
      * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entities
      */
-    addRange(entities: OmittedEntity<TEntity>[]): Promise<Awaited<TEntity>[]>;
+    addRange(entities: OmittedEntity<TEntity, TAddExclusions>[]): Promise<Awaited<TEntity>[]>;
     /**
      * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity

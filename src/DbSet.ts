@@ -9,7 +9,7 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> implements IDbSet<TDocumentType, TEntity> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = undefined> implements IDbSet<TDocumentType, TEntity, TAddExclusions> {
 
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }
@@ -40,7 +40,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entity 
      */
-    async add(entity: OmittedEntity<TEntity>) {
+    async add(entity: OmittedEntity<TEntity, TAddExclusions>) {
 
         const indexableEntity: IIndexableEntity = entity as any;
 
@@ -99,7 +99,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entities 
      */
-    async addRange(entities: OmittedEntity<TEntity>[]) {
+    async addRange(entities: OmittedEntity<TEntity, TAddExclusions>[]) {
         return await Promise.all(entities.map(w => this.add(w)));
     }
 

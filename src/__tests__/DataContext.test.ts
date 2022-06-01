@@ -1,8 +1,7 @@
 import PouchDB from 'pouchdb';
 import { clearDb, createContext, seedDb } from './TestSetup'
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { OmittedEntity } from '../typings';
-import { IBook, INote } from './Entities';
+import { INote } from './Entities';
 
 PouchDB.plugin(memoryAdapter);
 
@@ -48,7 +47,7 @@ describe('DataContext Tests', () => {
         await seedDb(context, {
             notes: [{ contents: "Some Note", createdDate: new Date(), userId: "jdemeuse" }],
             contacts: [{ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }],
-            books: [{ author: "James", rejectedCount: 10 }]
+            books: [{ author: "James", rejectedCount: 10, status: "none" }]
         });
 
         const notes = await context.notes.all();
@@ -162,7 +161,7 @@ describe('DataContext Tests', () => {
         await seedDb(context, {
             notes: [{ contents: "Some Note", createdDate: new Date(), userId: "jdemeuse" }],
             contacts: [{ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }],
-            books: [{ author: "James", rejectedCount: 10 }]
+            books: [{ author: "James", rejectedCount: 10, status: "none" }]
         });
 
         const all = await context.getAllDocs();

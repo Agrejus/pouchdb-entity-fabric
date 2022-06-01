@@ -1,4 +1,5 @@
 import { DataContext } from '../DataContext'; 
+import { DbSet } from '../DbSet';
 import { IBook, IContact, INote, ISeedOptions } from './Entities';
 
 export enum DocumentTypes {
@@ -14,7 +15,7 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 
     notes = this.createDbSet<INote>(DocumentTypes.Notes, "userId", "createdDate");
     contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
-    books = this.createDbSet<IBook>(DocumentTypes.Books);
+    books = new DbSet<DocumentTypes, IBook, "status">(DocumentTypes.Books, this);//this.createDbSet<IBook>(DocumentTypes.Books);
 }
 
 export const seedDb = async (context: PouchDbDataContext, options: ISeedOptions) => {
