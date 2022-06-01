@@ -15,20 +15,14 @@ describe('DataContext Tests', () => {
         const context = createContext();
 
         for (let dbSet of context) {
-            await dbSet.removeAll()
+            await dbSet.empty()
         }
 
-        await context.notes.addRange([
-            { contents: "contents", createdDate: new Date(), userId: 'jdemeuse' }
-        ]);
+        await context.notes.add({ contents: "contents", createdDate: new Date(), userId: 'jdemeuse' });
 
-        await context.contacts.addRange([
-            { address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }
-        ]);
+        await context.contacts.add({ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" });
 
-        await context.books.addRange([
-            { author: "James DeMeuse", rejectedCount: 1 }
-        ]);
+        await context.books.add({ author: "James DeMeuse", rejectedCount: 1 });
 
         await context.saveChanges();
 
@@ -47,7 +41,7 @@ describe('DataContext Tests', () => {
         await seedDb(context, {
             notes: [{ contents: "Some Note", createdDate: new Date(), userId: "jdemeuse" }],
             contacts: [{ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }],
-            books: [{ author: "James", rejectedCount: 10, status: "none" }]
+            books: [{ author: "James", rejectedCount: 10, status: "pending" }]
         });
 
         const notes = await context.notes.all();
@@ -65,7 +59,7 @@ describe('DataContext Tests', () => {
         await seedDb(context, {
             notes: [{ contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }]
         });
-        
+
         const notesBeforeAdd = await context.notes.all();
 
         expect(notesBeforeAdd.length).toBe(1);
@@ -87,8 +81,7 @@ describe('DataContext Tests', () => {
 
         const context = createContext();
 
-        const bookOne = await context.books.add({ author: "James DeMeuse", rejectedCount: 1 });
-        const bookTwo = await context.books.add({ author: "Agrejus", rejectedCount: 2 });
+        const [bookOne, bookTwo] = await context.books.add({ author: "James DeMeuse", rejectedCount: 1 }, { author: "Agrejus", rejectedCount: 2 });
 
         await context.saveChanges();
 
@@ -110,11 +103,10 @@ describe('DataContext Tests', () => {
 
         const context = createContext();
 
-        const noteOne = await context.notes.add({ contents: "Note One", createdDate: new Date(), userId: "jdemeuse" });
-        const noteTwo = await context.notes.add({ contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" });
+        const [noteOne, noteTwo] = await context.notes.add({ contents: "Note One", createdDate: new Date(), userId: "jdemeuse" }, { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" });
 
         await context.saveChanges();
-;
+
         const notes = await context.notes.all();
         const contacts = await context.contacts.all();
         const books = await context.books.all();
@@ -129,39 +121,13 @@ describe('DataContext Tests', () => {
         expect(noteTwo._id).toBe(saveNoteTwo._id)
     });
 
-    it('should add range of entities', async () => {
-
-        const context = createContext();
-        await seedDb(context, {
-            notes: []
-        });
-        
-        const notesBeforeAdd = await context.notes.all();
-
-        expect(notesBeforeAdd.length).toBe(0);
-
-        const [noteOne, noteTwo] = await context.notes.addRange([{ contents: "Note One", createdDate: new Date(), userId: "jdemeuse" }, { contents: "Note Two", createdDate: new Date(), userId: "jdemeuse1" }]);
-
-        await context.saveChanges();
-
-        const notes = await context.notes.all();
-        const contacts = await context.contacts.all();
-        const books = await context.books.all();
-
-        expect(notes.length).toBe(2);
-        expect(contacts.length).toBe(0);
-        expect(books.length).toBe(0);
-        expect(noteOne._id).toBeDefined();
-        expect(noteTwo._id).toBeDefined();
-    });
-
     it('should get all data', async () => {
 
         const context = createContext();
         await seedDb(context, {
             notes: [{ contents: "Some Note", createdDate: new Date(), userId: "jdemeuse" }],
             contacts: [{ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }],
-            books: [{ author: "James", rejectedCount: 10, status: "none" }]
+            books: [{ author: "James", rejectedCount: 10, status: "pending" }]
         });
 
         const all = await context.getAllDocs();
@@ -231,7 +197,7 @@ describe('DataContext Tests', () => {
 
         const itemToRemove = await context.notes.all();
 
-        await context.notes.removeRange(itemToRemove)
+        await context.notes.remove(...itemToRemove)
 
         await context.saveChanges();
 
@@ -256,7 +222,7 @@ describe('DataContext Tests', () => {
 
         const itemToRemove = await context.notes.find(w => w.userId === "jdemeuse1");
 
-        await context.notes.removeById(itemToRemove._id)
+        await context.notes.remove(itemToRemove._id)
 
         await context.saveChanges();
 
@@ -282,7 +248,7 @@ describe('DataContext Tests', () => {
 
         const itemsToRemove = await context.notes.all();
 
-        await context.notes.removeRangeById(itemsToRemove.map(w => w._id))
+        await context.notes.remove(...itemsToRemove.map(w => w._id))
 
         await context.saveChanges();
 
@@ -295,7 +261,7 @@ describe('DataContext Tests', () => {
 
         const context = createContext();
 
-        const note = await context.notes.add({ contents: "New Note", createdDate: new Date(), userId: "jdemeuse" });
+        const [note] = await context.notes.add({ contents: "New Note", createdDate: new Date(), userId: "jdemeuse" });
 
         await context.saveChanges();
 
@@ -398,7 +364,7 @@ describe('DataContext Tests', () => {
         });
 
         //const contact = await context.contacts.find(w => w.address === "1234 Test St");
-        const contact = await context.contacts.find(function(w) {
+        const contact = await context.contacts.find(function (w) {
             return w.address === "1234 Test St";
         });
 
@@ -422,17 +388,11 @@ describe('DataContext Tests', () => {
         const onEntityCreated = jest.fn();
         context.on("entity-created", onEntityCreated);
 
-        await context.notes.addRange([
-            { contents: "contents", createdDate: new Date(), userId: 'jdemeuse' }
-        ]);
+        await context.notes.add({ contents: "contents", createdDate: new Date(), userId: 'jdemeuse' });
 
-        await context.contacts.addRange([
-            { address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" }
-        ]);
+        await context.contacts.add({ address: "1234 Test St", firstName: "James", lastName: "DeMeuse", phone: "111-111-1111" });
 
-        await context.books.addRange([
-            { author: "James DeMeuse", rejectedCount: 1 }
-        ]);
+        await context.books.add({ author: "James DeMeuse", rejectedCount: 1 });
 
         await context.saveChanges();
 
@@ -453,7 +413,7 @@ describe('DataContext Tests', () => {
 
         const itemToRemove = await context.notes.all();
 
-        await context.notes.removeRange(itemToRemove)
+        await context.notes.remove(...itemToRemove)
 
         await context.saveChanges();
 
@@ -473,8 +433,8 @@ describe('DataContext Tests', () => {
         });
 
         const notes = await context.notes.all();
-        
-        for(let note of notes) {
+
+        for (let note of notes) {
             note.userId = "changed";
         }
 
@@ -498,7 +458,7 @@ describe('DataContext Tests', () => {
 
         const itemToRemove = await context.notes.all();
 
-        await context.notes.removeRange(itemToRemove)
+        await context.notes.remove(...itemToRemove)
 
 
         expect(onEntityRemove).toHaveBeenCalledTimes(2)
@@ -540,7 +500,7 @@ describe('DataContext Tests', () => {
 
         const itemToRemove = await context.notes.all();
 
-        await context.notes.removeRangeById(itemToRemove.map(w => w._id));
+        await context.notes.remove(...itemToRemove.map(w => w._id));
 
 
         expect(onEntityRemove).toHaveBeenCalledTimes(2)
@@ -561,7 +521,7 @@ describe('DataContext Tests', () => {
 
         const itemToRemove = await context.notes.all();
 
-        await context.notes.removeById(itemToRemove.map(w => w._id)[0]);
+        await context.notes.remove(itemToRemove.map(w => w._id)[0]);
 
         expect(onEntityRemove).toHaveBeenCalledTimes(1)
     });

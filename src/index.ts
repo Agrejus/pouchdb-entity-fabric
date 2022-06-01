@@ -6,5 +6,13 @@ export {
     IDbRecord, 
     IDbRecordBase, 
     IDbSet, 
-    IIndexableEntity
+    IIndexableEntity,
+    OmittedEntity,
+    DataContextEvent,
+    DataContextEventCallback,
+    DbSetEvent,
+    DbSetEventCallback,
+    DbSetIdOnlyEventCallback,
+    IBulkDocsResponse,
+    IDbSetBase
 } from './typings';

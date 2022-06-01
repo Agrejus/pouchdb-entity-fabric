@@ -18,10 +18,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
-    private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = { 
+    private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = {
         "add": [],
         "remove": []
-     }
+    }
 
     /**
      * Constructor
@@ -36,11 +36,11 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._api = this._context._getApi();
     }
 
-    /**
-     * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async add(entity: OmittedEntity<TEntity, TExtraExclusions>) {
+    async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
+        return await Promise.all(entities.map(w => this._add(w)))
+    }
+
+    private async _add(entity: OmittedEntity<TEntity, TExtraExclusions>) {
 
         const indexableEntity: IIndexableEntity = entity as any;
 
@@ -53,7 +53,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
         const addItem: IDbRecord<TDocumentType> = entity as any;
         addItem.DocumentType = this._documentType;
-        const id = this.getKeyFromEntity(entity as any);
+        const id = this._getKeyFromEntity(entity as any);
 
         if (id != undefined) {
             const ids = add.map(w => w._id);
@@ -72,7 +72,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return addItem as TEntity
     }
 
-    private getKeyFromEntity(entity: TEntity) {
+    private _getKeyFromEntity(entity: TEntity) {
 
         if (this._idKeys.length === 0) {
             return null;
@@ -92,22 +92,22 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     isMatch(first: TEntity, second: TEntity) {
-        return this.getKeyFromEntity(first) === this.getKeyFromEntity(second);
+        return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
     }
 
-    /**
-     * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entities 
-     */
-    async addRange(entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
-        return await Promise.all(entities.map(w => this.add(w as any)));
+    async remove(...ids: string[]): Promise<void>;
+    async remove(...entities: TEntity[]): Promise<void>;
+    async remove(...entities: any[]) {
+        
+        if (entities.some(w => typeof w === "string")) {
+            await Promise.all(entities.map(w => this._removeById(w)))
+            return;
+        }
+
+        await Promise.all(entities.map(w => this._remove(w)))
     }
 
-    /**
-     * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async remove(entity: TEntity) {
+    private async _remove(entity: TEntity) {
         const data = this._api.getTrackedData();
         const { remove } = data;
 
@@ -123,27 +123,12 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         remove.push(entity as any);
     }
 
-    /**
-     * Remove array of entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async removeRange(entities: TEntity[]) {
-        await Promise.all(entities.map(w => this.remove(w)))
-    }
-
-    /**
-     * Remove all entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     */
-    async removeAll() {
+    async empty() {
         const items = await this.all();
-        await this.removeRange(items);
+        await this.remove(...items);
     }
 
-    /**
-     * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param id 
-     */
-    async removeById(id: string) {
+    private async _removeById(id: string) {
         const data = this._api.getTrackedData();
         const { removeById } = data;
 
@@ -154,14 +139,6 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._events["remove"].forEach(w => w(id as any));
 
         removeById.push(id);
-    }
-
-    /**
-     * Remove array of entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param ids 
-     */
-    async removeRangeById(ids: string[]) {
-        await Promise.all(ids.map(w => this.removeById(w)))
     }
 
     private detachItems(data: TEntity[]) {
@@ -181,11 +158,6 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
-    /**
-     * Selects items from the data store, similar to Where in entity framework
-     * @param selector 
-     * @returns Entity array
-     */
     async filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) {
         const data = await this._all();
 
@@ -196,20 +168,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
-    /**
-     * Matches items with the same document type
-     * @param items 
-     * @returns Entity array
-     */
     match(items: IDbRecordBase[]) {
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    /**
-     * Selects a matching entity from the data store or returns null
-     * @param selector 
-     * @returns Entity
-     */
     async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) {
         const data = await this._all();
         const result = [...data].find(selector);
@@ -221,19 +183,11 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
-    /**
-     * Detaches specified array of items from the context
-     * @param entities 
-     */
     detach(...entities: TEntity[]) {
         return this.detachItems(entities) as TEntity[]
     }
 
-    /**
-     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entites 
-     */
-     attach(...entites: TEntity[]) {
+    attach(...entites: TEntity[]) {
         entites.forEach(w => this._api.makeTrackable(w));
         this._api.send(entites, true)
     }

@@ -392,10 +392,6 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         }
     }
 
-    /**
-     * Persist changes to the underlying data store
-     * @returns number
-     */
     async saveChanges() {
         try {
 

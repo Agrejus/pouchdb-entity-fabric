@@ -33,11 +33,12 @@ class DbSet {
     }
     get IdKeys() { return this._idKeys; }
     get DocumentType() { return this._documentType; }
-    /**
-     * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity
-     */
-    add(entity) {
+    add(...entities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return yield Promise.all(entities.map(w => this._add(w)));
+        });
+    }
+    _add(entity) {
         return __awaiter(this, void 0, void 0, function* () {
             const indexableEntity = entity;
             if (indexableEntity["_rev"] !== undefined) {
@@ -47,7 +48,7 @@ class DbSet {
             const { add } = data;
             const addItem = entity;
             addItem.DocumentType = this._documentType;
-            const id = this.getKeyFromEntity(entity);
+            const id = this._getKeyFromEntity(entity);
             if (id != undefined) {
                 const ids = add.map(w => w._id);
                 if (ids.includes(id)) {
@@ -60,7 +61,7 @@ class DbSet {
             return addItem;
         });
     }
-    getKeyFromEntity(entity) {
+    _getKeyFromEntity(entity) {
         if (this._idKeys.length === 0) {
             return null;
         }
@@ -74,22 +75,18 @@ class DbSet {
         return [this.DocumentType, ...keyData].join("/");
     }
     isMatch(first, second) {
-        return this.getKeyFromEntity(first) === this.getKeyFromEntity(second);
+        return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
     }
-    /**
-     * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entities
-     */
-    addRange(entities) {
+    remove(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Promise.all(entities.map(w => this.add(w)));
+            if (entities.some(w => typeof w === "string")) {
+                yield Promise.all(entities.map(w => this._removeById(w)));
+                return;
+            }
+            yield Promise.all(entities.map(w => this._remove(w)));
         });
     }
-    /**
-     * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity
-     */
-    remove(entity) {
+    _remove(entity) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = this._api.getTrackedData();
             const { remove } = data;
@@ -102,29 +99,13 @@ class DbSet {
             remove.push(entity);
         });
     }
-    /**
-     * Remove array of entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity
-     */
-    removeRange(entities) {
-        return __awaiter(this, void 0, void 0, function* () {
-            yield Promise.all(entities.map(w => this.remove(w)));
-        });
-    }
-    /**
-     * Remove all entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     */
-    removeAll() {
+    empty() {
         return __awaiter(this, void 0, void 0, function* () {
             const items = yield this.all();
-            yield this.removeRange(items);
+            yield this.remove(...items);
         });
     }
-    /**
-     * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param id
-     */
-    removeById(id) {
+    _removeById(id) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = this._api.getTrackedData();
             const { removeById } = data;
@@ -133,15 +114,6 @@ class DbSet {
             }
             this._events["remove"].forEach(w => w(id));
             removeById.push(id);
-        });
-    }
-    /**
-     * Remove array of entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param ids
-     */
-    removeRangeById(ids) {
-        return __awaiter(this, void 0, void 0, function* () {
-            yield Promise.all(ids.map(w => this.removeById(w)));
         });
     }
     detachItems(data) {
@@ -160,11 +132,6 @@ class DbSet {
             return result;
         });
     }
-    /**
-     * Selects items from the data store, similar to Where in entity framework
-     * @param selector
-     * @returns Entity array
-     */
     filter(selector) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._all();
@@ -173,19 +140,9 @@ class DbSet {
             return result;
         });
     }
-    /**
-     * Matches items with the same document type
-     * @param items
-     * @returns Entity array
-     */
     match(items) {
         return items.filter(w => w.DocumentType === this.DocumentType);
     }
-    /**
-     * Selects a matching entity from the data store or returns null
-     * @param selector
-     * @returns Entity
-     */
     find(selector) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._all();
@@ -196,17 +153,9 @@ class DbSet {
             return result;
         });
     }
-    /**
-     * Detaches specified array of items from the context
-     * @param entities
-     */
     detach(...entities) {
         return this.detachItems(entities);
     }
-    /**
-     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entites
-     */
     attach(...entites) {
         entites.forEach(w => this._api.makeTrackable(w));
         this._api.send(entites, true);

@@ -24,5 +24,5 @@ export interface IBook extends IDbRecord<DocumentTypes>  {
     author: string;
     publishDate?: Date;
     rejectedCount: number;
-    status: string
+    status: "pending" | "approved" | "rejected";
 }

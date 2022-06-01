@@ -21,9 +21,9 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 export const seedDb = async (context: PouchDbDataContext, options: ISeedOptions) => {
     await clearDb(context);
 
-    await context.notes.addRange(options.notes ?? []);
-    await context.contacts.addRange(options.contacts ?? []);
-    await context.books.addRange(options.books ?? []);
+    await context.notes.add(...options.notes ?? []);
+    await context.contacts.add(...options.contacts ?? []);
+    await context.books.add(...options.books ?? []);
 
     await context.saveChanges();
 }
@@ -32,7 +32,7 @@ export const clearDb = async (context?: PouchDbDataContext) => {
     const c = context ?? createContext();
 
     for (let dbSet of c) {
-        await dbSet.removeAll()
+        await dbSet.empty()
     }
 
     await c.saveChanges();

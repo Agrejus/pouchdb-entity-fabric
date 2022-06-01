@@ -1,16 +1,83 @@
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSetBase<TDocumentType> {
-    add(entity: OmittedEntity<TEntity, TExtraExclusions>): Promise<TEntity>;
-    addRange(entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
-    remove(entity: TEntity) : Promise<void>;
-    removeRange(entities: TEntity[]) : Promise<void>;
+    
+    /**
+     * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
+     * @param entities
+     */
+    add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
+
+    /**
+     * Remove one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
+     * @param entities
+     */
+    remove(...entities: TEntity[]) : Promise<void>;
+
+    /**
+     * Remove one or more entities by id from the underlying data context, saveChanges must be called to persist these items to the store
+     * @param ids 
+     */
+    
+     remove(...ids: string[]) : Promise<void>;
+
+    /**
+     * Return all items in the underlying data store for the document type
+     * @returns TEntity[]
+     */
     all(): Promise<TEntity[]>;
+
+    /**
+     * Filter items in the underlying data store and return the results
+     * @param selector 
+     * @returns Promise<TEntity[]>
+     */
     filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
+
+    /**
+     * Find first item matching the selector in the underlying data store and return the result
+     * @param selector 
+     * @returns TEntity
+     */
     find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) : Promise<TEntity | undefined>
+    
+    /**
+     * Check for equality between two entities
+     * @param first
+     * @param second 
+     * @returns boolean
+     */
     isMatch(first: TEntity, second: TEntity): boolean;
+
+    /**
+     * Detaches specified array of items from the context so they can be modified and changes will not be persisted to the underlying data store
+     * @param entities 
+     */
     detach(...entities: TEntity[]): TEntity[];
+
+    /**
+     * Attach an existing entities to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * @param entites 
+     */
     attach(...entites: TEntity[]): void;
+
+    /**
+     * Matches items with the same document type
+     * @param entities 
+     * @returns TEntity[]
+     */
     match(entities:IDbRecordBase[]): TEntity[];
+
+    /**
+     * Find first item in the underlying data store and return the result 
+     * @returns TEntity
+     */
     first(): Promise<TEntity>;
+
+    /**
+     * Attach callback event to the DbSet
+     * @param event
+     * @param callback 
+     * @returns void
+     */
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
 }
 
@@ -31,10 +98,13 @@ export interface IIndexableEntity {
 }
 
 export interface IDbSetBase<TDocumentType extends string> {
+
     get DocumentType(): TDocumentType;
-    removeAll(): Promise<void>;
-    removeById(id:string): Promise<void>;
-    removeRangeById(ids:string[]): Promise<void>;
+
+     /**
+      * Remove all entities from the underlying data context, saveChanges must be called to persist these changes to the store
+      */
+      empty(): Promise<void>;
 }
 
 export interface IDbSetApi<TDocumentType extends string> {
@@ -66,8 +136,24 @@ export interface IBulkDocsResponse {
 }
 
 export interface IDataContext {
+
+    /**
+     * Persist changes to the underlying data store.  Returns number of documents modified
+     * @returns number
+     */
     saveChanges(): Promise<number>;
+
+    /**
+     * Get all documents in the underlying data store
+     * @returns IDbRecordBase[]
+     */
     getAllDocs(): Promise<IDbRecordBase[]>;
+
+    /**
+     * Check to see if there are any unsaved changes
+     * @returns boolean
+     */
+    hasPendingChanges(): boolean;
 }
 
 export interface ITrackedData {

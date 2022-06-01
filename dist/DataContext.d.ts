@@ -85,13 +85,9 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
     private _makeTrackable;
     private _getPendingChanges;
     private _tryCallEvents;
-    /**
-     * Persist changes to the underlying data store
-     * @returns number
-     */
     saveChanges(): Promise<number>;
     protected addEntityWithoutId(entity: IDbRecordBase): Promise<IBulkDocsResponse>;
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TAddExclusions extends keyof TEntity = any>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, TAddExclusions>;
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>;
     query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
     hasPendingChanges(): boolean;
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;

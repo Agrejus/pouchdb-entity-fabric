@@ -334,10 +334,6 @@ class DataContext {
             }
         }
     }
-    /**
-     * Persist changes to the underlying data store
-     * @returns number
-     */
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {

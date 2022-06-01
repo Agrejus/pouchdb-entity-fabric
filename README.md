@@ -23,12 +23,12 @@ export enum DocumentTypes {
     MySecondDocument = "MySecondDocument"
 }
 
-interface IMyFirstEntity {
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
     propertyOne: string;
     propertyTwo: string;
 }
 
-interface IMySecondEntity {
+interface IMySecondEntity extends IDbRecord<DocumentTypes> {
     propertyThree: string;
     propertyFour: number;
 }
@@ -43,8 +43,28 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 }
 ```
 
+## Entity Declaration
+Entites can be declared a few different ways.  Two of the main ways are to create an interface and inherit from `IDbRecord<TDocumentType>` or add the properties from `IDbRecord<TDocumentType>` to your entity.
+
+```javascript
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+// OR
+
+interface IMyFirstEntity {
+    propertyOne: string;
+    propertyTwo: string;
+    readonly _id: string;
+    readonly _rev: string;
+    DocumentType: DocumentTypes;
+}
+```
+
 ## Creating a DbSet
-The DbSet concept is derrived from .NET's entity framework and works the same way.  Items must be changed in the DbSet, once all changes are made, `SaveChanges` must be called on the context to persist all changes from the DbSet
+The DbSet concept is derrived from .NET's entity framework and works the same way.  Items must be changed in the DbSet, once all changes are made, `saveChanges()` must be called on the context to persist all changes from the DbSet
 
 DbSets work in two different ways
 - Automatic Id Generation
@@ -55,8 +75,7 @@ DbSets work in two different ways
 ```javascript
 const context = new PouchDbDataContext();
 
-const myFirstItem = { propertyOne: "some value", propertyTwo: "some value" };
-context.myFirstDbSet.add(myFirstItem);
+const [myFirstItem] = context.myFirstDbSet.add({ propertyOne: "some value", propertyTwo: "some value" });
 
 await context.saveChanges();
 
@@ -68,24 +87,57 @@ If no property id keys are provided to the db set, then we assume the id will be
 ```javascript
 const context = new PouchDbDataContext();
 
-const mySecondItem = { propertyThree: "some value", propertyFour: 1 };
-context.mySecondDbSetWithAutoIdGeneration.add(mySecondItem);
+const [mySecondItem] = await context.mySecondDbSetWithAutoIdGeneration.add({ propertyThree: "some value", propertyFour: 1 });
 
 await context.saveChanges();
 
-// myFirstItem will have the _rev and _id property added after save changes is called
+// mySecondItem will have the _rev and _id property added after save changes is called
+```
+
+### Add array of entities
+```javascript
+const context = new PouchDbDataContext();
+
+const [first, second] = await context.mySecondDbSetWithAutoIdGeneration.add(
+    { propertyThree: "some value", propertyFour: 1 }, 
+    { propertyThree: "other value", propertyFour: 2 }
+);
+
+await context.saveChanges();
+
+// OR
+
+const context = new PouchDbDataContext();
+const items = [
+    { propertyThree: "some value", propertyFour: 1 }, 
+    { propertyThree: "other value", propertyFour: 2 }
+];
+
+const [first, second] = await context.mySecondDbSetWithAutoIdGeneration.add(...items);
+
+await context.saveChanges();
+
 ```
 
 ## Removing Data
-
+### Remove One Entity
 ```javascript
 context.myFirstDbSet.remove(someEntity);
 
 await context.saveChanges();
 ```
 
+### Remove array of entities
+```javascript
+
+const someEntities: IMyFirstEntity[] = []; // some array of items
+context.myFirstDbSet.remove(...someEntities); // ensure we spread the array
+
+await context.saveChanges();
+```
+
 ## Modifying Data
-Any entities returned by the context can be modified and saved by calling `SaveChanges`.  Entities are modified by reference, so there is no need to add or attach entities that are returned from the underlying context
+Any entities returned by the context can be modified and saved by calling `saveChanges()`.  Entities are modified by reference, so there is no need to add or attach entities that are returned from the underlying context
 ```javascript
 const context = new PouchDbDataContext();
 
@@ -98,29 +150,93 @@ await context.saveChanges();
 // result will now be saved to the underlying database after SaveChanges is called.  Entities are modified by reference, there is no need to attach or add an entity that is returned from the underlying context
 ```
 
+## Default Property Values
+With TypeScript/JavaScript, it can be hard to set default types unless a class is created and default types are set in the constructor.  This can get messy because extra syntax is required to create a class for each entity, instead of just an interface.  With an interface, they cannot have an initializer, meaning a default type cannot be set.  Also, when giving an Entity Type to a `DbSet<>`, optional properties will be optional throughout there usage, what if we want optional only on creation and set a default later?  To help with default property values, we can use property exclusion coupled with the `on()` event on a `DbSet<>`.  Below is an example of setting a sequence number to zero for every entity added, but not requiring the developer to set a sequence number when an item is being added and also maintaining the property as required (not optional).  
+
+```javascript
+
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    SomeDocument = "SomeDocument"
+}
+
+interface ISomeEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+    sequenceNumber: number;
+}
+
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    constructor() {
+        super('some-db');
+
+        // When an entity is added to the underlying context, automatically set the status to 'pending'
+        // This is useful for setting default values when adding
+        this.someDbSet.on("add", entity => {
+            entity.sequenceNumber = 0;
+        })
+    }
+
+    someDbSet = this.createDbSet<ISomeEntity, "sequenceNumber">(DocumentTypes.SomeDocument, "propertyOne", "propertyTwo");
+}
+
+const context = new PouchDbDataContext();
+
+// notice status is not required here, it will be set by the on event later
+const [ result ] = await context.someDbSet.add({ propertyOne: "some value", propertyTwo: "some value" });
+
+await context.saveChanges();
+
+// result
+{
+    _id: "SomeDocument/some value/some value",
+    _rev: "<generated>",
+    DocumentType: "SomeDocument",
+    sequenceNumber: 0,
+    propertyOne: "some value",
+    propertyTwo: "some value"
+}
+```
+
+## DbSet Events
+DbSet's have two available event that can be subscribed to, `"add"`, `"remove"`.  
+- `"add"` event is called after the entity is queued for addition.
+- `"remove"` event is called after the entity is queued for removal.
+
+## DataContext Events
+The DataContext has three available events that can be subscribed to, `"entity-created"`, `"entity-updated"`, `"entity-removed"`.  
+- `"entity-created"` event is called after the entity is created in the underlying data store.
+- `"entity-updated"` event is called after the entity is updated in the underlying data store.
+- `"entity-removed"` event is called after the entity is removed in the underlying data store.
+
 ## API
 ### DbSet Methods
 | Method | Description |
 | ----- | --- |
-| `add(entity: TEntity): Promise<void>` | Add an entity to the context, save changes must be called to persist changes |
-| `addRange(entities: TEntity[]): Promise<void>` | Add list of entities to the context, save changes must be called to persist changes |
-| `attach(entity: AttachedEntity<TEntity, TDocumentType, TEntityType>): Promise<void>` | Attaches an entity to the context |
-| `remove(entity: TEntity) : Promise<void>` | Remove an entity from the context, save changes must be called to persist changes |
-| `removeRange(entities: TEntity[]) : Promise<void>` | Remove entities from the context, save changes must be called to persist changes |
-| `all(): Promise<(TEntityType & TEntity)[]>` | Get all entities for the underlying document type |
-| `filter(selector: (entity: (TEntityType & TEntity), index?: number, array?: (TEntityType & TEntity)[]) => boolean): Promise<(TEntityType & TEntity)[]>` | Filter entities for the underlying document type |
-| `find(selector: (entity: (TEntityType & TEntity), index?: number, array?: (TEntityType & TEntity)[]) => boolean) : Promise<(TEntityType & TEntity) \| undefined>` | Find an entity for the underlying document type |
-| `onBeforeAdd(action: (entity: TEntity & TEntityType) => void): void` | Called before an entity is added to the data context |
+| `add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<Awaited<TEntity>[]>` | Add an entity or entities to the context and return it as a reference, save changes must be called to persist changes |
 | `isMatch(first: TEntity, second: TEntity): boolean` | Checks for equality between two entities from the context.  This is useful to check and see if an entity belongs in the `DbSet` |
-| `detach(entities: TEntity[]): (TEntity & TEntityType)[]` | Detaches an entity from the data context.  This is useful for detaching and entity, modifying it and changes will not be persisted to PouchDB |
-| `match(entities:IDbRecordBase[]): (TEntityType & TEntity)[]` | Matches base entities and returns entities with matching document types.  This is useful for matching entites from `getAllDocs` in the data context, because those entites are generic and can belong to any `DbSet` |
+| `remove(...ids: string[]): Promise<void>` | Remove an entity or entities by id from the context, save changes must be called to persist changes |
+| `remove(...entities: TEntity[]): Promise<void>` | Remove an entity or entities from the context, save changes must be called to persist changes |
+| `empty(): Promise<void>;` | Remove all entities from the DbSet, save changes must be called to persist changes |
+| `all(): Promise<TEntity[]>` | Get all entities for the underlying document type |
+| `filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;` | Filter entities for the underlying document type |
+| `match(items: IDbRecordBase[]): TEntity[]` | Matches base entities and returns entities with matching document types.  This is useful for matching entites from `getAllDocs` in the data context, because those entites are generic and can belong to any `DbSet` |
+| `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity>` | Find an entity for the underlying document type |
+| `detach(...entities: TEntity[]): TEntity[]` | Detaches an entity from the data context.  This is useful for detaching and entity, modifying it and changes will not be persisted to PouchDB |
+| `attach(...entites: TEntity[]): void` | Attaches an entity to the context |
+| `first(): Promise<TEntity>` | Get first item in the DbSet |  
+| `on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void` | Called when an item is queued for creation in the underlying data context |
+| `on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;` | Called when an item is queued for removal in the underlying data context |
 
 ### DataContext Methods
 | Method | Description |
 | ----- | --- |
 | `saveChanges(): Promise<number>` | Persist all changes to PouchDB, returns a count of all documents modified |
 | `getAllDocs(): Promise<IDbRecordBase[]>` | Get all documents regardless of document type |
-| `protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, Entity, IDbRecord<TDocumentType>>` | Method used to create a DbSet in the context.  NOTE: This is a protected method |
+| `protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>` | Method used to create a DbSet in the context.  NOTE: This is a protected method |
+| `on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void` | Subscribe to events on the data context |
 
 
 
@@ -134,7 +250,17 @@ await context.saveChanges();
     - `readonly _rev: string;`
     - `DocumentType: TDocumentType;`
 - Removed `AttachedEntity<>`, using above mechanism instead.  This will eliminate the need to recast types after they are added to the context
-- Added ability to exclude properties when using `add()` or `addRange()` methods on `DbSet<>`.  This allows users to exlucde properties and set them later.  Example:
+- Removed `onBeforeAdd()` method on `DbSet<>`
+- Removed `removeRange()` method on `DbSet<>`.  Replaced by `remove()`
+- Removed `addRange()` method on `DbSet<>`.  Replaced by `add()`
+- Removed `removeAll()` method on `DbSet<>`.  Replaced by `empty()`
+- Removed `removeRangeById()` method on `DbSet<>`.  Replaced by `remove()`
+- Removed `removeById()` method on `DbSet<>`.  Replaced by `remove()`
+- Added `on()` method to allow for adding events to the `DbSet<>`.  Event types: `"add"`, `"remove"`
+- Added `on()` method to allow for adding events to the `DataContext<>`. Event Types: ``, ``, ``
+- Added ability to exclude properties when using `add()` or `addRange()` methods on `DbSet<>`.  This allows users to exlucde properties and set them later, which is useful for creating default property values.  Example:
+- Overloaded `remove()` and `add()` on `DbSet<>` to replace extra functions (above)
+- Added `first(): Promise<TEntity>` method to get the first item in the `DbSet<>`.
 
 ```javascript
 
@@ -144,7 +270,7 @@ export enum DocumentTypes {
     SomeDocument = "SomeDocument"
 }
 
-interface ISomeEntity {
+interface ISomeEntity extends IDbRecord<DocumentTypes> {
     propertyOne: string;
     propertyTwo: string;
     status: "pending" | "succeeded"
@@ -155,6 +281,8 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
     constructor() {
         super('some-db');
 
+        // When an entity is added to the underlying context, automatically set the status to 'pending'
+        // This is useful for setting default values when adding
         this.someDbSet.on("add", entity => {
             entity.status = "pending";
         })
@@ -166,7 +294,7 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 const context = new PouchDbDataContext();
 
 // notice status is not required here, it will be set by the on event later
-const result = await context.someDbSet.add({ propertyOne: "some value", propertyTwo: "some value" });
+const [result] = await context.someDbSet.add({ propertyOne: "some value", propertyTwo: "some value" });
 
 await context.saveChanges();
 
