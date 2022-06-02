@@ -122,7 +122,7 @@ export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentTyp
 }
 
 export interface IDbAdditionRecord<T> {
-    DocumentType: T;
+    readonly DocumentType: T;
 }
 
 export interface IDbRecordBase extends IDbRecord<any> {

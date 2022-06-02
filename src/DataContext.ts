@@ -31,9 +31,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     protected async getAllData(documentType?: TDocumentType) {
 
         const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
-            selector: {
-                collectiontype: this._collectionName
-            }
+            selector: {}
         }
 
         if (documentType != null) {
@@ -151,7 +149,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
     /**
      * Remove entity in the data store, this is used by DbSet
-     * @param entity 
+     * @param id 
      */
     protected async removeEntityById(id: string) {
         const entity = await this._db.get(id);
@@ -191,7 +189,6 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     /**
      * Used by the context api
      * @param data 
-     * @param matcher 
      */
     private _detach(data: IDbRecordBase[]) {
 
@@ -227,7 +224,12 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             }
         }
 
-        this._attachments = [...this._attachments, ...data].filter((w, i, self) => self.indexOf(w) === i);
+        this._setAttachments(data);
+    }
+
+    private _setAttachments(data: IDbRecordBase[]) {
+        // do not filter duplicates in case devs return multiple instances of the same entity
+        this._attachments = [...this._attachments, ...data];//.filter((value, index, self) =>  index === self.findIndex((t) => t._id === value._id));
     }
 
     /**
@@ -242,18 +244,18 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         } as ITrackedData;
     }
 
-    private reinitialize(removals: IDbRecordBase[] = [], removalsById: string[] = []) {
+    private reinitialize(removals: IDbRecordBase[] = [], removalsById: string[] = [], add: IDbRecordBase[] = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
 
         // remove attached tracking changes
-        for(let item of this._attachments) {
+        for (let item of this._attachments) {
             const indexableEntity: IIndexableEntity = item as any;
             delete indexableEntity[PRISTINE_ENTITY_KEY];
         }
 
-        for(let removal of removals) {
+        for (let removal of removals) {
             const index = this._attachments.findIndex(w => w._id === removal._id);
 
             if (index !== -1) {
@@ -261,13 +263,16 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             }
         }
 
-        for(let removalById of removalsById) {
+        for (let removalById of removalsById) {
             const index = this._attachments.findIndex(w => w._id === removalById);
 
             if (index !== -1) {
                 this._attachments.splice(index, 1)
             }
         }
+
+        // move additions to attachments so we can track changes
+        this._setAttachments(add);
     }
 
     /**
@@ -308,13 +313,13 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
                 const indexableEntity: IIndexableEntity = entity as any;
                 const key = String(property);
 
-                if (property !== PRISTINE_ENTITY_KEY) {
+                if (property !== PRISTINE_ENTITY_KEY && indexableEntity._id != null) {
                     const oldValue = indexableEntity[key];
 
                     if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
                         indexableEntity[PRISTINE_ENTITY_KEY] = {};
                     }
-    
+
                     if (indexableEntity[PRISTINE_ENTITY_KEY][key] === undefined) {
                         indexableEntity[PRISTINE_ENTITY_KEY][key] = oldValue;
                     }
@@ -347,13 +352,6 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             }
 
             return false;
-        }).map(w => {
-            const indexableEntity = w as IIndexableEntity;
-            delete indexableEntity[PRISTINE_ENTITY_KEY];
-
-            // remove the pristine entity, this will get re-added 
-            // after any change happens because this is a proxy
-            return indexableEntity as IDbRecordBase;
         });
 
         return {
@@ -364,32 +362,26 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         }
     }
 
-    private _tryCallEvents(modification: IDbRecordBase, changes: { remove: IDbRecordBase[], addsWithIds: IDbRecordBase[], updated: IDbRecordBase[] }) {
-        const { remove, addsWithIds, updated } = changes;
+    private _tryCallEvents(changes: { remove: IDbRecordBase[], add: IDbRecordBase[], updated: IDbRecordBase[] }) {
 
-        if (this._events["entity-removed"].length > 0) {
-            const foundRemoval = remove.find(w => w._id === modification._id);
-
-            if (foundRemoval) {
-                this._events["entity-removed"].forEach(w => w(foundRemoval));
-            }
+        if (this._events["entity-removed"].length > 0 && changes.remove.length > 0) {
+            changes.remove.forEach(w => this._events["entity-removed"].forEach(x => x(w)))
         }
 
-        if (this._events["entity-created"].length > 0) {
-            const foundAdd = addsWithIds.find(w => w._id === modification._id);
-
-            if (foundAdd) {
-                this._events["entity-created"].forEach(w => w(foundAdd));
-            }
+        if (this._events["entity-created"].length > 0 && changes.add.length > 0) {
+            changes.add.forEach(w => this._events["entity-created"].forEach(x => x(w)))
         }
 
-        if (this._events["entity-updated"].length > 0) {
-            const foundUpdated = updated.find(w => w._id === modification._id);
-
-            if (foundUpdated) {
-                this._events["entity-updated"].forEach(w => w(foundUpdated));
-            }
+        if (this._events["entity-updated"].length > 0 && changes.updated.length > 0) {
+            changes.updated.forEach(w => this._events["entity-updated"].forEach(x => x(w)))
         }
+    }
+
+    private _makePristine(entity: IDbRecordBase) {
+        const indexableEntity = entity as IIndexableEntity;
+
+        // make pristine again
+        delete indexableEntity[PRISTINE_ENTITY_KEY];
     }
 
     async saveChanges() {
@@ -397,9 +389,8 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
             const { add, remove, removeById, updated } = this._getPendingChanges();
 
-            for(let item of add) {
-                this._makeTrackable(item);
-            }
+            // remove pristine entity
+            [...add, ...remove, ...updated].forEach(w => this._makePristine(w))
 
             const addsWithIds = add.filter(w => !!w._id);
             const addsWithoutIds = add.filter(w => w._id == null);
@@ -409,19 +400,26 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
             for (let modification of modifications) {
 
-                this._tryCallEvents(modification, { remove, addsWithIds, updated });9
-
                 const found = successfulModifications.find(w => w.id === modification._id);
                 // update the rev in case we edit the record again
                 if (found && found.ok === true) {
-                    (modification as any)._rev = found.rev;
+                    const indexableEntity = modification as IIndexableEntity;
+                    indexableEntity._rev = found.rev;
+
+                    // make pristine again
+                    this._makePristine(modification);
                 }
             }
 
             const additionsWithGeneratedIds = await Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)))
             const removalsById = await Promise.all(removeById.map(w => this.removeEntityById(w)));
 
-            this.reinitialize(remove, removeById)
+            // removals are being grouped with updates, 
+            // need to separate out calls to events so we don't double dip
+            // on updates and removals
+            this._tryCallEvents({ remove, add, updated });
+
+            this.reinitialize(remove, removeById, add);
 
             return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
 
@@ -437,8 +435,6 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         return new Promise<IBulkDocsResponse>(async (resolve, reject) => {
             try {
                 const result = await this.insertEntity(entity);
-
-                this._events["entity-created"].forEach(w => w(entity as any));
 
                 resolve({ ok: result, id: "", rev: "" })
             } catch (e) {

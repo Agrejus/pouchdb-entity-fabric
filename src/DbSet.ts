@@ -52,7 +52,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const { add } = data;
 
         const addItem: IDbRecord<TDocumentType> = entity as any;
-        addItem.DocumentType = this._documentType;
+        (addItem as any).DocumentType = this._documentType;
         const id = this._getKeyFromEntity(entity as any);
 
         if (id != undefined) {
@@ -67,9 +67,11 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
         this._events["add"].forEach(w => w(entity as any));
 
-        add.push(addItem);
+        const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
 
-        return addItem as TEntity
+        add.push(trackableEntity);
+
+        return trackableEntity;
     }
 
     private _getKeyFromEntity(entity: TEntity) {
