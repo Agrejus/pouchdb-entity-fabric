@@ -1,4 +1,5 @@
 import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { validateAttachedEntity } from './Validation';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -100,7 +101,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     async remove(...ids: string[]): Promise<void>;
     async remove(...entities: TEntity[]): Promise<void>;
     async remove(...entities: any[]) {
-        
+
         if (entities.some(w => typeof w === "string")) {
             await Promise.all(entities.map(w => this._removeById(w)))
             return;
@@ -174,7 +175,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) : Promise<TEntity | undefined> {
+    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined> {
         const data = await this._all();
         const result = [...data].find(selector);
 
@@ -190,6 +191,14 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     attach(...entites: TEntity[]) {
+
+        const validationFailures = entites.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
+        
+        if (validationFailures.length > 0) {
+            const errors = validationFailures.map(w => w.error).join('\r\n')
+            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
+        }
+
         entites.forEach(w => this._api.makeTrackable(w));
         this._api.send(entites, true)
     }

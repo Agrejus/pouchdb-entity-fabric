@@ -37,9 +37,7 @@ class DataContext {
     getAllData(documentType) {
         return __awaiter(this, void 0, void 0, function* () {
             const findOptions = {
-                selector: {
-                    collectiontype: this._collectionName
-                }
+                selector: {}
             };
             if (documentType != null) {
                 findOptions.selector.DocumentType = documentType;
@@ -139,7 +137,7 @@ class DataContext {
     }
     /**
      * Remove entity in the data store, this is used by DbSet
-     * @param entity
+     * @param id
      */
     removeEntityById(id) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -179,21 +177,9 @@ class DataContext {
     /**
      * Used by the context api
      * @param data
-     * @param matcher
      */
     _detach(data) {
-        const result = [];
-        for (let i = 0; i < data.length; i++) {
-            const detachment = data[i];
-            const index = this._attachments.findIndex(w => w._id === detachment._id);
-            if (index === -1) {
-                continue;
-            }
-            const clone = JSON.parse(JSON.stringify(this._attachments[index]));
-            this._attachments.splice(index, 1);
-            result.push(clone);
-        }
-        return result;
+        this._attachments = this._attachments.filter(w => data.some(x => x._id === w._id) === false);
     }
     /**
      * Used by the context api
@@ -206,7 +192,11 @@ class DataContext {
                 throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
             }
         }
-        this._attachments = [...this._attachments, ...data].filter((w, i, self) => self.indexOf(w) === i);
+        this._setAttachments(data);
+    }
+    _setAttachments(data) {
+        // do not filter duplicates in case devs return multiple instances of the same entity
+        this._attachments = [...this._attachments, ...data]; //.filter((value, index, self) =>  index === self.findIndex((t) => t._id === value._id));
     }
     /**
      * Used by the context api
@@ -219,7 +209,7 @@ class DataContext {
             removeById: this._removeById
         };
     }
-    reinitialize(removals = [], removalsById = []) {
+    reinitialize(removals = [], removalsById = [], add = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
@@ -240,6 +230,8 @@ class DataContext {
                 this._attachments.splice(index, 1);
             }
         }
+        // move additions to attachments so we can track changes
+        this._setAttachments(add);
     }
     /**
      * Provides equality comparison for Entities
@@ -270,7 +262,7 @@ class DataContext {
             set: (entity, property, value) => {
                 const indexableEntity = entity;
                 const key = String(property);
-                if (property !== DbSet_1.PRISTINE_ENTITY_KEY) {
+                if (property !== DbSet_1.PRISTINE_ENTITY_KEY && indexableEntity._id != null) {
                     const oldValue = indexableEntity[key];
                     if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] === undefined) {
                         indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] = {};
@@ -299,12 +291,6 @@ class DataContext {
                 }
             }
             return false;
-        }).map(w => {
-            const indexableEntity = w;
-            delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
-            // remove the pristine entity, this will get re-added 
-            // after any change happens because this is a proxy
-            return indexableEntity;
         });
         return {
             add,
@@ -313,51 +299,50 @@ class DataContext {
             updated
         };
     }
-    _tryCallEvents(modification, changes) {
-        const { remove, addsWithIds, updated } = changes;
-        if (this._events["entity-removed"].length > 0) {
-            const foundRemoval = remove.find(w => w._id === modification._id);
-            if (foundRemoval) {
-                this._events["entity-removed"].forEach(w => w(foundRemoval));
-            }
+    _tryCallEvents(changes) {
+        if (this._events["entity-removed"].length > 0 && changes.remove.length > 0) {
+            changes.remove.forEach(w => this._events["entity-removed"].forEach(x => x(w)));
         }
-        if (this._events["entity-created"].length > 0) {
-            const foundAdd = addsWithIds.find(w => w._id === modification._id);
-            if (foundAdd) {
-                this._events["entity-created"].forEach(w => w(foundAdd));
-            }
+        if (this._events["entity-created"].length > 0 && changes.add.length > 0) {
+            changes.add.forEach(w => this._events["entity-created"].forEach(x => x(w)));
         }
-        if (this._events["entity-updated"].length > 0) {
-            const foundUpdated = updated.find(w => w._id === modification._id);
-            if (foundUpdated) {
-                this._events["entity-updated"].forEach(w => w(foundUpdated));
-            }
+        if (this._events["entity-updated"].length > 0 && changes.updated.length > 0) {
+            changes.updated.forEach(w => this._events["entity-updated"].forEach(x => x(w)));
         }
+    }
+    _makePristine(entity) {
+        const indexableEntity = entity;
+        // make pristine again
+        delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
     }
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { add, remove, removeById, updated } = this._getPendingChanges();
-                for (let item of add) {
-                    this._makeTrackable(item);
-                }
+                // remove pristine entity
+                [...add, ...remove, ...updated].forEach(w => this._makePristine(w));
                 const addsWithIds = add.filter(w => !!w._id);
                 const addsWithoutIds = add.filter(w => w._id == null);
                 const modifications = [...updated, ...addsWithIds, ...remove.map(w => (Object.assign(Object.assign({}, w), { _deleted: true })))];
                 const modificationResult = yield this.bulkDocs(modifications);
                 const successfulModifications = modificationResult.filter(w => w.ok === true);
                 for (let modification of modifications) {
-                    this._tryCallEvents(modification, { remove, addsWithIds, updated });
-                    9;
                     const found = successfulModifications.find(w => w.id === modification._id);
                     // update the rev in case we edit the record again
                     if (found && found.ok === true) {
-                        modification._rev = found.rev;
+                        const indexableEntity = modification;
+                        indexableEntity._rev = found.rev;
+                        // make pristine again
+                        this._makePristine(modification);
                     }
                 }
                 const additionsWithGeneratedIds = yield Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)));
                 const removalsById = yield Promise.all(removeById.map(w => this.removeEntityById(w)));
-                this.reinitialize(remove, removeById);
+                // removals are being grouped with updates, 
+                // need to separate out calls to events so we don't double dip
+                // on updates and removals
+                this._tryCallEvents({ remove, add, updated });
+                this.reinitialize(remove, removeById, add);
                 return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
                         return w.ok;
                     })].filter(w => w === true).length;
@@ -372,7 +357,6 @@ class DataContext {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const result = yield this.insertEntity(entity);
-                this._events["entity-created"].forEach(w => w(entity));
                 resolve({ ok: result, id: "", rev: "" });
             }
             catch (e) {

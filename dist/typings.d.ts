@@ -42,7 +42,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Detaches specified array of items from the context so they can be modified and changes will not be persisted to the underlying data store
      * @param entities
      */
-    detach(...entities: TEntity[]): TEntity[];
+    detach(...entities: TEntity[]): void;
     /**
      * Attach an existing entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites
@@ -77,6 +77,7 @@ export declare type DbSetIdOnlyEventCallback = (entity: string) => void;
 export declare type DbSetEvent = "add" | "remove";
 export declare type KeyOf<T> = keyof T;
 export declare type IdKeys<T> = KeyOf<T>[];
+export declare type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev">>;
 export interface IIndexableEntity {
     [key: string]: any;
 }
@@ -99,7 +100,7 @@ export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentTyp
     readonly _rev: string;
 }
 export interface IDbAdditionRecord<T> {
-    DocumentType: T;
+    readonly DocumentType: T;
 }
 export interface IDbRecordBase extends IDbRecord<any> {
 }

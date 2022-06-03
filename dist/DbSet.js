@@ -10,6 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DbSet = exports.PRISTINE_ENTITY_KEY = void 0;
+const Validation_1 = require("./Validation");
 exports.PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -57,8 +58,9 @@ class DbSet {
                 addItem._id = id;
             }
             this._events["add"].forEach(w => w(entity));
-            add.push(addItem);
-            return addItem;
+            const trackableEntity = this._api.makeTrackable(addItem);
+            add.push(trackableEntity);
+            return trackableEntity;
         });
     }
     _getKeyFromEntity(entity) {
@@ -116,7 +118,7 @@ class DbSet {
             removeById.push(id);
         });
     }
-    detachItems(data) {
+    _detachItems(data) {
         return this._api.detach(data);
     }
     _all() {
@@ -154,9 +156,14 @@ class DbSet {
         });
     }
     detach(...entities) {
-        return this.detachItems(entities);
+        this._detachItems(entities);
     }
     attach(...entites) {
+        const validationFailures = entites.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
+        if (validationFailures.length > 0) {
+            const errors = validationFailures.map(w => w.error).join('\r\n');
+            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
+        }
         entites.forEach(w => this._api.makeTrackable(w));
         this._api.send(entites, true);
     }
