@@ -55,7 +55,7 @@ describe('getting started - data context', () => {
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
-        constructor(){
+        constructor() {
             super();
             this.books.on("add", entity => {
                 entity.status = "pending";
@@ -189,9 +189,9 @@ describe('getting started - data context', () => {
 
     test('should remove many entities by reference', async () => {
         const context = new PouchDbDataContext();
-        const generated: IContact[] = []; 
+        const generated: IContact[] = [];
 
-        for(let i = 0; i < 20; i++) {
+        for (let i = 0; i < 20; i++) {
             const [contact] = await context.contacts.add({
                 firstName: faker.name.firstName(),
                 lastName: faker.name.lastName(),
@@ -218,9 +218,9 @@ describe('getting started - data context', () => {
 
     test('should remove many entities by id', async () => {
         const context = new PouchDbDataContext();
-        const generated: IContact[] = []; 
+        const generated: IContact[] = [];
 
-        for(let i = 0; i < 20; i++) {
+        for (let i = 0; i < 20; i++) {
             const [contact] = await context.contacts.add({
                 firstName: faker.name.firstName(),
                 lastName: faker.name.lastName(),
@@ -339,9 +339,9 @@ describe('getting started - data context', () => {
 
     test('should empty entities from dbset', async () => {
         const context = new PouchDbDataContext();
-        const generated: IContact[] = []; 
+        const generated: IContact[] = [];
 
-        for(let i = 0; i < 20; i++) {
+        for (let i = 0; i < 20; i++) {
             const [contact] = await context.contacts.add({
                 firstName: faker.name.firstName(),
                 lastName: faker.name.lastName(),
@@ -385,7 +385,7 @@ describe('getting started - data context', () => {
         const filtered = await context.contacts.filter(w => w.firstName === "James");
 
         expect(filtered.length).toBe(1);
-        
+
         const doesMatch = context.contacts.isMatch(filtered[0], first);
         expect(doesMatch).toBe(true);
     });
@@ -394,7 +394,7 @@ describe('getting started - data context', () => {
         const context = new PouchDbDataContext();
 
 
-        for(let i = 0; i < 20; i++) {
+        for (let i = 0; i < 20; i++) {
             await context.contacts.add({
                 firstName: faker.name.firstName(),
                 lastName: faker.name.lastName(),
@@ -422,4 +422,125 @@ describe('getting started - data context', () => {
 
         expect(contacts.length).toBe(20);
     });
+
+    test('should find correct entity', async () => {
+        const context = new PouchDbDataContext();
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        }, {
+            firstName: "John",
+            lastName: "Doe",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        await context.saveChanges();
+
+        const filtered = await context.contacts.find(w => w.firstName === "John");
+
+        expect(filtered._id).toBe("Contacts/John/Doe");
+    });
+
+    test('should find no entity', async () => {
+        const context = new PouchDbDataContext();
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        }, {
+            firstName: "John",
+            lastName: "Doe",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        await context.saveChanges();
+
+        const filtered = await context.contacts.find(w => w.firstName === "Test");
+
+        expect(filtered).not.toBeDefined();
+    });
+
+    it('should detach entities from context reference after adding', async () => {
+
+        const context = new PouchDbDataContext();
+        const [contact] = await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        context.contacts.detach(contact);
+
+        contact.firstName = "Test";
+
+        expect(context.hasPendingChanges()).toBe(false);
+        await context.saveChanges();
+
+        const updated = await context.contacts.find(w => w.firstName === "James");
+
+        expect(updated.firstName).toBe("James");
+    });
+
+    it('should detach entities from context reference after adding and getting from find', async () => {
+
+        const context = new PouchDbDataContext();
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const contact = await context.contacts.find(w => w.firstName === "James");
+
+        context.contacts.detach(contact);
+
+        contact.firstName = "Test";
+
+        expect(context.hasPendingChanges()).toBe(false);
+        await context.saveChanges();
+
+        const updated = await context.contacts.find(w => w.firstName === "James");
+
+        expect(updated.firstName).toBe("James");
+    });
+
+    it('should detach entities from context reference after adding and getting from filter', async () => {
+
+        const context = new PouchDbDataContext();
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const [contact] = await context.contacts.filter(w => w.firstName === "James");
+
+        context.contacts.detach(contact);
+
+        contact.firstName = "Test";
+
+        expect(context.hasPendingChanges()).toBe(false);
+        await context.saveChanges();
+
+        const updated = await context.contacts.find(w => w.firstName === "James");
+
+        expect(updated.firstName).toBe("James");
+    });
+
+    // ensure all detaching works
+    // attach
 });

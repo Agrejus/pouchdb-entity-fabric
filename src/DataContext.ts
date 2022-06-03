@@ -191,24 +191,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * @param data 
      */
     private _detach(data: IDbRecordBase[]) {
-
-        const result: IDbRecordBase[] = [];
-        for (let i = 0; i < data.length; i++) {
-            const detachment = data[i];
-            const index = this._attachments.findIndex(w => w._id === detachment._id)
-
-            if (index === -1) {
-                continue;
-            }
-
-            const clone: IDbRecordBase = JSON.parse(JSON.stringify(this._attachments[index]));
-
-            this._attachments.splice(index, 1);
-
-            result.push(clone);
-        }
-
-        return result;
+        this._attachments = this._attachments.filter(w => data.some(x => x._id === w._id) === false);
     }
 
     /**

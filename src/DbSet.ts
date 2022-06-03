@@ -143,7 +143,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         removeById.push(id);
     }
 
-    private detachItems(data: TEntity[]) {
+    private _detachItems(data: TEntity[]) {
         return this._api.detach(data);
     }
 
@@ -174,7 +174,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) {
+    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) : Promise<TEntity | undefined> {
         const data = await this._all();
         const result = [...data].find(selector);
 
@@ -186,7 +186,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     detach(...entities: TEntity[]) {
-        return this.detachItems(entities) as TEntity[]
+        this._detachItems(entities)
     }
 
     attach(...entites: TEntity[]) {

@@ -51,7 +51,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Detaches specified array of items from the context so they can be modified and changes will not be persisted to the underlying data store
      * @param entities 
      */
-    detach(...entities: TEntity[]): TEntity[];
+    detach(...entities: TEntity[]): void;
 
     /**
      * Attach an existing entities to the underlying Data Context, saveChanges must be called to persist these items to the store
