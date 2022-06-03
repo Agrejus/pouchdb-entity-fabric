@@ -1,5 +1,5 @@
-import { DataContext } from "../../DataContext";
-import { IDbRecord } from "../../typings";
+import { DataContext } from "../DataContext";
+import { IDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
