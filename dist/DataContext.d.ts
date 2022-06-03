@@ -2,7 +2,7 @@
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
-import { IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IdKeys } from './typings';
+import { DataContextEvent, DataContextEventCallback, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase } from './typings';
 export declare class DataContext<TDocumentType extends string> implements IDataContext {
     protected _db: PouchDB.Database;
     protected _removals: IDbRecordBase[];
@@ -10,6 +10,7 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
     protected _attachments: IDbRecordBase[];
     protected _removeById: string[];
     protected _collectionName: string;
+    private _events;
     private _dbSets;
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration);
     /**
@@ -45,7 +46,7 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
     protected removeEntity(entity: IDbRecordBase): Promise<boolean>;
     /**
      * Remove entity in the data store, this is used by DbSet
-     * @param entity
+     * @param id
      */
     protected removeEntityById(id: string): Promise<boolean>;
     /**
@@ -61,7 +62,6 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
     /**
      * Used by the context api
      * @param data
-     * @param matcher
      */
     private _detach;
     /**
@@ -69,6 +69,7 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
      * @param data
      */
     private _sendData;
+    private _setAttachments;
     /**
      * Used by the context api
      */
@@ -81,14 +82,16 @@ export declare class DataContext<TDocumentType extends string> implements IDataC
      * @returns boolean
      */
     private areEqual;
-    /**
-     * Persist changes to the underlying data store
-     * @returns number
-     */
+    private _makeTrackable;
+    private _getPendingChanges;
+    private _tryCallEvents;
+    private _makePristine;
     saveChanges(): Promise<number>;
     protected addEntityWithoutId(entity: IDbRecordBase): Promise<IBulkDocsResponse>;
-    protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>>;
-    query<TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<(TEntity & TEntityType)[]>): Promise<(TEntity & TEntityType)[]>;
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
+    hasPendingChanges(): boolean;
+    on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;
     [Symbol.iterator](): {
         next: () => {
             value: IDbSetBase<string>;

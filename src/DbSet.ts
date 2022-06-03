@@ -1,10 +1,5 @@
-import { IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys } from './typings';
-
-export type AttachedEntity<TEntity, TDocumentType extends string, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> = TEntityType & TEntity;
-
-export interface IIndexableEntity {
-    [key: string]: any;
-}
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { validateAttachedEntity } from './Validation';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -15,7 +10,7 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>> implements IDbSet<TDocumentType, TEntity, TEntityType> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
 
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }
@@ -24,7 +19,10 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
-    private _onBeforeAdd: ((entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void) | null = null;
+    private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = {
+        "add": [],
+        "remove": []
+    }
 
     /**
      * Constructor
@@ -32,29 +30,18 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
      * @param context Will be 'this' from the data context
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
-    constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: IdKeys<TEntity>) {
+    constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
         this._documentType = documentType;
         this._context = context as IPrivateContext<TDocumentType>;
         this._idKeys = idKeys;
         this._api = this._context._getApi();
     }
 
-    /**
-     * Attach an existing entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async attach(entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) {
-        const data = this._api.getTrackedData();
-        const { attach } = data;
-
-        attach.push(entity);
+    async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
+        return await Promise.all(entities.map(w => this._add(w)))
     }
 
-    /**
-     * Add an entity to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async add(entity: TEntity) {
+    private async _add(entity: OmittedEntity<TEntity, TExtraExclusions>) {
 
         const indexableEntity: IIndexableEntity = entity as any;
 
@@ -66,8 +53,8 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
         const { add } = data;
 
         const addItem: IDbRecord<TDocumentType> = entity as any;
-        addItem.DocumentType = this._documentType;
-        const id = this.getKeyFromEntity(entity);
+        (addItem as any).DocumentType = this._documentType;
+        const id = this._getKeyFromEntity(entity as any);
 
         if (id != undefined) {
             const ids = add.map(w => w._id);
@@ -79,44 +66,51 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
             (addItem as any)._id = id;
         }
 
-        if (this._onBeforeAdd != null) {
-            this._onBeforeAdd(entity as any)
-        }
+        this._events["add"].forEach(w => w(entity as any));
 
-        add.push(addItem);
+        const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
+
+        add.push(trackableEntity);
+
+        return trackableEntity;
     }
 
-    private getKeyFromEntity(entity: TEntity) {
+    private _getKeyFromEntity(entity: TEntity) {
 
         if (this._idKeys.length === 0) {
             return null;
         }
 
-        const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => (entity as any)[w])
+        const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => {
+
+            const value = (entity as any)[w];
+
+            if (value instanceof Date) {
+                return value.toISOString();
+            }
+
+            return value
+        })
         return [this.DocumentType, ...keyData].join("/");
     }
 
     isMatch(first: TEntity, second: TEntity) {
-        return this.getKeyFromEntity(first) === this.getKeyFromEntity(second);
+        return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
     }
 
-    onBeforeAdd(action: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>) => void) {
-        this._onBeforeAdd = action;
+    async remove(...ids: string[]): Promise<void>;
+    async remove(...entities: TEntity[]): Promise<void>;
+    async remove(...entities: any[]) {
+
+        if (entities.some(w => typeof w === "string")) {
+            await Promise.all(entities.map(w => this._removeById(w)))
+            return;
+        }
+
+        await Promise.all(entities.map(w => this._remove(w)))
     }
 
-    /**
-     * Add array of entities to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entities 
-     */
-    async addRange(entities: TEntity[]) {
-        await Promise.all(entities.map(w => this.add(w)));
-    }
-
-    /**
-     * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async remove(entity: TEntity) {
+    private async _remove(entity: TEntity) {
         const data = this._api.getTrackedData();
         const { remove } = data;
 
@@ -127,30 +121,17 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`)
         }
 
+        this._events["remove"].forEach(w => w(entity as any));
+
         remove.push(entity as any);
     }
 
-    /**
-     * Remove array of entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entity 
-     */
-    async removeRange(entities: TEntity[]) {
-        await Promise.all(entities.map(w => this.remove(w)))
-    }
-
-    /**
-     * Remove all entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     */
-    async removeAll() {
+    async empty() {
         const items = await this.all();
-        await this.removeRange(items);
+        await this.remove(...items);
     }
 
-    /**
-     * Remove entity from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param id 
-     */
-    async removeById(id: string) {
+    private async _removeById(id: string) {
         const data = this._api.getTrackedData();
         const { removeById } = data;
 
@@ -158,104 +139,84 @@ export class DbSet<TDocumentType extends string, TEntity, TEntityType extends ID
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${id}`)
         }
 
+        this._events["remove"].forEach(w => w(id as any));
+
         removeById.push(id);
     }
 
-    /**
-     * Remove array of entities from underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param ids 
-     */
-    async removeRangeById(ids: string[]) {
-        await Promise.all(ids.map(w => this.removeById(w)))
-    }
-
-    private detachItems(data: AttachedEntity<TEntity, TDocumentType, TEntityType>[], matcher: (first: AttachedEntity<TEntity, TDocumentType, TEntityType>, second: AttachedEntity<TEntity, TDocumentType, TEntityType>) => boolean) {
-        return this._api.detach(data, matcher);
-    }
-
-    private makeTrackable<T extends Object>(entity: T): T {
-        const proxyHandler: ProxyHandler<T> = {
-            set: (entity, property, value) => {
-
-                const indexableEntity: IIndexableEntity = entity as any;
-                const key = String(property);
-                const oldValue = indexableEntity[key];
-
-                if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
-                    indexableEntity[PRISTINE_ENTITY_KEY] = {};
-                }
-
-                if (indexableEntity[PRISTINE_ENTITY_KEY][key] === undefined) {
-                    indexableEntity[PRISTINE_ENTITY_KEY][key] = oldValue;
-                }
-
-                indexableEntity[key] = value;
-
-                return true;
-            }
-        }
-
-        return new Proxy(entity, proxyHandler) as any
+    private _detachItems(data: TEntity[]) {
+        return this._api.detach(data);
     }
 
     private async _all() {
         const data = await this._api.getAllData(this._documentType)
-        return data.map(w => this.makeTrackable(w) as AttachedEntity<TEntity, TDocumentType, TEntityType>);
+        return data.map(w => this._api.makeTrackable(w) as TEntity);
     }
 
     async all() {
         const result = await this._all();
 
-        this._api.send(result)
+        this._api.send(result, false)
 
         return result;
     }
 
-    /**
-     * Selects items from the data store, similar to Where in entity framework
-     * @param selector 
-     * @returns Entity array
-     */
-    async filter(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean) {
+    async filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) {
         const data = await this._all();
 
         const result = [...data].filter(selector);
 
-        this._api.send(result)
+        this._api.send(result, false)
 
         return result;
     }
 
-    /**
-     * Matches items with the same document type
-     * @param items 
-     * @returns Entity array
-     */
     match(items: IDbRecordBase[]) {
-        return items.filter(w => w.DocumentType === this.DocumentType) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
+        return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    /**
-     * Selects a matching entity from the data store or returns null
-     * @param selector 
-     * @returns Entity
-     */
-    async find(selector: (entity: AttachedEntity<TEntity, TDocumentType, TEntityType>, index?: number, array?: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) => boolean) {
+    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined> {
         const data = await this._all();
         const result = [...data].find(selector);
 
         if (result) {
-            this._api.send([result])
+            this._api.send([result], false)
         }
 
         return result;
     }
 
-    /**
-     * Detaches specified array of items from the context
-     * @param entities 
-     */
-    detach(entities: AttachedEntity<TEntity, TDocumentType, TEntityType>[]) {
-        return this.detachItems(entities, this.isMatch.bind(this)) as AttachedEntity<TEntity, TDocumentType, TEntityType>[]
+    detach(...entities: TEntity[]) {
+        this._detachItems(entities)
+    }
+
+    attach(...entites: TEntity[]) {
+
+        const validationFailures = entites.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
+        
+        if (validationFailures.length > 0) {
+            const errors = validationFailures.map(w => w.error).join('\r\n')
+            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
+        }
+
+        entites.forEach(w => this._api.makeTrackable(w));
+        this._api.send(entites, true)
+    }
+
+    async first() {
+        const data = await this._all();
+        const result = data[0];
+
+        if (result) {
+            this._api.send([result], false)
+        }
+
+        return result;
+    }
+
+    on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+    on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
+    on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>) {
+        this._events[event].push(callback);
     }
 }

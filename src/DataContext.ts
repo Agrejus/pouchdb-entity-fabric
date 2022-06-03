@@ -1,7 +1,7 @@
 import PouchDB from 'pouchdb';
-import { DbSet, IIndexableEntity, PRISTINE_ENTITY_KEY } from "./DbSet";
+import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
-import { IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IdKeys, ITrackedData } from './typings';
+import { DataContextEvent, DataContextEventCallback, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
 
 PouchDB.plugin(findAdapter);
 
@@ -13,6 +13,11 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     protected _attachments: IDbRecordBase[] = [];
     protected _removeById: string[] = [];
     protected _collectionName!: string;
+    private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = {
+        "entity-created": [],
+        "entity-removed": [],
+        "entity-updated": []
+    }
 
     private _dbSets: IDbSetBase<string>[] = [];
 
@@ -26,9 +31,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     protected async getAllData(documentType?: TDocumentType) {
 
         const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
-            selector: {
-                collectiontype: this._collectionName
-            }
+            selector: {}
         }
 
         if (documentType != null) {
@@ -146,11 +149,14 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
     /**
      * Remove entity in the data store, this is used by DbSet
-     * @param entity 
+     * @param id 
      */
     protected async removeEntityById(id: string) {
         const entity = await this._db.get(id);
         const response = await this._db.remove(entity);
+
+        this._events["entity-removed"].forEach(w => w(entity as any));
+
         return response.ok;
     }
 
@@ -175,42 +181,38 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             getTrackedData: this._getTrackedData.bind(this),
             getAllData: this.getAllData.bind(this),
             send: this._sendData.bind(this),
-            detach: this._detach.bind(this)
+            detach: this._detach.bind(this),
+            makeTrackable: this._makeTrackable.bind(this)
         }
     }
 
     /**
      * Used by the context api
      * @param data 
-     * @param matcher 
      */
-     private _detach(data: IDbRecordBase[], matcher: (first: IDbRecordBase, second: IDbRecordBase) => boolean) {
+    private _detach(data: IDbRecordBase[]) {
+        this._attachments = this._attachments.filter(w => data.some(x => x._id === w._id) === false);
+    }
 
-        const result = [];
-        for (let i = 0; i < data.length; i++) {
-            const detachment = data[i];
-            const index = this._attachments.findIndex(w => matcher(detachment, w));
+    /**
+     * Used by the context api
+     * @param data 
+     */
+    private _sendData(data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) {
+        if (shouldThrowOnDuplicate) {
+            const duplicate = this._attachments.find(w => data.some(x => x._id === w._id));
 
-            if (index === -1) {
-                continue;
+            if (duplicate) {
+                throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
             }
-
-            const clone: IDbRecordBase = JSON.parse(JSON.stringify(this._attachments[index]));
-
-            this._attachments[index] = clone;
-
-            result.push(clone);
         }
 
-        return result;
+        this._setAttachments(data);
     }
 
-    /**
-     * Used by the context api
-     * @param data 
-     */
-    private _sendData(data: IDbRecordBase[]) {
-        this._attachments = [...this._attachments, ...data].filter((w, i, self) => self.indexOf(w) === i);
+    private _setAttachments(data: IDbRecordBase[]) {
+        // do not filter duplicates in case devs return multiple instances of the same entity
+        this._attachments = [...this._attachments, ...data];//.filter((value, index, self) =>  index === self.findIndex((t) => t._id === value._id));
     }
 
     /**
@@ -225,10 +227,35 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         } as ITrackedData;
     }
 
-    private reinitialize() {
+    private reinitialize(removals: IDbRecordBase[] = [], removalsById: string[] = [], add: IDbRecordBase[] = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
+
+        // remove attached tracking changes
+        for (let item of this._attachments) {
+            const indexableEntity: IIndexableEntity = item as any;
+            delete indexableEntity[PRISTINE_ENTITY_KEY];
+        }
+
+        for (let removal of removals) {
+            const index = this._attachments.findIndex(w => w._id === removal._id);
+
+            if (index !== -1) {
+                this._attachments.splice(index, 1)
+            }
+        }
+
+        for (let removalById of removalsById) {
+            const index = this._attachments.findIndex(w => w._id === removalById);
+
+            if (index !== -1) {
+                this._attachments.splice(index, 1)
+            }
+        }
+
+        // move additions to attachments so we can track changes
+        this._setAttachments(add);
     }
 
     /**
@@ -262,42 +289,91 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         }) === false;
     }
 
-    /**
-     * Persist changes to the underlying data store
-     * @returns number
-     */
-    async saveChanges() {
-        try {
+    private _makeTrackable<T extends Object>(entity: T): T {
+        const proxyHandler: ProxyHandler<T> = {
+            set: (entity, property, value) => {
 
-            const data = this._getTrackedData();
-            const { add, remove, removeById } = data;
+                const indexableEntity: IIndexableEntity = entity as any;
+                const key = String(property);
 
-            // Check to see if we have any updates, let's not needlessly update
-            // if we don't need to
-            const updated = this._attachments.filter(w => {
+                if (property !== PRISTINE_ENTITY_KEY && indexableEntity._id != null) {
+                    const oldValue = indexableEntity[key];
 
-                const indexableEntity = w as IIndexableEntity;
-                if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
-                    return false;
-                }
+                    if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
+                        indexableEntity[PRISTINE_ENTITY_KEY] = {};
+                    }
 
-                const pristineKeys = Object.keys(indexableEntity[PRISTINE_ENTITY_KEY]);
-
-                for (let pristineKey of pristineKeys) {
-                    if (indexableEntity[PRISTINE_ENTITY_KEY][pristineKey] != indexableEntity[pristineKey]) {
-                        return true
+                    if (indexableEntity[PRISTINE_ENTITY_KEY][key] === undefined) {
+                        indexableEntity[PRISTINE_ENTITY_KEY][key] = oldValue;
                     }
                 }
 
-                return false;
-            }).map(w => {
-                const indexableEntity = w as IIndexableEntity;
-                delete indexableEntity[PRISTINE_ENTITY_KEY];
+                indexableEntity[key] = value;
 
-                // remove the pristine entity, this will get re-added 
-                // after any change happens because this is a proxy
-                return indexableEntity as IDbRecordBase;
-            });
+                return true;
+            }
+        }
+
+        return new Proxy(entity, proxyHandler) as any
+    }
+
+    private _getPendingChanges() {
+        const { add, remove, removeById } = this._getTrackedData();
+        const updated = this._attachments.filter(w => {
+
+            const indexableEntity = w as IIndexableEntity;
+            if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
+                return false;
+            }
+
+            const pristineKeys = Object.keys(indexableEntity[PRISTINE_ENTITY_KEY]);
+
+            for (let pristineKey of pristineKeys) {
+                if (indexableEntity[PRISTINE_ENTITY_KEY][pristineKey] != indexableEntity[pristineKey]) {
+                    return true
+                }
+            }
+
+            return false;
+        });
+
+        return {
+            add,
+            remove,
+            removeById,
+            updated
+        }
+    }
+
+    private _tryCallEvents(changes: { remove: IDbRecordBase[], add: IDbRecordBase[], updated: IDbRecordBase[] }) {
+
+        if (this._events["entity-removed"].length > 0 && changes.remove.length > 0) {
+            changes.remove.forEach(w => this._events["entity-removed"].forEach(x => x(w)))
+        }
+
+        if (this._events["entity-created"].length > 0 && changes.add.length > 0) {
+            changes.add.forEach(w => this._events["entity-created"].forEach(x => x(w)))
+        }
+
+        if (this._events["entity-updated"].length > 0 && changes.updated.length > 0) {
+            changes.updated.forEach(w => this._events["entity-updated"].forEach(x => x(w)))
+        }
+    }
+
+    private _makePristine(entity: IDbRecordBase) {
+        const indexableEntity = entity as IIndexableEntity;
+
+        // make pristine again
+        delete indexableEntity[PRISTINE_ENTITY_KEY];
+    }
+
+    async saveChanges() {
+        try {
+
+            const { add, remove, removeById, updated } = this._getPendingChanges();
+
+            // remove pristine entity
+            [...add, ...remove, ...updated].forEach(w => this._makePristine(w))
 
             const addsWithIds = add.filter(w => !!w._id);
             const addsWithoutIds = add.filter(w => w._id == null);
@@ -306,20 +382,32 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             const successfulModifications = modificationResult.filter(w => w.ok === true);
 
             for (let modification of modifications) {
-                const found = successfulModifications.find(w => w.id === modification._id);
 
+                const found = successfulModifications.find(w => w.id === modification._id);
                 // update the rev in case we edit the record again
                 if (found && found.ok === true) {
-                    (modification as any)._rev = found.rev;
+                    const indexableEntity = modification as IIndexableEntity;
+                    indexableEntity._rev = found.rev;
+
+                    // make pristine again
+                    this._makePristine(modification);
                 }
             }
 
             const additionsWithGeneratedIds = await Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)))
             const removalsById = await Promise.all(removeById.map(w => this.removeEntityById(w)));
 
-            this.reinitialize()
+            // removals are being grouped with updates, 
+            // need to separate out calls to events so we don't double dip
+            // on updates and removals
+            this._tryCallEvents({ remove, add, updated });
 
-            return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => w.ok)].filter(w => w === true).length;
+            this.reinitialize(remove, removeById, add);
+
+            return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
+
+                return w.ok;
+            })].filter(w => w === true).length;
         } catch (e) {
             this.reinitialize()
             throw e;
@@ -330,6 +418,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         return new Promise<IBulkDocsResponse>(async (resolve, reject) => {
             try {
                 const result = await this.insertEntity(entity);
+
                 resolve({ ok: result, id: "", rev: "" })
             } catch (e) {
                 console.error(e);
@@ -338,16 +427,25 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         })
     }
 
-    protected createDbSet<TEntity>(documentType: TDocumentType, ...idKeys: IdKeys<TEntity>): IDbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>> {
-        const dbSet = new DbSet<TDocumentType, TEntity, IDbRecord<TDocumentType>>(documentType, this, ...idKeys);
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, ...idKeys);
 
         this._dbSets.push(dbSet);
 
         return dbSet;
     }
 
-    async query<TEntity, TEntityType extends IDbRecord<TDocumentType> = IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<(TEntity & TEntityType)[]>) {
+    async query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>) {
         return await callback(this._db);
+    }
+
+    hasPendingChanges() {
+        const { add, remove, removeById, updated } = this._getPendingChanges();
+        return [add.length, remove.length, removeById.length, updated.length].some(w => w > 0);
+    }
+
+    on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>) {
+        this._events[event].push(callback);
     }
 
     [Symbol.iterator]() {
