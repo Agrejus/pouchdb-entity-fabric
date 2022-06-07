@@ -196,7 +196,7 @@ class DataContext {
     }
     _setAttachments(data) {
         // do not filter duplicates in case devs return multiple instances of the same entity
-        this._attachments = [...this._attachments, ...data]; //.filter((value, index, self) =>  index === self.findIndex((t) => t._id === value._id));
+        this._attachments = [...this._attachments, ...data];
     }
     /**
      * Used by the context api

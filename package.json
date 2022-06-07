@@ -8,7 +8,8 @@
   "scripts": {
     "test": "jest --runInBand --silent --no-cache",
     "build": "npm run clean && tsc",
-    "clean": "./node_modules/.bin/rimraf ./dist/*"
+    "clean": "./node_modules/.bin/rimraf ./dist/*",
+    "performance" : "ts-node ./examples/getting-started/performance.ts"
   },
   "author": "James DeMeuse <james.demeuse@gmail.com>",
   "license": "MIT",

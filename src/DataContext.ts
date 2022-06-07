@@ -8,11 +8,13 @@ PouchDB.plugin(findAdapter);
 export class DataContext<TDocumentType extends string> implements IDataContext {
 
     protected _db: PouchDB.Database;
+
     protected _removals: IDbRecordBase[] = [];
     protected _additions: IDbRecordBase[] = [];
     protected _attachments: IDbRecordBase[] = [];
+
     protected _removeById: string[] = [];
-    protected _collectionName!: string;
+
     private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = {
         "entity-created": [],
         "entity-removed": [],
@@ -30,17 +32,23 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      */
     protected async getAllData(documentType?: TDocumentType) {
 
-        const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
-            selector: {}
+        try {
+            const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
+                selector: {},
+            }
+    
+            if (documentType != null) {
+                findOptions.selector.DocumentType = documentType;
+            }
+    
+            const result = await this._db.find(findOptions);
+    
+            return result.docs as IDbRecordBase[];
+        } catch (e) {
+            console.log(e);
+            return [] as IDbRecordBase[];
         }
 
-        if (documentType != null) {
-            findOptions.selector.DocumentType = documentType;
-        }
-
-        const result = await this._db.find(findOptions);
-
-        return result.docs as IDbRecordBase[];
     }
 
     async getAllDocs() {
@@ -182,7 +190,8 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             getAllData: this.getAllData.bind(this),
             send: this._sendData.bind(this),
             detach: this._detach.bind(this),
-            makeTrackable: this._makeTrackable.bind(this)
+            makeTrackable: this._makeTrackable.bind(this),
+            get: this.getEntity.bind(this)
         }
     }
 
@@ -212,7 +221,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
     private _setAttachments(data: IDbRecordBase[]) {
         // do not filter duplicates in case devs return multiple instances of the same entity
-        this._attachments = [...this._attachments, ...data];//.filter((value, index, self) =>  index === self.findIndex((t) => t._id === value._id));
+        this._attachments = [...this._attachments, ...data];
     }
 
     /**
@@ -403,6 +412,8 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             this._tryCallEvents({ remove, add, updated });
 
             this.reinitialize(remove, removeById, add);
+
+            // Add default index here for DocumentType, only add 12ms
 
             return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
 

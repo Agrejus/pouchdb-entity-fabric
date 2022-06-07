@@ -444,6 +444,27 @@ describe('getting started - data context', () => {
         expect(filtered._id).toBe("Contacts/John/Doe");
     });
 
+    test('should find correct entity by id', async () => {
+        const context = new PouchDbDataContext();
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        }, {
+            firstName: "John",
+            lastName: "Doe",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        await context.saveChanges();
+
+        const filtered = await context.contacts.find("Contacts/James/DeMeuse");
+
+        expect(filtered._id).toBe("Contacts/James/DeMeuse");
+    });
+
     test('should find no entity', async () => {
         const context = new PouchDbDataContext();
         await context.contacts.add({
@@ -461,6 +482,27 @@ describe('getting started - data context', () => {
         await context.saveChanges();
 
         const filtered = await context.contacts.find(w => w.firstName === "Test");
+
+        expect(filtered).not.toBeDefined();
+    });
+
+    test('should find no entity by id', async () => {
+        const context = new PouchDbDataContext();
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        }, {
+            firstName: "John",
+            lastName: "Doe",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        await context.saveChanges();
+
+        const filtered = await context.contacts.find("Test");
 
         expect(filtered).not.toBeDefined();
     });

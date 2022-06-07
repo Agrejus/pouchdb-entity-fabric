@@ -37,7 +37,14 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @param selector 
      * @returns TEntity
      */
-    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) : Promise<TEntity | undefined>
+    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) : Promise<TEntity | undefined>;
+
+    /**
+     * Find entity by id
+     * @param id 
+     * @returns TEntity
+     */
+    find(id: string) : Promise<TEntity | undefined>
     
     /**
      * Check for equality between two entities
@@ -108,9 +115,12 @@ export interface IDbSetBase<TDocumentType extends string> {
       empty(): Promise<void>;
 }
 
+export type EntitySelector<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity, index?: number, array?: TEntity[]) => boolean
+
 export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (documentType: TDocumentType) => Promise<IDbRecordBase[]>;
+    get: (id: string) => Promise<IDbRecordBase>;
     send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
     makeTrackable<T extends Object>(entity: T): T;

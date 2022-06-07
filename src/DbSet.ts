@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
 import { validateAttachedEntity } from './Validation';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
@@ -175,9 +175,22 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined> {
+    async find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>
+    async find(id: string): Promise<TEntity | undefined>
+    async find(idOrSelector: EntitySelector<TDocumentType, TEntity> | string): Promise<TEntity | undefined> {
+
+        if (typeof idOrSelector === "string") {
+            const found = await this._api.get(idOrSelector);
+
+            if (found) {
+                this._api.send([found], false)
+            }
+
+            return (found ?? undefined) as (TEntity | undefined);
+        }
+
         const data = await this._all();
-        const result = [...data].find(selector);
+        const result = [...data].find(idOrSelector);
 
         if (result) {
             this._api.send([result], false)
