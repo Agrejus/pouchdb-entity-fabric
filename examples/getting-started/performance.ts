@@ -181,30 +181,11 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
     }
 
     async allDocs() {
-        return await this._db.allDocs();
+        return await this.doWork(w => w.allDocs());
     }
 
     async destroy() {
-        await this._db.destroy();
-    }
-
-    get db() {
-        return this._db;
-    }
-
-    async createIndex() {
-
-        const result = await this._db.getIndexes();
-
-        if (result.indexes.some(w => w.ddoc === "document-type-get-index") == false) {
-            await this._db.createIndex({
-                index: {
-                    fields: ["DocumentType"],
-                    name: 'document-type-index',
-                    ddoc: "document-type-index"
-                },
-            });
-        }
+        await this.doWork(w => w.destroy());
     }
 
     test1 = this.createDbSet<ITest1>(DocumentTypes.Test1);
@@ -231,6 +212,7 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
 const generateData = async (context: PouchDbDataContext) => {
 
     try {
+
         for(let dbset of context) {
             const set : any = dbset
 
@@ -243,7 +225,6 @@ const generateData = async (context: PouchDbDataContext) => {
                 });
             }
         }
-        
 
         await context.saveChanges();
     } catch (e) {
@@ -258,57 +239,21 @@ export const run = async () => {
         // how much faster is this vs having an index on DocumentType?
 
         // Auto add index?
-        // const tearDown = new PouchDbDataContext();
-        // await tearDown.destroy();
+        const tearDown = new PouchDbDataContext();
+        await tearDown.destroy();
 
         const context = new PouchDbDataContext();
 
-        // await generateData(context);
-
-        // await context.createIndex();
-
-        // await context.db.put({
-        //     _id: '_design/index',
-        //     views: {
-        //         index: {
-        //             map: `function mapFun(doc) {
-        //             if (doc.DocumentType) {
-        //               emit(doc.DocumentType);
-        //             }
-        //           }`
-        //         }
-        //     }
-        // });
-
-        // for(let i = 0; i < 10000; i++) {
-        //     const c = new PouchDbDataContext();
-        //     let all = await c.test1.all();
-        //     //await c.db.close();
-        //     console.log(all.length);
-        // }
+        await generateData(context);
 
         const s = performance.now();
-        const result = await context.db.getIndexes();
-        console.log(result.indexes.length);
-        // const d = await context.db.find({
-        //     selector: {
-        //         DocumentType: "Contacts"
-        //     },
-        //     //sort: ["DocumentType"]
-        // });
-
-        // const all = await context.db.query('document-type-index', {
-        //     key: 'Contacts',
-        //     include_docs: true
-        // });
 
         // before index, all = 135ms
-        //let all = await context.test1.all();
-        //const all = await context.allDocs();
+        let all = await context.test1.all();
+
         const e = performance.now();
         console.log(e - s);
-       // console.log(all.rows.length)
-        //console.log(all.length);
+
     } catch (e) {
         debugger;
         console.log(e)

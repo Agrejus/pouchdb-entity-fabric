@@ -38,7 +38,7 @@ describe('getting started - data context', () => {
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
         constructor() {
-            super('test-db', { adapter: 'memory' });
+            super('test-db', { adapter: 'memory' } );
         }
 
         async empty() {
@@ -109,6 +109,7 @@ describe('getting started - data context', () => {
     });
 
     test('should add entity, save, and generate an id', async () => {
+
         const context = new PouchDbDataContext();
         const [note] = await context.notes.add({
             contents: "Some Note",
@@ -238,10 +239,11 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(20);
 
         await context.contacts.remove(...all.map(w => w._id));
+debugger;
         await context.saveChanges();
-
+debugger;
         all = await context.contacts.all();
-
+debugger;
         expect(all.length).toBe(0);
     });
 

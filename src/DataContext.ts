@@ -1,72 +1,45 @@
 import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
-import { DataContextEvent, DataContextEventCallback, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
 
 PouchDB.plugin(findAdapter);
 
-export class DataContext<TDocumentType extends string> implements IDataContext {
+abstract class PouchDbBase {
 
-    protected _db: PouchDB.Database;
-
-    protected _removals: IDbRecordBase[] = [];
-    protected _additions: IDbRecordBase[] = [];
-    protected _attachments: IDbRecordBase[] = [];
-
-    protected _removeById: string[] = [];
-
-    private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = {
-        "entity-created": [],
-        "entity-removed": [],
-        "entity-updated": []
-    }
-
-    private _dbSets: IDbSetBase<string>[] = [];
+    private _options?: PouchDB.Configuration.DatabaseConfiguration;
+    private _name?: string;
 
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
-        this._db = new PouchDB(name, options);
-    }
-
-    /**
-     * Gets all data from the data store
-     */
-    protected async getAllData(documentType?: TDocumentType) {
-
-        try {
-            const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
-                selector: {},
-            }
-    
-            if (documentType != null) {
-                findOptions.selector.DocumentType = documentType;
-            }
-    
-            const result = await this._db.find(findOptions);
-    
-            return result.docs as IDbRecordBase[];
-        } catch (e) {
-            console.log(e);
-            return [] as IDbRecordBase[];
-        }
+        this._options = options;
+        this._name = name;
 
     }
 
-    async getAllDocs() {
-        return this.getAllData();
+    protected async doWork<T>(action: (db: PouchDB.Database) => Promise<T>) {
+        const db = new PouchDB(this._name, this._options);
+        const result = await action(db);
+
+        // await db.close();
+
+        return result;
+    }
+}
+
+abstract class PouchDbInteractionBase<TDocumentType extends string> extends PouchDbBase {
+
+    constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
+        super(name, options);
     }
 
     /**
-     * Gets an instance of IDataContext to be used with DbSets
-     */
-    protected getContext() { return this; }
-
-    /**
-     * Inserts entity into the data store, this is used by DbSet
-     * @param entity 
-     * @param onComplete 
-     */
+    * Inserts entity into the data store, this is used by DbSet
+    * @param entity 
+    * @param onComplete 
+    */
     protected async insertEntity(entity: IDbAdditionRecord<any>, onComplete?: (result: IDbRecord<any>) => void) {
-        const response = await this._db.post(entity);
+        debugger;
+        const response = await this.doWork(w => w.post(entity));
         const result: IDbRecord<any> = entity as any;
 
         (result as any)._rev = response.rev;
@@ -90,7 +63,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     protected async updateEntity(entity: IDbRecordBase, onComplete: (result: IDbRecord<any>) => void): Promise<boolean> {
 
         try {
-            const response = await this._db.put(entity);
+            const response = await this.doWork(w => w.put(entity));
             const result: IDbRecord<any> = entity as any;
 
             (result as any)._rev = response.rev;
@@ -105,7 +78,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
             (result as any)._rev = found!._id;
 
-            const response = await this._db.put(result);
+            const response = await this.doWork(w => w.put(result));
 
             (result as any)._rev = response.rev;
 
@@ -121,7 +94,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      */
     protected async bulkDocs(entities: IDbRecordBase[]): Promise<IBulkDocsResponse[]> {
 
-        const response = await this._db.bulkDocs(entities);
+        const response = await this.doWork(w => w.bulkDocs(entities));
 
         return response.map(w => {
 
@@ -151,7 +124,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * @param entity 
      */
     protected async removeEntity(entity: IDbRecordBase) {
-        const response = await this._db.remove(entity as any);
+        const response = await this.doWork(w => w.remove(entity as any));
         return response.ok;
     }
 
@@ -159,13 +132,19 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      * Remove entity in the data store, this is used by DbSet
      * @param id 
      */
-    protected async removeEntityById(id: string) {
-        const entity = await this._db.get(id);
-        const response = await this._db.remove(entity);
+    protected async removeEntityById(id: string, onResponse: (entity: IDbRecordBase) => void) {
+        const result = await this.doWork(async w => {
+            const entity = await w.get(id);
+            const response = await w.remove(entity);
+            return {
+                entity,
+                response
+            }
+        });
 
-        this._events["entity-removed"].forEach(w => w(entity as any));
+        onResponse(result.entity as any);
 
-        return response.ok;
+        return result.response.ok;
     }
 
     /**
@@ -174,11 +153,71 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
      */
     protected async getEntity(id: string) {
         try {
-            return await this._db.get<IDbRecordBase>(id);
+            return await this.doWork(w => w.get<IDbRecordBase>(id));
         } catch (e) {
             return null
         }
     }
+
+    /**
+     * Gets all data from the data store
+     */
+    protected async getAllData(documentType?: TDocumentType) {
+
+        try {
+            const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
+                selector: {},
+            }
+
+            if (documentType != null) {
+                findOptions.selector.DocumentType = documentType;
+            }
+
+            const result = await this.doWork(w => w.find(findOptions));
+
+            return result.docs as IDbRecordBase[];
+        } catch (e) {
+            console.log(e);
+            return [] as IDbRecordBase[];
+        }
+
+    }
+}
+
+export class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
+
+    protected _removals: IDbRecordBase[] = [];
+    protected _additions: IDbRecordBase[] = [];
+    protected _attachments: IDbRecordBase[] = [];
+
+    protected _removeById: string[] = [];
+    private _configuration: DatabaseConfigurationAdditionalConfiguration;
+
+    private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = {
+        "entity-created": [],
+        "entity-removed": [],
+        "entity-updated": []
+    }
+
+    private _dbSets: IDbSetBase<string>[] = [];
+
+    constructor(name?: string, options?: DataContextOptions) {
+        const { documentTypeIndex, ...pouchDb } = options ?? {};
+        super(name, pouchDb);
+
+        this._configuration = {
+            documentTypeIndex: documentTypeIndex ?? "create"
+        };
+    }
+
+    async getAllDocs() {
+        return this.getAllData();
+    }
+
+    /**
+     * Gets an instance of IDataContext to be used with DbSets
+     */
+    protected getContext() { return this; }
 
     /**
      * Gets an API to be used by DbSets
@@ -376,6 +415,21 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
         delete indexableEntity[PRISTINE_ENTITY_KEY];
     }
 
+    private async _tryCreateDocumentTypeIndex() {
+
+        if (this._configuration.documentTypeIndex === "create") {
+
+            // Create if not exists, do nothing if exists
+            await this.doWork(w => w.createIndex({
+                index: {
+                    fields: ["DocumentType"],
+                    name: 'document-type-index',
+                    ddoc: "document-type-index"
+                },
+            }));
+        }
+    }
+
     async saveChanges() {
         try {
 
@@ -404,7 +458,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
             }
 
             const additionsWithGeneratedIds = await Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)))
-            const removalsById = await Promise.all(removeById.map(w => this.removeEntityById(w)));
+            const removalsById = await Promise.all(removeById.map(w => this.removeEntityById(w, entity => this._events["entity-removed"].forEach(w => w(entity)))));
 
             // removals are being grouped with updates, 
             // need to separate out calls to events so we don't double dip
@@ -413,12 +467,9 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
 
             this.reinitialize(remove, removeById, add);
 
-            // Add default index here for DocumentType, only add 12ms
+            await this._tryCreateDocumentTypeIndex();
 
-            return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
-
-                return w.ok;
-            })].filter(w => w === true).length;
+            return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => w.ok)].filter(w => w === true).length;
         } catch (e) {
             this.reinitialize()
             throw e;
@@ -447,7 +498,7 @@ export class DataContext<TDocumentType extends string> implements IDataContext {
     }
 
     async query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>) {
-        return await callback(this._db);
+        return await this.doWork(w => callback(w))
     }
 
     hasPendingChanges() {
