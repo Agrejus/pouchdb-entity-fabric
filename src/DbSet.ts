@@ -1,5 +1,6 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
 import { validateAttachedEntity } from './Validation';
+import { v4 as uuidv4 } from 'uuid';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -38,41 +39,40 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
-        return await Promise.all(entities.map(w => this._add(w)))
-    }
-
-    private async _add(entity: OmittedEntity<TEntity, TExtraExclusions>) {
-
-        const indexableEntity: IIndexableEntity = entity as any;
-
-        if (indexableEntity["_rev"] !== undefined) {
-            throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
-        }
-
         const data = this._api.getTrackedData();
         const { add } = data;
 
-        const addItem: IDbRecord<TDocumentType> = entity as any;
-        (addItem as any).DocumentType = this._documentType;
-        const id = this._getKeyFromEntity(entity as any);
+        return entities.map(entity => {
+            const indexableEntity: IIndexableEntity = entity as any;
 
-        if (id != undefined) {
-            const ids = add.map(w => w._id);
-
-            if (ids.includes(id)) {
-                throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
+            if (indexableEntity["_rev"] !== undefined) {
+                throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
-
-            (addItem as any)._id = id;
-        }
-
-        this._events["add"].forEach(w => w(entity as any));
-
-        const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
-
-        add.push(trackableEntity);
-
-        return trackableEntity;
+    
+            const addItem: IDbRecord<TDocumentType> = entity as any;
+            (addItem as any).DocumentType = this._documentType;
+            const id = this._getKeyFromEntity(entity as any);
+    
+            if (id != undefined) {
+                const ids = add.map(w => w._id);
+    
+                if (ids.includes(id)) {
+                    throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
+                }
+    
+                (addItem as any)._id = id;
+            } else {
+                (addItem as any)._id = uuidv4();
+            }
+    
+            this._events["add"].forEach(w => w(entity as any));
+    
+            const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
+    
+            add.push(trackableEntity);
+    
+            return trackableEntity;
+        })
     }
 
     private _getKeyFromEntity(entity: TEntity) {
@@ -175,9 +175,22 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined> {
+    async find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>
+    async find(id: string): Promise<TEntity | undefined>
+    async find(idOrSelector: EntitySelector<TDocumentType, TEntity> | string): Promise<TEntity | undefined> {
+
+        if (typeof idOrSelector === "string") {
+            const found = await this._api.get(idOrSelector);
+
+            if (found) {
+                this._api.send([found], false)
+            }
+
+            return (found ?? undefined) as (TEntity | undefined);
+        }
+
         const data = await this._all();
-        const result = [...data].find(selector);
+        const result = [...data].find(idOrSelector);
 
         if (result) {
             this._api.send([result], false)

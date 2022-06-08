@@ -37,7 +37,7 @@ describe('getting started - data context', () => {
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
         constructor() {
-            super('test-db', { adapter: 'memory' });
+            super('test-db', { adapter: 'memory' } );
         }
 
         async empty() {
@@ -380,11 +380,12 @@ describe('getting started - data context', () => {
             rejectedCount: 1,
             publishDate: new Date()
         })
-
+debugger;
         expect(context.hasPendingChanges()).toBe(true);
+debugger;
         await context.saveChanges();
         expect(context.hasPendingChanges()).toBe(false);
-
+debugger;
         const all = await context.getAllDocs();
 
         expect(all.length).toBe(3);
@@ -531,4 +532,7 @@ describe('getting started - data context', () => {
 
         expect(interation).toHaveBeenCalledTimes(3);
     });
+
+    // Should create index
+
 });

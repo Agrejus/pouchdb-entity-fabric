@@ -1,6 +1,6 @@
 {
   "name": "pouchdb-entity-fabric",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "PouchDB abstraction layer modeled after .net's Entity Framework",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,11 +30,14 @@
     "@faker-js/faker": "^7.1.0",
     "@jest/types": "^28.1.0",
     "@types/jest": "^27.5.1",
+    "@types/lodash": "^4.14.182",
     "@types/node": "^17.0.35",
     "@types/pouchdb": "^6.4.0",
+    "@types/uuid": "^8.3.4",
     "babel-jest": "^28.1.0",
     "cross-env": "^7.0.3",
     "jest": "^28.1.0",
+    "lodash": "^4.17.21",
     "pouchdb-adapter-memory": "^7.2.2",
     "rimraf": "^3.0.2",
     "ts-jest": "^28.0.2",
@@ -43,6 +46,7 @@
   },
   "dependencies": {
     "pouchdb": "^7.2.2",
-    "pouchdb-find": "^7.2.2"
+    "pouchdb-find": "^7.2.2",
+    "uuid": "^8.3.2"
   }
 }
