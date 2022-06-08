@@ -37,7 +37,7 @@ describe('getting started - data context', () => {
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
         constructor() {
-            super('test-db', { adapter: 'memory' } );
+            super('test-db', { adapter: 'memory' });
         }
 
         async empty() {
@@ -380,12 +380,12 @@ describe('getting started - data context', () => {
             rejectedCount: 1,
             publishDate: new Date()
         })
-debugger;
+
         expect(context.hasPendingChanges()).toBe(true);
-debugger;
+
         await context.saveChanges();
         expect(context.hasPendingChanges()).toBe(false);
-debugger;
+
         const all = await context.getAllDocs();
 
         expect(all.length).toBe(3);
@@ -424,6 +424,7 @@ debugger;
         expect(context.hasPendingChanges()).toBe(true);
         await context.saveChanges();
         expect(context.hasPendingChanges()).toBe(false);
+
         expect(onEntityCreatedMock).toHaveBeenCalledTimes(3);
         expect(onEntityRemovedMock).toHaveBeenCalledTimes(0);
         expect(onEntityUpdatedMock).toHaveBeenCalledTimes(0);
@@ -533,6 +534,109 @@ debugger;
         expect(interation).toHaveBeenCalledTimes(3);
     });
 
-    // Should create index
+    it('should do many modifications on save', async () => {
 
+        const context = new PouchDbDataContext();
+        const onEntityCreatedMock = jest.fn();
+        const onEntityRemovedMock = jest.fn();
+        const onEntityUpdatedMock = jest.fn();
+
+        context.on("entity-created", onEntityCreatedMock);
+        context.on("entity-removed", onEntityRemovedMock);
+        context.on("entity-updated", onEntityUpdatedMock);
+        const [contactOne, contactTwo] = await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        }, {
+            firstName: "John",
+            lastName: "Doe",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        const [noteOne, noteTwo] = await context.notes.add({
+            contents: "some new note one",
+            createdDate: new Date(),
+            userId: "jdemeuse"
+        }, {
+            contents: "some new note two",
+            createdDate: new Date(),
+            userId: "jdoe"
+        });
+
+        const [bookOne, bookTwo] = await context.books.add({
+            author: "James DeMeuse",
+            rejectedCount: 1,
+            publishDate: new Date()
+        }, {
+            author: "John Doe",
+            rejectedCount: 10,
+            publishDate: new Date()
+        })
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        expect(contactOne._id).toBeDefined();
+        expect(contactTwo._id).toBeDefined();
+        expect(noteOne._id).toBeDefined();
+        expect(noteTwo._id).toBeDefined();
+        expect(bookOne._id).toBeDefined();
+        expect(bookTwo._id).toBeDefined();
+
+        // should add one more
+        const [noteThree] = await context.notes.add({
+            contents: "note three contents",
+            createdDate: new Date(),
+            userId: "someuserid"
+        });
+
+        const [contactThree] = await context.contacts.add({
+            address: "111 Address Way",
+            firstName: "First",
+            lastName: "Last",
+            phone: "333-333-3333"
+        });
+
+        // should update one
+        noteOne.contents = "Changed";
+        contactTwo.address = "Some Changed Address"
+
+        // should remove one
+        await context.books.remove(bookOne);
+        await context.contacts.remove(contactOne._id);
+
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        const books = await context.books.all();
+        const contacts = await context.contacts.all();
+        const notes = await context.notes.all();
+
+        expect(books.length).toBe(1);
+        expect(contacts.length).toBe(2);
+        expect(notes.length).toBe(3);
+
+        const foundNoteOne = await context.notes.find(noteOne._id);
+        const foundContactTwo = await context.contacts.find(contactTwo._id);
+        const foundBookOne = await context.books.find(bookOne._id);
+        const foundContactOne = await context.contacts.find(contactOne._id);
+
+        expect(foundNoteOne.contents).toBe(noteOne.contents);
+        expect(foundContactTwo.address).toBe(contactTwo.address);
+        expect(foundBookOne).not.toBeDefined();
+        expect(foundContactOne).not.toBeDefined();
+
+        expect(onEntityCreatedMock).toHaveBeenCalledTimes(8);
+        expect(onEntityRemovedMock).toHaveBeenCalledTimes(2);
+        expect(onEntityUpdatedMock).toHaveBeenCalledTimes(2);
+    });
+
+    // Should auto create index
+    // should be able to handle all alterations, create/update/delete at the same time
 });

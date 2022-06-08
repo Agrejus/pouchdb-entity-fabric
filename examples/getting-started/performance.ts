@@ -184,10 +184,6 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
         return await this.doWork(w => w.allDocs());
     }
 
-    async destroy() {
-        await this.doWork(w => w.destroy());
-    }
-
     test1 = this.createDbSet<ITest1>(DocumentTypes.Test1);
     test2 = this.createDbSet<ITest2>(DocumentTypes.Test2);
     test3 = this.createDbSet<ITest3>(DocumentTypes.Test3);
@@ -213,8 +209,8 @@ const generateData = async (context: PouchDbDataContext) => {
 
     try {
 
-        for(let dbset of context) {
-            const set : any = dbset
+        for (let dbset of context) {
+            const set: any = dbset
 
             for (let i = 0; i < 1000; i++) {
                 await set.add({
@@ -236,15 +232,18 @@ const generateData = async (context: PouchDbDataContext) => {
 
 export const run = async () => {
     try {
-        // how much faster is this vs having an index on DocumentType?
-
         // Auto add index?
         const tearDown = new PouchDbDataContext();
-        await tearDown.destroy();
+        await tearDown.destroyDatabase();
 
         const context = new PouchDbDataContext();
 
+        await context.generateDocumentTypeIndex();
+
+        const gs = performance.now();
         await generateData(context);
+        const ge = performance.now();
+        console.log('Generate', ge - gs);
 
         const s = performance.now();
 
@@ -252,8 +251,9 @@ export const run = async () => {
         let all = await context.test1.all();
 
         const e = performance.now();
-        console.log(e - s);
+        console.log(all.length, e - s);
 
+        debugger;
     } catch (e) {
         debugger;
         console.log(e)

@@ -16,11 +16,13 @@ abstract class PouchDbBase {
 
     }
 
-    protected async doWork<T>(action: (db: PouchDB.Database) => Promise<T>) {
+    protected async doWork<T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose: boolean = true) {
         const db = new PouchDB(this._name, this._options);
         const result = await action(db);
 
-        // await db.close();
+        if (shouldClose) {
+            await db.close();
+        }
 
         return result;
     }
@@ -34,117 +36,107 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
     /**
     * Inserts entity into the data store, this is used by DbSet
-    * @param entity 
+    * @param entities 
     * @param onComplete 
     */
-    protected async insertEntity(entity: IDbAdditionRecord<any>, onComplete?: (result: IDbRecord<any>) => void) {
-        debugger;
-        const response = await this.doWork(w => w.post(entity));
-        const result: IDbRecord<any> = entity as any;
+    protected async insertEntity(onComplete: (result: IDbRecord<any>) => void, ...entities: IDbAdditionRecord<any>[]) {
 
-        (result as any)._rev = response.rev;
+        const response = await this.doWork(async w => {
 
-        if (!result._id) {
-            (result as any)._id = response.id;
-        }
+            return await Promise.all(entities.map(async e => {
 
-        if (onComplete != null) {
-            onComplete(result);
-        }
+                const result: IDbRecord<any> = e as any;
+                const response = await w.post(e);
 
-        return response.ok;
-    }
+                (result as any)._rev = response.rev;
 
-    /**
-     * Updates entity in the data store, this is used by DbSet
-     * @param entity 
-     * @param onComplete 
-     */
-    protected async updateEntity(entity: IDbRecordBase, onComplete: (result: IDbRecord<any>) => void): Promise<boolean> {
+                if (!result._id) {
+                    (result as any)._id = response.id;
+                }
 
-        try {
-            const response = await this.doWork(w => w.put(entity));
-            const result: IDbRecord<any> = entity as any;
+                onComplete(result);
 
-            (result as any)._rev = response.rev;
+                return response;
+            }));
+        });
 
-            onComplete(result);
-
-            return response.ok;
-        } catch {
-            const found = await this.getEntity(entity._id);
-
-            const result: IDbRecord<any> = entity as any;
-
-            (result as any)._rev = found!._id;
-
-            const response = await this.doWork(w => w.put(result));
-
-            (result as any)._rev = response.rev;
-
-            onComplete(result);
-
-            return response.ok;
-        }
+        return response.map(w => w.ok);
     }
 
     /**
      * Does a bulk operation in the data store
      * @param entities 
      */
-    protected async bulkDocs(entities: IDbRecordBase[]): Promise<IBulkDocsResponse[]> {
+    protected async bulkDocs(entities: IDbRecordBase[]) {
 
         const response = await this.doWork(w => w.bulkDocs(entities));
 
-        return response.map(w => {
+        const result: {
+            errors: { [key: string]: IBulkDocsResponse },
+            errors_count: number,
+            successes: { [key: string]: IBulkDocsResponse },
+            successes_count:number
+        } = {
+            errors: {},
+            successes: {},
+            errors_count: 0,
+            successes_count: 0
+        };
 
-            if ('error' in w) {
-                const error = w as PouchDB.Core.Error;
+        for (let item of response) {
+            if ('error' in item) {
+                const error = item as PouchDB.Core.Error;
 
-                return {
+                result.errors_count += 1;
+                result.errors[error.id] = {
                     id: error.id,
                     ok: false,
                     error: error.message,
                     rev: error.rev
                 } as IBulkDocsResponse;
+                continue;
             }
 
-            const success = w as PouchDB.Core.Response;
+            const success = item as PouchDB.Core.Response;
 
-            return {
+            result.successes_count += 1;
+            result.successes[success.id] = {
                 id: success.id,
                 ok: success.ok,
                 rev: success.rev
-            } as IBulkDocsResponse
-        });
+            } as IBulkDocsResponse;
+        }
+
+        return result;
     }
 
     /**
      * Remove entity in the data store, this is used by DbSet
      * @param entity 
      */
-    protected async removeEntity(entity: IDbRecordBase) {
+    protected async removeEntity(...entity: IDbRecordBase[]) {
         const response = await this.doWork(w => w.remove(entity as any));
         return response.ok;
     }
 
     /**
      * Remove entity in the data store, this is used by DbSet
-     * @param id 
+     * @param ids 
      */
-    protected async removeEntityById(id: string, onResponse: (entity: IDbRecordBase) => void) {
+    protected async removeEntityById(onResponse: (entity: IDbRecordBase) => void, ...ids: string[]) {
         const result = await this.doWork(async w => {
-            const entity = await w.get(id);
-            const response = await w.remove(entity);
-            return {
-                entity,
-                response
-            }
+
+            return await Promise.all(ids.map(async id => {
+                const entity = await w.get(id);
+                const response = await w.remove(entity);
+
+                onResponse(entity as any);
+
+                return response;
+            }))
         });
 
-        onResponse(result.entity as any);
-
-        return result.response.ok;
+        return result.map(w => w.ok);
     }
 
     /**
@@ -420,14 +412,34 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         if (this._configuration.documentTypeIndex === "create") {
 
             // Create if not exists, do nothing if exists
-            await this.doWork(w => w.createIndex({
+            await this.doWork(async w => {
+
+                const result = await w.getIndexes();
+
+                if (result.indexes.some(w => w.ddoc === "document-type-index") === false) {
+                    await w.createIndex({
+                        index: {
+                            fields: ["DocumentType"],
+                            name: 'document-type-index',
+                            ddoc: "document-type-index"
+                        },
+                    })
+                }
+            });
+        }
+    }
+
+    async generateDocumentTypeIndex() {
+        await this.doWork(async w => {
+
+            await w.createIndex({
                 index: {
                     fields: ["DocumentType"],
                     name: 'document-type-index',
                     ddoc: "document-type-index"
                 },
-            }));
-        }
+            })
+        });
     }
 
     async saveChanges() {
@@ -435,58 +447,47 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
             const { add, remove, removeById, updated } = this._getPendingChanges();
 
-            // remove pristine entity
+            // remove pristine entity before we send to bulk docs
             [...add, ...remove, ...updated].forEach(w => this._makePristine(w))
 
-            const addsWithIds = add.filter(w => !!w._id);
+            const addsWithIds = add.filter(w => w._id != null);
             const addsWithoutIds = add.filter(w => w._id == null);
             const modifications = [...updated, ...addsWithIds, ...remove.map(w => ({ ...w, _deleted: true }))];
             const modificationResult = await this.bulkDocs(modifications);
-            const successfulModifications = modificationResult.filter(w => w.ok === true);
 
             for (let modification of modifications) {
 
-                const found = successfulModifications.find(w => w.id === modification._id);
+                const found = modificationResult.successes[modification._id];
+
                 // update the rev in case we edit the record again
                 if (found && found.ok === true) {
                     const indexableEntity = modification as IIndexableEntity;
                     indexableEntity._rev = found.rev;
 
-                    // make pristine again
+                    // make pristine again because we set the _rev above
                     this._makePristine(modification);
                 }
             }
 
-            const additionsWithGeneratedIds = await Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)))
-            const removalsById = await Promise.all(removeById.map(w => this.removeEntityById(w, entity => this._events["entity-removed"].forEach(w => w(entity)))));
+            const additionsWithNoIds = await this.addEntityWithoutId(entity => this._events["entity-created"].forEach(w => w(entity)), ...addsWithoutIds);
+            const removalsById = await this.removeEntityById(entity => this._events["entity-removed"].forEach(w => w(entity)), ...removeById)
 
             // removals are being grouped with updates, 
             // need to separate out calls to events so we don't double dip
             // on updates and removals
-            this._tryCallEvents({ remove, add, updated });
+            this._tryCallEvents({ remove, add: addsWithIds, updated });
 
             this.reinitialize(remove, removeById, add);
 
-            await this._tryCreateDocumentTypeIndex();
-
-            return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => w.ok)].filter(w => w === true).length;
+            return [...removalsById, ...additionsWithNoIds].filter(w => w === true).length + modificationResult.successes_count;
         } catch (e) {
             this.reinitialize()
             throw e;
         }
     }
 
-    protected addEntityWithoutId(entity: IDbRecordBase) {
-        return new Promise<IBulkDocsResponse>(async (resolve, reject) => {
-            try {
-                const result = await this.insertEntity(entity);
-
-                resolve({ ok: result, id: "", rev: "" })
-            } catch (e) {
-                console.error(e);
-                reject({ ok: false, id: "", rev: "" })
-            }
-        })
+    protected async addEntityWithoutId(onComplete: (result: IDbRecord<any>) => void, ...entities: IDbRecordBase[]) {
+        return await this.insertEntity(onComplete, ...entities);
     }
 
     protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
@@ -508,6 +509,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>) {
         this._events[event].push(callback);
+    }
+
+    async destroyDatabase() {
+        await this.doWork(w => w.destroy(), false)
     }
 
     [Symbol.iterator]() {

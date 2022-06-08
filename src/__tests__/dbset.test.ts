@@ -180,7 +180,7 @@ describe('getting started - data context', () => {
         await context.saveChanges();
 
         await context.contacts.remove(contact._id);
-
+debugger;
         await context.saveChanges();
 
         const all = await context.contacts.all();
