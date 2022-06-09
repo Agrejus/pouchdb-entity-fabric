@@ -2,6 +2,7 @@ import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
+import { performance } from 'perf_hooks';
 
 PouchDB.plugin(findAdapter);
 
@@ -75,7 +76,7 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
             errors: { [key: string]: IBulkDocsResponse },
             errors_count: number,
             successes: { [key: string]: IBulkDocsResponse },
-            successes_count:number
+            successes_count: number
         } = {
             errors: {},
             successes: {},
@@ -111,44 +112,24 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
     }
 
     /**
-     * Remove entity in the data store, this is used by DbSet
-     * @param entity 
-     */
-    protected async removeEntity(...entity: IDbRecordBase[]) {
-        const response = await this.doWork(w => w.remove(entity as any));
-        return response.ok;
-    }
-
-    /**
-     * Remove entity in the data store, this is used by DbSet
+     * Get entity from the data store, this is used by DbSet
      * @param ids 
      */
-    protected async removeEntityById(onResponse: (entity: IDbRecordBase) => void, ...ids: string[]) {
-        const result = await this.doWork(async w => {
-
-            return await Promise.all(ids.map(async id => {
-                const entity = await w.get(id);
-                const response = await w.remove(entity);
-
-                onResponse(entity as any);
-
-                return response;
-            }))
-        });
-
-        return result.map(w => w.ok);
-    }
-
-    /**
-     * Get entity from the data store, this is used by DbSet
-     * @param id 
-     */
-    protected async getEntity(id: string) {
-        try {
-            return await this.doWork(w => w.get<IDbRecordBase>(id));
-        } catch (e) {
-            return null
+    protected async get(...ids: string[]) {
+        if (ids.length === 0) {
+            return [];
         }
+
+        const result = await this.doWork(w => w.bulkGet({ docs: ids.map(x => ({ id: x })) }));
+
+        return result.results.map(w => {
+            const result = w.docs[0];
+
+            if ('error' in result) {
+                throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`)
+            }
+            return result.ok as IDbRecordBase;
+        });
     }
 
     /**
@@ -222,7 +203,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             send: this._sendData.bind(this),
             detach: this._detach.bind(this),
             makeTrackable: this._makeTrackable.bind(this),
-            get: this.getEntity.bind(this)
+            get: this.get.bind(this)
         }
     }
 
@@ -267,27 +248,13 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         } as ITrackedData;
     }
 
-    private reinitialize(removals: IDbRecordBase[] = [], removalsById: string[] = [], add: IDbRecordBase[] = []) {
+    private reinitialize(removals: IDbRecordBase[] = [], add: IDbRecordBase[] = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
 
-        // remove attached tracking changes
-        for (let item of this._attachments) {
-            const indexableEntity: IIndexableEntity = item as any;
-            delete indexableEntity[PRISTINE_ENTITY_KEY];
-        }
-
         for (let removal of removals) {
             const index = this._attachments.findIndex(w => w._id === removal._id);
-
-            if (index !== -1) {
-                this._attachments.splice(index, 1)
-            }
-        }
-
-        for (let removalById of removalsById) {
-            const index = this._attachments.findIndex(w => w._id === removalById);
 
             if (index !== -1) {
                 this._attachments.splice(index, 1)
@@ -407,52 +374,41 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         delete indexableEntity[PRISTINE_ENTITY_KEY];
     }
 
-    private async _tryCreateDocumentTypeIndex() {
-
-        if (this._configuration.documentTypeIndex === "create") {
-
-            // Create if not exists, do nothing if exists
-            await this.doWork(async w => {
-
-                const result = await w.getIndexes();
-
-                if (result.indexes.some(w => w.ddoc === "document-type-index") === false) {
-                    await w.createIndex({
-                        index: {
-                            fields: ["DocumentType"],
-                            name: 'document-type-index',
-                            ddoc: "document-type-index"
-                        },
-                    })
-                }
-            });
-        }
-    }
-
     async generateDocumentTypeIndex() {
         await this.doWork(async w => {
 
             await w.createIndex({
                 index: {
                     fields: ["DocumentType"],
-                    name: 'document-type-index',
-                    ddoc: "document-type-index"
+                    name: 'autogen_document-type-index',
+                    ddoc: "autogen_document-type-index"
                 },
             })
         });
     }
 
+    private async _getModifications() {
+        const { add, remove, removeById, updated } = this._getPendingChanges();
+
+        const extraRemovals = await this.get(...removeById);
+
+        return {
+            add,
+            remove: [...remove, ...extraRemovals].map(w => ({ ...w, _deleted: true })),
+            updated
+        }
+    }
+
     async saveChanges() {
         try {
 
-            const { add, remove, removeById, updated } = this._getPendingChanges();
+            const { add, remove, updated } = await this._getModifications();
+
+            const modifications = [...add, ...remove, ...updated];
 
             // remove pristine entity before we send to bulk docs
-            [...add, ...remove, ...updated].forEach(w => this._makePristine(w))
+            modifications.forEach(w => this._makePristine(w))
 
-            const addsWithIds = add.filter(w => w._id != null);
-            const addsWithoutIds = add.filter(w => w._id == null);
-            const modifications = [...updated, ...addsWithIds, ...remove.map(w => ({ ...w, _deleted: true }))];
             const modificationResult = await this.bulkDocs(modifications);
 
             for (let modification of modifications) {
@@ -469,17 +425,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 }
             }
 
-            const additionsWithNoIds = await this.addEntityWithoutId(entity => this._events["entity-created"].forEach(w => w(entity)), ...addsWithoutIds);
-            const removalsById = await this.removeEntityById(entity => this._events["entity-removed"].forEach(w => w(entity)), ...removeById)
-
             // removals are being grouped with updates, 
             // need to separate out calls to events so we don't double dip
             // on updates and removals
-            this._tryCallEvents({ remove, add: addsWithIds, updated });
+            this._tryCallEvents({ remove, add, updated });
 
-            this.reinitialize(remove, removeById, add);
+            this.reinitialize(remove, add);
 
-            return [...removalsById, ...additionsWithNoIds].filter(w => w === true).length + modificationResult.successes_count;
+            return modificationResult.successes_count;
         } catch (e) {
             this.reinitialize()
             throw e;

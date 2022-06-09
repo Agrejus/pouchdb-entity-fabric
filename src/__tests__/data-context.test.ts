@@ -380,12 +380,12 @@ describe('getting started - data context', () => {
             rejectedCount: 1,
             publishDate: new Date()
         })
-debugger;
+
         expect(context.hasPendingChanges()).toBe(true);
-debugger;
+
         await context.saveChanges();
         expect(context.hasPendingChanges()).toBe(false);
-debugger;
+
         const all = await context.getAllDocs();
 
         expect(all.length).toBe(3);

@@ -11,6 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DbSet = exports.PRISTINE_ENTITY_KEY = void 0;
 const Validation_1 = require("./Validation");
+const uuid_1 = require("uuid");
 exports.PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -36,31 +37,31 @@ class DbSet {
     get DocumentType() { return this._documentType; }
     add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Promise.all(entities.map(w => this._add(w)));
-        });
-    }
-    _add(entity) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const indexableEntity = entity;
-            if (indexableEntity["_rev"] !== undefined) {
-                throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity');
-            }
             const data = this._api.getTrackedData();
             const { add } = data;
-            const addItem = entity;
-            addItem.DocumentType = this._documentType;
-            const id = this._getKeyFromEntity(entity);
-            if (id != undefined) {
-                const ids = add.map(w => w._id);
-                if (ids.includes(id)) {
-                    throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`);
+            return entities.map(entity => {
+                const indexableEntity = entity;
+                if (indexableEntity["_rev"] !== undefined) {
+                    throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity');
                 }
-                addItem._id = id;
-            }
-            this._events["add"].forEach(w => w(entity));
-            const trackableEntity = this._api.makeTrackable(addItem);
-            add.push(trackableEntity);
-            return trackableEntity;
+                const addItem = entity;
+                addItem.DocumentType = this._documentType;
+                const id = this._getKeyFromEntity(entity);
+                if (id != undefined) {
+                    const ids = add.map(w => w._id);
+                    if (ids.includes(id)) {
+                        throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`);
+                    }
+                    addItem._id = id;
+                }
+                else {
+                    addItem._id = (0, uuid_1.v4)();
+                }
+                this._events["add"].forEach(w => w(entity));
+                const trackableEntity = this._api.makeTrackable(addItem);
+                add.push(trackableEntity);
+                return trackableEntity;
+            });
         });
     }
     _getKeyFromEntity(entity) {
@@ -145,10 +146,17 @@ class DbSet {
     match(items) {
         return items.filter(w => w.DocumentType === this.DocumentType);
     }
-    find(selector) {
+    find(idOrSelector) {
         return __awaiter(this, void 0, void 0, function* () {
+            if (typeof idOrSelector === "string") {
+                const found = yield this._api.get(idOrSelector);
+                if (found) {
+                    this._api.send([found], false);
+                }
+                return (found !== null && found !== void 0 ? found : undefined);
+            }
             const data = yield this._all();
-            const result = [...data].find(selector);
+            const result = [...data].find(idOrSelector);
             if (result) {
                 this._api.send([result], false);
             }

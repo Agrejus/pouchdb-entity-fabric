@@ -61,9 +61,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
                 }
     
                 (addItem as any)._id = id;
-            } else {
-                (addItem as any)._id = uuidv4();
-            }
+            } 
     
             this._events["add"].forEach(w => w(entity as any));
     
@@ -78,7 +76,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     private _getKeyFromEntity(entity: TEntity) {
 
         if (this._idKeys.length === 0) {
-            return null;
+            return uuidv4();
         }
 
         const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => {
@@ -175,22 +173,20 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    async find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>
-    async find(id: string): Promise<TEntity | undefined>
-    async find(idOrSelector: EntitySelector<TDocumentType, TEntity> | string): Promise<TEntity | undefined> {
+    async get(...ids:string[]) {
+        const entities = await this._api.get(...ids);
 
-        if (typeof idOrSelector === "string") {
-            const found = await this._api.get(idOrSelector);
-
-            if (found) {
-                this._api.send([found], false)
-            }
-
-            return (found ?? undefined) as (TEntity | undefined);
+        if (entities.length > 0) {
+            this._api.send(entities, false)
         }
 
+        return entities as TEntity[];
+    }
+
+    async find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined> {
+
         const data = await this._all();
-        const result = [...data].find(idOrSelector);
+        const result = [...data].find(selector);
 
         if (result) {
             this._api.send([result], false)
@@ -200,20 +196,28 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     detach(...entities: TEntity[]) {
-        this._detachItems(entities)
-    }
 
-    attach(...entites: TEntity[]) {
-
-        const validationFailures = entites.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
+        const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
         
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n')
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
         }
 
-        entites.forEach(w => this._api.makeTrackable(w));
-        this._api.send(entites, true)
+        this._detachItems(entities)
+    }
+
+    attach(...entities: TEntity[]) {
+
+        const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
+        
+        if (validationFailures.length > 0) {
+            const errors = validationFailures.map(w => w.error).join('\r\n')
+            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
+        }
+
+        entities.forEach(w => this._api.makeTrackable(w));
+        this._api.send(entities, true)
     }
 
     async first() {
