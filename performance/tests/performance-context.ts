@@ -195,7 +195,7 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
                 }
             }
 
-            fs.writeFileSync(`./metrics/performance-${packageJson.version}.json`, JSON.stringify(result, null, 2))
+            fs.writeFileSync(`./performance/metrics/performance-${packageJson.version}.json`, JSON.stringify(result, null, 2))
         }
     }
 

@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
       {
-        "name": "Run Performance",
+        "name": "Run Performance Test",
         "type": "node",
         "request": "launch",
         "runtimeExecutable": "node",
         "runtimeArgs": ["--nolazy", "-r", "ts-node/register/transpile-only"],
 
-        "args": ["examples/getting-started/performance.ts"],
+        "args": ["performance/tests/${fileBasename}"],
 
         "cwd": "${workspaceRoot}",
         "internalConsoleOptions": "openOnSessionStart",
