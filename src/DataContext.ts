@@ -342,9 +342,11 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         delete indexableEntity[PRISTINE_ENTITY_KEY];
     }
 
-    async generateDocumentTypeIndex() {
-        await this.doWork(async w => {
+    async createDocumentTypeIndex() {
 
+        // once this index is created any read's will rebuild the index 
+        // automatically.  The first read may be slow once new data is created
+        await this.doWork(async w => {
             await w.createIndex({
                 index: {
                     fields: ["DocumentType"],
@@ -426,6 +428,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>) {
         this._events[event].push(callback);
+    }
+
+    async empty() {
+        for (let dbset of this) {
+            await dbset.empty();
+        }
+
+        await this.saveChanges();
     }
 
     async destroyDatabase() {

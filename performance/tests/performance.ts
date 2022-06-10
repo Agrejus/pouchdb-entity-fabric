@@ -20,7 +20,7 @@ const generateData = async (context: PerformanceDbDataContext, count: number) =>
 
         await context.saveChanges();
 
-        await context.generateDocumentTypeIndex();
+        await context.createDocumentTypeIndex();
     } catch (e) {
         debugger;
         console.log(e);
@@ -28,9 +28,9 @@ const generateData = async (context: PerformanceDbDataContext, count: number) =>
 
 }
 
-const runTest = async (generator: () => Promise<PerformanceDbDataContext>, name:string) => {
+const runTest = async (generator: () => Promise<PerformanceDbDataContext>, name: string) => {
     await destroyDatabase();
-    
+
     const context = await generator();
 
     context.writePerformance(name)
@@ -54,7 +54,7 @@ const shouldAddOneEntity = async () => {
 const shouldAddSomeEntities = async () => {
     const context = new PerformanceDbDataContext();
 
-    await generateData(context, 5)
+    await generateData(context, 50)
 
     await context.saveChanges();
 
@@ -102,7 +102,7 @@ const shouldRemoveSomeEntities = async () => {
 const shouldRemoveManyEntities = async () => {
     const context = new PerformanceDbDataContext();
 
-    await generateData(context, 50);
+    await generateData(context, 2000);
 
     await context.test10.empty();
     await context.test4.empty();
@@ -145,7 +145,7 @@ const shouldRemoveSomeEntitiesById = async () => {
 const shouldRemoveManyEntitiesById = async () => {
     const context = new PerformanceDbDataContext();
 
-    await generateData(context, 50);
+    await generateData(context, 2000);
 
     const ten = await context.test10.all();
     const four = await context.test4.all();
@@ -197,35 +197,35 @@ const shouldUpdateSomeEntities = async () => {
 const shouldUpdateManyEntities = async () => {
     const context = new PerformanceDbDataContext();
 
-    await generateData(context, 50);
+    await generateData(context, 2000);
 
     const ten = await context.test10.all();
     const four = await context.test4.all();
     const five = await context.test5.all();
     const nineteen = await context.test19.all();
 
-    for(let item of ten) {
+    for (let item of ten) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();
         item.test4 = faker.random.word();
     }
 
-    for(let item of four) {
+    for (let item of four) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();
         item.test4 = faker.random.word();
     }
 
-    for(let item of five) {
+    for (let item of five) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();
         item.test4 = faker.random.word();
     }
 
-    for(let item of nineteen) {
+    for (let item of nineteen) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();
@@ -284,15 +284,15 @@ const shouldGetManyEntities = async () => {
 const shouldAttachSomeEntities = async () => {
     const context = new PerformanceDbDataContext();
 
-    await generateData(context, 10)
+    await generateData(context, 50)
 
     const items = await context.test1.all();
 
-    const secondContext = new PerformanceDbDataContext();    
+    const secondContext = new PerformanceDbDataContext();
 
     secondContext.test1.attach(...items);
 
-    for(let item of items) {
+    for (let item of items) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();
@@ -307,15 +307,15 @@ const shouldAttachSomeEntities = async () => {
 const shouldAttachManyEntities = async () => {
     const context = new PerformanceDbDataContext();
 
-    await generateData(context, 1000)
+    await generateData(context, 2000)
 
     const items = await context.test1.all();
 
-    const secondContext = new PerformanceDbDataContext();    
+    const secondContext = new PerformanceDbDataContext();
 
     secondContext.test1.attach(...items);
 
-    for(let item of items) {
+    for (let item of items) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();
@@ -345,7 +345,7 @@ export const run = async () => {
         await runTest(shouldUpdateOneEntity, "shouldUpdateOneEntity");
         await runTest(shouldUpdateSomeEntities, "shouldUpdateSomeEntities");
         await runTest(shouldUpdateManyEntities, "shouldUpdateManyEntities");
-        
+
         await runTest(shouldGetAllSomeEntities, "shouldGetAllSomeEntities");
         await runTest(shouldGetAllManyEntities, "shouldGetAllManyEntities");
 

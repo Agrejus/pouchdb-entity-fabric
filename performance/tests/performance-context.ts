@@ -246,32 +246,6 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
 
     writePerformance(name: string) { }
 
-    async empty() {
-        for (let dbset of this) {
-            await dbset.empty();
-        }
-
-        await this.saveChanges();
-    }
-
-    async allDocs() {
-        return await this.doWork(w => w.allDocs());
-    }
-
-    async destroy() {
-        await this.doWork(w => w.destroy(), false);
-    }
-
-    async createDocumentTypeIndex() {
-        await this.doWork(w => w.createIndex({
-            index: {
-                fields: ["DocumentType"],
-                name: 'document-type-index',
-                ddoc: "document-type-index"
-            },
-        }));
-    }
-
     async getIndexes() {
         return await this.doWork(w => w.getIndexes());
     }
