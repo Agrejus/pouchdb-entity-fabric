@@ -2,7 +2,6 @@ import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
-import { performance } from 'perf_hooks';
 
 PouchDB.plugin(findAdapter);
 
@@ -14,7 +13,6 @@ abstract class PouchDbBase {
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
         this._options = options;
         this._name = name;
-
     }
 
     protected async doWork<T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose: boolean = true) {
@@ -33,35 +31,6 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
         super(name, options);
-    }
-
-    /**
-    * Inserts entity into the data store, this is used by DbSet
-    * @param entities 
-    * @param onComplete 
-    */
-    protected async insertEntity(onComplete: (result: IDbRecord<any>) => void, ...entities: IDbAdditionRecord<any>[]) {
-
-        const response = await this.doWork(async w => {
-
-            return await Promise.all(entities.map(async e => {
-
-                const result: IDbRecord<any> = e as any;
-                const response = await w.post(e);
-
-                (result as any)._rev = response.rev;
-
-                if (!result._id) {
-                    (result as any)._id = response.id;
-                }
-
-                onComplete(result);
-
-                return response;
-            }));
-        });
-
-        return response.map(w => w.ok);
     }
 
     /**
@@ -109,7 +78,7 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
         }
 
         return result;
-    }
+    }  
 
     /**
      * Get entity from the data store, this is used by DbSet
@@ -153,7 +122,6 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
             console.log(e);
             return [] as IDbRecordBase[];
         }
-
     }
 }
 
@@ -248,7 +216,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         } as ITrackedData;
     }
 
-    private reinitialize(removals: IDbRecordBase[] = [], add: IDbRecordBase[] = []) {
+    private _reinitialize(removals: IDbRecordBase[] = [], add: IDbRecordBase[] = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
@@ -430,17 +398,13 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             // on updates and removals
             this._tryCallEvents({ remove, add, updated });
 
-            this.reinitialize(remove, add);
+            this._reinitialize(remove, add);
 
             return modificationResult.successes_count;
         } catch (e) {
-            this.reinitialize()
+            this._reinitialize()
             throw e;
         }
-    }
-
-    protected async addEntityWithoutId(onComplete: (result: IDbRecord<any>) => void, ...entities: IDbRecordBase[]) {
-        return await this.insertEntity(onComplete, ...entities);
     }
 
     protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {

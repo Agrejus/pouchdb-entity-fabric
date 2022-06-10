@@ -1,7 +1,7 @@
 import { performance } from "perf_hooks";
 import { DataContext } from "../../src/DataContext";
 import { DbSet } from "../../src/DbSet";
-import { EntityIdKeys, IDbRecord, IDbSet } from "../../src/typings";
+import { EntityIdKeys, IBulkDocsResponse, IDbRecord, IDbRecordBase, IDbSet } from "../../src/typings";
 import { max, mean, min, uniqBy } from 'lodash';
 import * as fs from 'fs';
 import packageJson from '../../package.json';
@@ -175,7 +175,7 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
     if (!isDbSet) {
         instance.metrics = [];
 
-        instance.writePerformance = () => {
+        instance.writePerformance = (name: string) => {
 
             const result = {};
 
@@ -195,7 +195,7 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
                 }
             }
 
-            fs.writeFileSync(`./performance/metrics/performance-${packageJson.version}.json`, JSON.stringify(result, null, 2))
+            fs.writeFileSync(`./performance/metrics/performance-${name}-${packageJson.version}.json`, JSON.stringify(result, null, 2))
         }
     }
 
@@ -227,7 +227,6 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'getContext',
             'getAllData',
             'updateEntity',
-            'bulkDocs',
             'removeEntity',
             'removeEntityById',
             'getEntity',
@@ -241,7 +240,11 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
         overrideWithPerformance(this, propertiesToIgnore, false, DataContext.prototype, PerformanceDbDataContext.prototype);
     }
 
-    writePerformance() { }
+    protected async bulkDocs(entities: IDbRecordBase[]) {
+        return super.bulkDocs(entities);
+    }
+
+    writePerformance(name: string) { }
 
     async empty() {
         for (let dbset of this) {
