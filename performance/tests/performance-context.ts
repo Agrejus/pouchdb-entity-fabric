@@ -4,6 +4,7 @@ import { DbSet } from "../../src/DbSet";
 import { EntityIdKeys, IBulkDocsResponse, IDbRecord, IDbRecordBase, IDbSet } from "../../src/typings";
 import { max, mean, min, uniqBy } from 'lodash';
 import * as fs from 'fs';
+import * as path from 'path'
 import packageJson from '../../package.json';
 
 export enum PerformanceDocumentTypes {
@@ -194,8 +195,15 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
                     average: averageValue
                 }
             }
+            const fileNameAndPath = `./performance/metrics/v${packageJson.version}/performance-${name}.json`;
 
-            fs.writeFileSync(`./performance/metrics/performance-${name}-${packageJson.version}.json`, JSON.stringify(result, null, 2))
+            const dirname = path.dirname(fileNameAndPath);
+            
+            if (fs.existsSync(dirname) === false) {
+                fs.mkdirSync(dirname);
+            }
+
+            fs.writeFileSync(fileNameAndPath, JSON.stringify(result, null, 2))
         }
     }
 
