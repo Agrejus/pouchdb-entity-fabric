@@ -118,7 +118,7 @@ export interface IDbSetBase<TDocumentType extends string> {
 }
 
 export type DatabaseConfigurationAdditionalConfiguration = {
-    documentTypeIndex?: "create"
+
 }
 
 export type DataContextOptions = PouchDB.Configuration.DatabaseConfiguration & DatabaseConfigurationAdditionalConfiguration
@@ -173,6 +173,12 @@ export interface IDataContext {
      * @returns boolean
      */
     hasPendingChanges(): boolean;
+
+    /**
+     * Enable DataContext speed optimizations.  Needs to be run once per application per database.  Typically, this should be run on application start.
+     * @returns void
+     */
+    optimize(): Promise<void>
 }
 
 export interface ITrackedData {

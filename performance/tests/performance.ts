@@ -20,7 +20,7 @@ const generateData = async (context: PerformanceDbDataContext, count: number) =>
 
         await context.saveChanges();
 
-        await context.createDocumentTypeIndex();
+        await context.optimize();
     } catch (e) {
         debugger;
         console.log(e);

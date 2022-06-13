@@ -78,7 +78,7 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
         }
 
         return result;
-    }  
+    }
 
     /**
      * Get entity from the data store, this is used by DbSet
@@ -143,16 +143,39 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     private _dbSets: IDbSetBase<string>[] = [];
 
     constructor(name?: string, options?: DataContextOptions) {
-        const { documentTypeIndex, ...pouchDb } = options ?? {};
+        const { ...pouchDb } = options ?? {};
         super(name, pouchDb);
 
         this._configuration = {
-            documentTypeIndex: documentTypeIndex ?? "create"
+
         };
     }
 
     async getAllDocs() {
         return this.getAllData();
+    }
+
+    async optimize() {
+        // once this index is created any read's will rebuild the index 
+        // automatically.  The first read may be slow once new data is created
+        await this.doWork(async w => {
+
+            await w.createIndex({
+                index: {
+                    fields: ["DocumentType"],
+                    name: 'autogen_document-type-index',
+                    ddoc: "autogen_document-type-index"
+                },
+            });
+
+            await w.createIndex({
+                index: {
+                    fields: ["_deleted"],
+                    name: 'autogen_deleted-index',
+                    ddoc: "autogen_deleted-index"
+                },
+            });
+        });
     }
 
     /**
@@ -340,21 +363,6 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         // make pristine again
         delete indexableEntity[PRISTINE_ENTITY_KEY];
-    }
-
-    async createDocumentTypeIndex() {
-
-        // once this index is created any read's will rebuild the index 
-        // automatically.  The first read may be slow once new data is created
-        await this.doWork(async w => {
-            await w.createIndex({
-                index: {
-                    fields: ["DocumentType"],
-                    name: 'autogen_document-type-index',
-                    ddoc: "autogen_document-type-index"
-                },
-            })
-        });
     }
 
     private async _getModifications() {

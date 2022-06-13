@@ -31,31 +31,27 @@ const generateData = async (context: PerformanceDbDataContext, count: number, db
         debugger;
         console.log(e);
     }
-
 }
 
 export const run = async () => {
     try {
 
-        const cleanup = new PerformanceDbDataContext();
-        await cleanup.destroyDatabase();
+        // const cleanup = new PerformanceDbDataContext();
+        // await cleanup.destroyDatabase();
 
         const context = new PerformanceDbDataContext();
 
-        await generateData(context, 2000);
+        // await generateData(context, 250);
+    
+        await context.test1.empty();
+        await context.test4.empty();
+        await context.test5.empty();
+        await context.test19.empty();
+    
+        await context.saveChanges();
 
-        await context.createDocumentTypeIndex();
-
-        const s = performance.now();
-        await context.test1.all();
-        const e = performance.now();
-
-        const s2 = performance.now();
-        await context.test1.all();
-        const e2 = performance.now()
-
-        console.log(e - s);
-        console.log(e2 - s2);
+        const test1All = await context.test1.all();
+        debugger;
 
     } catch (e) {
         debugger;

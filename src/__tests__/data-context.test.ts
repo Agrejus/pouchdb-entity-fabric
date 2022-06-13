@@ -382,7 +382,6 @@ describe('getting started - data context', () => {
         })
 
         expect(context.hasPendingChanges()).toBe(true);
-
         await context.saveChanges();
         expect(context.hasPendingChanges()).toBe(false);
 

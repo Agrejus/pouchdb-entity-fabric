@@ -1,7 +1,7 @@
 import { performance } from "perf_hooks";
 import { DataContext } from "../../src/DataContext";
 import { DbSet } from "../../src/DbSet";
-import { EntityIdKeys, IBulkDocsResponse, IDbRecord, IDbRecordBase, IDbSet } from "../../src/typings";
+import { DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDbRecord, IDbRecordBase, IDbSet } from "../../src/typings";
 import { max, mean, min, uniqBy } from 'lodash';
 import * as fs from 'fs';
 import * as path from 'path'
@@ -198,7 +198,7 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
             const fileNameAndPath = `./performance/metrics/v${packageJson.version}/performance-${name}.json`;
 
             const dirname = path.dirname(fileNameAndPath);
-            
+
             if (fs.existsSync(dirname) === false) {
                 fs.mkdirSync(dirname);
             }
@@ -228,8 +228,8 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
 
 export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTypes> {
 
-    constructor() {
-        super('test-db');
+    constructor(options?: DataContextOptions) {
+        super('test-db', options);
         const propertiesToIgnore = [
             'insertEntity',
             'getContext',
