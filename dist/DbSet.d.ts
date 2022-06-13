@@ -31,10 +31,10 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     all(): Promise<TEntity[]>;
     filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
     match(items: IDbRecordBase[]): TEntity[];
+    get(...ids: string[]): Promise<TEntity[]>;
     find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>;
-    find(id: string): Promise<TEntity | undefined>;
     detach(...entities: TEntity[]): void;
-    attach(...entites: TEntity[]): void;
+    attach(...entities: TEntity[]): void;
     first(): Promise<TEntity>;
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;

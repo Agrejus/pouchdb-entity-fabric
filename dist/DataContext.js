@@ -49,28 +49,6 @@ class PouchDbInteractionBase extends PouchDbBase {
         super(name, options);
     }
     /**
-    * Inserts entity into the data store, this is used by DbSet
-    * @param entities
-    * @param onComplete
-    */
-    insertEntity(onComplete, ...entities) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
-                return yield Promise.all(entities.map((e) => __awaiter(this, void 0, void 0, function* () {
-                    const result = e;
-                    const response = yield w.post(e);
-                    result._rev = response.rev;
-                    if (!result._id) {
-                        result._id = response.id;
-                    }
-                    onComplete(result);
-                    return response;
-                })));
-            }));
-            return response.map(w => w.ok);
-        });
-    }
-    /**
      * Does a bulk operation in the data store
      * @param entities
      */
@@ -107,62 +85,22 @@ class PouchDbInteractionBase extends PouchDbBase {
         });
     }
     /**
-     * Remove entity in the data store, this is used by DbSet
-     * @param entity
-     */
-    removeEntity(...entity) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this.doWork(w => w.remove(entity));
-            return response.ok;
-        });
-    }
-    /**
-     * Remove entity in the data store, this is used by DbSet
+     * Get entity from the data store, this is used by DbSet
      * @param ids
      */
-    removeEntityById(onResponse, ...ids) {
+    get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
-            const result = yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
-                return yield Promise.all(ids.map((id) => __awaiter(this, void 0, void 0, function* () {
-                    const entity = yield w.get(id);
-                    const response = yield w.remove(entity);
-                    onResponse(entity);
-                    return response;
-                })));
-            }));
-            return result.map(w => w.ok);
-        });
-    }
-    removeEntityById2(onResponse, ...ids) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const result = yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
-                const s = performance.now();
-                const result = yield w.bulkGet({ docs: ids.map(x => ({ id: x, })) });
-                const e = performance.now();
-                console.log(e - s);
-                // return await Promise.all(ids.map(async id => {
-                //     const entity = await w.get(id);
-                //     const response = await w.remove(entity);
-                //     onResponse(entity as any);
-                //     return response;
-                // }))
-                return result.results;
-            }));
-            return result.map(w => !!w);
-        });
-    }
-    /**
-     * Get entity from the data store, this is used by DbSet
-     * @param id
-     */
-    getEntity(id) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                return yield this.doWork(w => w.get(id));
+            if (ids.length === 0) {
+                return [];
             }
-            catch (e) {
-                return null;
-            }
+            const result = yield this.doWork(w => w.bulkGet({ docs: ids.map(x => ({ id: x })) }));
+            return result.results.map(w => {
+                const result = w.docs[0];
+                if ('error' in result) {
+                    throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`);
+                }
+                return result.ok;
+            });
         });
     }
     /**
@@ -189,7 +127,7 @@ class PouchDbInteractionBase extends PouchDbBase {
 }
 class DataContext extends PouchDbInteractionBase {
     constructor(name, options) {
-        const _a = options !== null && options !== void 0 ? options : {}, { documentTypeIndex } = _a, pouchDb = __rest(_a, ["documentTypeIndex"]);
+        const pouchDb = __rest(options !== null && options !== void 0 ? options : {}, []);
         super(name, pouchDb);
         this._removals = [];
         this._additions = [];
@@ -201,13 +139,33 @@ class DataContext extends PouchDbInteractionBase {
             "entity-updated": []
         };
         this._dbSets = [];
-        this._configuration = {
-            documentTypeIndex: documentTypeIndex !== null && documentTypeIndex !== void 0 ? documentTypeIndex : "create"
-        };
+        this._configuration = {};
     }
     getAllDocs() {
         return __awaiter(this, void 0, void 0, function* () {
             return this.getAllData();
+        });
+    }
+    optimize() {
+        return __awaiter(this, void 0, void 0, function* () {
+            // once this index is created any read's will rebuild the index 
+            // automatically.  The first read may be slow once new data is created
+            yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
+                yield w.createIndex({
+                    index: {
+                        fields: ["DocumentType"],
+                        name: 'autogen_document-type-index',
+                        ddoc: "autogen_document-type-index"
+                    },
+                });
+                yield w.createIndex({
+                    index: {
+                        fields: ["_deleted"],
+                        name: 'autogen_deleted-index',
+                        ddoc: "autogen_deleted-index"
+                    },
+                });
+            }));
         });
     }
     /**
@@ -225,7 +183,7 @@ class DataContext extends PouchDbInteractionBase {
             send: this._sendData.bind(this),
             detach: this._detach.bind(this),
             makeTrackable: this._makeTrackable.bind(this),
-            get: this.getEntity.bind(this)
+            get: this.get.bind(this)
         };
     }
     /**
@@ -263,23 +221,12 @@ class DataContext extends PouchDbInteractionBase {
             removeById: this._removeById
         };
     }
-    reinitialize(removals = [], removalsById = [], add = []) {
+    _reinitialize(removals = [], add = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
-        // remove attached tracking changes
-        for (let item of this._attachments) {
-            const indexableEntity = item;
-            delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
-        }
         for (let removal of removals) {
             const index = this._attachments.findIndex(w => w._id === removal._id);
-            if (index !== -1) {
-                this._attachments.splice(index, 1);
-            }
-        }
-        for (let removalById of removalsById) {
-            const index = this._attachments.findIndex(w => w._id === removalById);
             if (index !== -1) {
                 this._attachments.splice(index, 1);
             }
@@ -369,47 +316,24 @@ class DataContext extends PouchDbInteractionBase {
         // make pristine again
         delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
     }
-    _tryCreateDocumentTypeIndex() {
+    _getModifications() {
         return __awaiter(this, void 0, void 0, function* () {
-            if (this._configuration.documentTypeIndex === "create") {
-                // Create if not exists, do nothing if exists
-                yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
-                    const result = yield w.getIndexes();
-                    if (result.indexes.some(w => w.ddoc === "document-type-index") === false) {
-                        yield w.createIndex({
-                            index: {
-                                fields: ["DocumentType"],
-                                name: 'document-type-index',
-                                ddoc: "document-type-index"
-                            },
-                        });
-                    }
-                }));
-            }
-        });
-    }
-    generateDocumentTypeIndex() {
-        return __awaiter(this, void 0, void 0, function* () {
-            yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
-                yield w.createIndex({
-                    index: {
-                        fields: ["DocumentType"],
-                        name: 'document-type-index',
-                        ddoc: "document-type-index"
-                    },
-                });
-            }));
+            const { add, remove, removeById, updated } = this._getPendingChanges();
+            const extraRemovals = yield this.get(...removeById);
+            return {
+                add,
+                remove: [...remove, ...extraRemovals].map(w => (Object.assign(Object.assign({}, w), { _deleted: true }))),
+                updated
+            };
         });
     }
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { add, remove, removeById, updated } = this._getPendingChanges();
+                const { add, remove, updated } = yield this._getModifications();
+                const modifications = [...add, ...remove, ...updated];
                 // remove pristine entity before we send to bulk docs
-                [...add, ...remove, ...updated].forEach(w => this._makePristine(w));
-                const addsWithIds = add.filter(w => w._id != null);
-                const addsWithoutIds = add.filter(w => w._id == null);
-                const modifications = [...updated, ...addsWithIds, ...remove.map(w => (Object.assign(Object.assign({}, w), { _deleted: true })))];
+                modifications.forEach(w => this._makePristine(w));
                 const modificationResult = yield this.bulkDocs(modifications);
                 for (let modification of modifications) {
                     const found = modificationResult.successes[modification._id];
@@ -421,24 +345,17 @@ class DataContext extends PouchDbInteractionBase {
                         this._makePristine(modification);
                     }
                 }
-                const additionsWithNoIds = yield this.addEntityWithoutId(entity => this._events["entity-created"].forEach(w => w(entity)), ...addsWithoutIds);
-                const removalsById = yield this.removeEntityById2(entity => this._events["entity-removed"].forEach(w => w(entity)), ...removeById);
                 // removals are being grouped with updates, 
                 // need to separate out calls to events so we don't double dip
                 // on updates and removals
-                this._tryCallEvents({ remove, add: addsWithIds, updated });
-                this.reinitialize(remove, removeById, add);
-                return [...removalsById, ...additionsWithNoIds].filter(w => w === true).length + modificationResult.successes_count;
+                this._tryCallEvents({ remove, add, updated });
+                this._reinitialize(remove, add);
+                return modificationResult.successes_count;
             }
             catch (e) {
-                this.reinitialize();
+                this._reinitialize();
                 throw e;
             }
-        });
-    }
-    addEntityWithoutId(onComplete, ...entities) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return yield this.insertEntity(onComplete, ...entities);
         });
     }
     createDbSet(documentType, ...idKeys) {
@@ -457,6 +374,14 @@ class DataContext extends PouchDbInteractionBase {
     }
     on(event, callback) {
         this._events[event].push(callback);
+    }
+    empty() {
+        return __awaiter(this, void 0, void 0, function* () {
+            for (let dbset of this) {
+                yield dbset.empty();
+            }
+            yield this.saveChanges();
+        });
     }
     destroyDatabase() {
         return __awaiter(this, void 0, void 0, function* () {

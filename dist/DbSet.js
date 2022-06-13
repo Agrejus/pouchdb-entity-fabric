@@ -54,9 +54,6 @@ class DbSet {
                     }
                     addItem._id = id;
                 }
-                else {
-                    addItem._id = (0, uuid_1.v4)();
-                }
                 this._events["add"].forEach(w => w(entity));
                 const trackableEntity = this._api.makeTrackable(addItem);
                 add.push(trackableEntity);
@@ -66,7 +63,7 @@ class DbSet {
     }
     _getKeyFromEntity(entity) {
         if (this._idKeys.length === 0) {
-            return null;
+            return (0, uuid_1.v4)();
         }
         const keyData = Object.keys(entity).filter((w) => this._idKeys.includes(w)).map(w => {
             const value = entity[w];
@@ -146,17 +143,19 @@ class DbSet {
     match(items) {
         return items.filter(w => w.DocumentType === this.DocumentType);
     }
-    find(idOrSelector) {
+    get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (typeof idOrSelector === "string") {
-                const found = yield this._api.get(idOrSelector);
-                if (found) {
-                    this._api.send([found], false);
-                }
-                return (found !== null && found !== void 0 ? found : undefined);
+            const entities = yield this._api.get(...ids);
+            if (entities.length > 0) {
+                this._api.send(entities, false);
             }
+            return entities;
+        });
+    }
+    find(selector) {
+        return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._all();
-            const result = [...data].find(idOrSelector);
+            const result = [...data].find(selector);
             if (result) {
                 this._api.send([result], false);
             }
@@ -164,16 +163,21 @@ class DbSet {
         });
     }
     detach(...entities) {
-        this._detachItems(entities);
-    }
-    attach(...entites) {
-        const validationFailures = entites.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
+        const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n');
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
         }
-        entites.forEach(w => this._api.makeTrackable(w));
-        this._api.send(entites, true);
+        this._detachItems(entities);
+    }
+    attach(...entities) {
+        const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
+        if (validationFailures.length > 0) {
+            const errors = validationFailures.map(w => w.error).join('\r\n');
+            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
+        }
+        entities.forEach(w => this._api.makeTrackable(w));
+        this._api.send(entities, true);
     }
     first() {
         return __awaiter(this, void 0, void 0, function* () {

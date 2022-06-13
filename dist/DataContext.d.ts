@@ -2,7 +2,7 @@
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
-import { DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase } from './typings';
+import { DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase } from './typings';
 declare abstract class PouchDbBase {
     private _options?;
     private _name?;
@@ -11,12 +11,6 @@ declare abstract class PouchDbBase {
 }
 declare abstract class PouchDbInteractionBase<TDocumentType extends string> extends PouchDbBase {
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration);
-    /**
-    * Inserts entity into the data store, this is used by DbSet
-    * @param entities
-    * @param onComplete
-    */
-    protected insertEntity(onComplete: (result: IDbRecord<any>) => void, ...entities: IDbAdditionRecord<any>[]): Promise<boolean[]>;
     /**
      * Does a bulk operation in the data store
      * @param entities
@@ -32,21 +26,10 @@ declare abstract class PouchDbInteractionBase<TDocumentType extends string> exte
         successes_count: number;
     }>;
     /**
-     * Remove entity in the data store, this is used by DbSet
-     * @param entity
-     */
-    protected removeEntity(...entity: IDbRecordBase[]): Promise<boolean>;
-    /**
-     * Remove entity in the data store, this is used by DbSet
+     * Get entity from the data store, this is used by DbSet
      * @param ids
      */
-    protected removeEntityById(onResponse: (entity: IDbRecordBase) => void, ...ids: string[]): Promise<boolean[]>;
-    protected removeEntityById2(onResponse: (entity: IDbRecordBase) => void, ...ids: string[]): Promise<boolean[]>;
-    /**
-     * Get entity from the data store, this is used by DbSet
-     * @param id
-     */
-    protected getEntity(id: string): Promise<IDbRecordBase & PouchDB.Core.IdMeta & PouchDB.Core.GetMeta>;
+    protected get(...ids: string[]): Promise<IDbRecordBase[]>;
     /**
      * Gets all data from the data store
      */
@@ -62,6 +45,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _dbSets;
     constructor(name?: string, options?: DataContextOptions);
     getAllDocs(): Promise<IDbRecordBase[]>;
+    optimize(): Promise<void>;
     /**
      * Gets an instance of IDataContext to be used with DbSets
      */
@@ -86,7 +70,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * Used by the context api
      */
     private _getTrackedData;
-    private reinitialize;
+    private _reinitialize;
     /**
      * Provides equality comparison for Entities
      * @param first
@@ -98,14 +82,13 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _getPendingChanges;
     private _tryCallEvents;
     private _makePristine;
-    private _tryCreateDocumentTypeIndex;
-    generateDocumentTypeIndex(): Promise<void>;
+    private _getModifications;
     saveChanges(): Promise<number>;
-    protected addEntityWithoutId(onComplete: (result: IDbRecord<any>) => void, ...entities: IDbRecordBase[]): Promise<boolean[]>;
     protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>;
     query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
     hasPendingChanges(): boolean;
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;
+    empty(): Promise<void>;
     destroyDatabase(): Promise<void>;
     [Symbol.iterator](): {
         next: () => {
