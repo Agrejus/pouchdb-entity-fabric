@@ -37,7 +37,7 @@ describe('getting started - data context', () => {
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
         constructor() {
-            super('test-db', { adapter: 'memory' });
+            super('test-db', { adapter: 'memory' } );
         }
 
         async empty() {
@@ -531,4 +531,7 @@ describe('getting started - data context', () => {
 
         expect(interation).toHaveBeenCalledTimes(3);
     });
+
+    // Should create index
+
 });

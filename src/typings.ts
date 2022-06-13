@@ -1,5 +1,7 @@
+import PouchDB from 'pouchdb';
+
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSetBase<TDocumentType> {
-    
+
     /**
      * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
      * @param entities
@@ -10,14 +12,14 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Remove one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
      * @param entities
      */
-    remove(...entities: TEntity[]) : Promise<void>;
+    remove(...entities: TEntity[]): Promise<void>;
 
     /**
      * Remove one or more entities by id from the underlying data context, saveChanges must be called to persist these items to the store
      * @param ids 
      */
-    
-     remove(...ids: string[]) : Promise<void>;
+
+    remove(...ids: string[]): Promise<void>;
 
     /**
      * Return all items in the underlying data store for the document type
@@ -37,8 +39,15 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @param selector 
      * @returns TEntity
      */
-    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) : Promise<TEntity | undefined>
-    
+    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined>;
+
+    /**
+     * Find entity by an id or ids
+     * @param ids
+     * @returns TEntity
+     */
+    get(...ids: string[]): Promise<TEntity[]>
+
     /**
      * Check for equality between two entities
      * @param first
@@ -64,7 +73,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @param entities 
      * @returns TEntity[]
      */
-    match(entities:IDbRecordBase[]): TEntity[];
+    match(entities: IDbRecordBase[]): TEntity[];
 
     /**
      * Find first item in the underlying data store and return the result 
@@ -102,15 +111,24 @@ export interface IDbSetBase<TDocumentType extends string> {
 
     get DocumentType(): TDocumentType;
 
-     /**
-      * Remove all entities from the underlying data context, saveChanges must be called to persist these changes to the store
-      */
-      empty(): Promise<void>;
+    /**
+     * Remove all entities from the underlying data context, saveChanges must be called to persist these changes to the store
+     */
+    empty(): Promise<void>;
 }
+
+export type DatabaseConfigurationAdditionalConfiguration = {
+
+}
+
+export type DataContextOptions = PouchDB.Configuration.DatabaseConfiguration & DatabaseConfigurationAdditionalConfiguration
+
+export type EntitySelector<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity, index?: number, array?: TEntity[]) => boolean
 
 export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (documentType: TDocumentType) => Promise<IDbRecordBase[]>;
+    get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
     makeTrackable<T extends Object>(entity: T): T;
@@ -155,6 +173,24 @@ export interface IDataContext {
      * @returns boolean
      */
     hasPendingChanges(): boolean;
+
+    /**
+     * Enable DataContext speed optimizations.  Needs to be run once per application per database.  Typically, this should be run on application start.
+     * @returns void
+     */
+    optimize(): Promise<void>
+
+    /**
+     * Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store
+     * @returns void
+     */
+    empty(): Promise<void>
+
+    /**
+     * Destroy Pouch Database
+     * @returns void
+     */
+     destroyDatabase(): Promise<void>
 }
 
 export interface ITrackedData {

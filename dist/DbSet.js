@@ -11,6 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DbSet = exports.PRISTINE_ENTITY_KEY = void 0;
 const Validation_1 = require("./Validation");
+const uuid_1 = require("uuid");
 exports.PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -36,36 +37,33 @@ class DbSet {
     get DocumentType() { return this._documentType; }
     add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Promise.all(entities.map(w => this._add(w)));
-        });
-    }
-    _add(entity) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const indexableEntity = entity;
-            if (indexableEntity["_rev"] !== undefined) {
-                throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity');
-            }
             const data = this._api.getTrackedData();
             const { add } = data;
-            const addItem = entity;
-            addItem.DocumentType = this._documentType;
-            const id = this._getKeyFromEntity(entity);
-            if (id != undefined) {
-                const ids = add.map(w => w._id);
-                if (ids.includes(id)) {
-                    throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`);
+            return entities.map(entity => {
+                const indexableEntity = entity;
+                if (indexableEntity["_rev"] !== undefined) {
+                    throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity');
                 }
-                addItem._id = id;
-            }
-            this._events["add"].forEach(w => w(entity));
-            const trackableEntity = this._api.makeTrackable(addItem);
-            add.push(trackableEntity);
-            return trackableEntity;
+                const addItem = entity;
+                addItem.DocumentType = this._documentType;
+                const id = this._getKeyFromEntity(entity);
+                if (id != undefined) {
+                    const ids = add.map(w => w._id);
+                    if (ids.includes(id)) {
+                        throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`);
+                    }
+                    addItem._id = id;
+                }
+                this._events["add"].forEach(w => w(entity));
+                const trackableEntity = this._api.makeTrackable(addItem);
+                add.push(trackableEntity);
+                return trackableEntity;
+            });
         });
     }
     _getKeyFromEntity(entity) {
         if (this._idKeys.length === 0) {
-            return null;
+            return (0, uuid_1.v4)();
         }
         const keyData = Object.keys(entity).filter((w) => this._idKeys.includes(w)).map(w => {
             const value = entity[w];
@@ -145,6 +143,15 @@ class DbSet {
     match(items) {
         return items.filter(w => w.DocumentType === this.DocumentType);
     }
+    get(...ids) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const entities = yield this._api.get(...ids);
+            if (entities.length > 0) {
+                this._api.send(entities, false);
+            }
+            return entities;
+        });
+    }
     find(selector) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._all();
@@ -156,16 +163,21 @@ class DbSet {
         });
     }
     detach(...entities) {
-        this._detachItems(entities);
-    }
-    attach(...entites) {
-        const validationFailures = entites.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
+        const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n');
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
         }
-        entites.forEach(w => this._api.makeTrackable(w));
-        this._api.send(entites, true);
+        this._detachItems(entities);
+    }
+    attach(...entities) {
+        const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
+        if (validationFailures.length > 0) {
+            const errors = validationFailures.map(w => w.error).join('\r\n');
+            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
+        }
+        entities.forEach(w => this._api.makeTrackable(w));
+        this._api.send(entities, true);
     }
     first() {
         return __awaiter(this, void 0, void 0, function* () {

@@ -322,6 +322,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `remove(...entities: TEntity[]): Promise<void>` | Remove an entity or entities from the context, save changes must be called to persist changes |
 | `empty(): Promise<void>` | Remove all entities from the DbSet, save changes must be called to persist changes |
 | `all(): Promise<TEntity[]>` | Get all entities for the underlying document type |
+| `get(...ids: string[]): Promise<TEntity[]>` | Find entity by an id or ids |
 | `filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>` | Filter entities for the underlying document type |
 | `match(items: IDbRecordBase[]): TEntity[]` | Matches base entities and returns entities with matching document types.  This is useful for matching entites from `getAllDocs` in the data context, because those entites are generic and can belong to any `DbSet` |
 | `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity \| undefined>` | Find an entity for the underlying document type |
@@ -340,80 +341,23 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void` | Subscribe to events on the data context |
 | `hasPendingChanges(): boolean` | Check whether or not the context has any pending changes |
 | `query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>` | Invoke a query on PouchDB and return the result |
+| `empty()` | Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store |
+| `destroyDatabase()` | Destroy Pouch Database |
+| `optimize()` | Add optimizations to increase performance of PouchDB |
 
 ## Changes
-### 1.0.0 -> 1.1.0 
-- DbSet `add()` and `addRange()` method now return a refererence to added entity.  Can now be treated like a factory that creates the object
-- Entities need to inherit from `IDbRecord<TDocumentType>` or have the following properties:
-    - `readonly _id: string;`
-    - `readonly _rev: string;`
-    - `DocumentType: TDocumentType;`
-- Removed `AttachedEntity<>`, using above mechanism instead.  This will eliminate the need to recast types after they are added to the context
-- Removed `onBeforeAdd()` method on `DbSet<>`
-- Removed `removeRange()` method on `DbSet<>`.  Replaced by `remove()`
-- Removed `addRange()` method on `DbSet<>`.  Replaced by `add()`
-- Removed `removeAll()` method on `DbSet<>`.  Replaced by `empty()`
-- Removed `removeRangeById()` method on `DbSet<>`.  Replaced by `remove()`
-- Removed `removeById()` method on `DbSet<>`.  Replaced by `remove()`
-- Added `on()` method to allow for adding events to the `DbSet<>`.  Event types: `"add"`, `"remove"`
-- Added `on()` method to allow for adding events to the `DataContext<>`. Event Types: `"entity-created"`, `"entity-removed"`, `"entity-updated"`
-- Added ability to exclude properties when using `add()` methods on `DbSet<>`.  This allows users to exlucde properties and set them later, which is useful for creating default property values.  Example below list of changes
-- Changes name of `removeAll()` to `empty()` on `DbSet<>`
-- Overloaded `remove()` on `DbSet<>` to replace extra functions (above)
-- Added `first(): Promise<TEntity>` method to get the first item in the `DbSet<>`
-- Added `first(): Promise<TEntity>` method to get the first item in the `DbSet<>`
-- Added `hasPendingChanges()` method to `DataContext<>` for devs to check and see if the context has any pending changes that need to be saved
+### 1.1.0 -> 1.2.0 
+- Added `empty()` to `DataContext<>`
+- Added `destroyDatabase()` to `DataContext<>`
+- Added `optimize()` to `DataContext<>`
+- Added `get()` to `DbSet<>`
+- Improved persistance performance:
 
-
-```typescript
-
-import { DataContext } from 'pouchdb-entity-fabric';
-
-export enum DocumentTypes {
-    SomeDocument = "SomeDocument"
-}
-
-interface ISomeEntity extends IDbRecord<DocumentTypes> {
-    propertyOne: string;
-    propertyTwo: string;
-    status: "pending" | "succeeded"
-}
-
-
-export class PouchDbDataContext extends DataContext<DocumentTypes> {
-    constructor() {
-        super('some-db');
-
-        // When an entity is added to the underlying context, automatically set the status to 'pending'
-        // This is useful for setting default values when adding
-        this.someDbSet.on("add", entity => {
-            entity.status = "pending";
-        })
-    }
-
-    someDbSet = this.createDbSet<ISomeEntity, "status">(DocumentTypes.MyFirstDocument, "propertyOne", "propertyTwo");
-}
-
-const context = new PouchDbDataContext();
-
-// notice status is not required here, it will be set by the on event later
-const [result] = await context.someDbSet.add({ propertyOne: "some value", propertyTwo: "some value" });
-
-await context.saveChanges();
-
-// result
-{
-    _id: "SomeDocument/some value/some value",
-    _rev: "<generated>",
-    DocumentType: "SomeDocument",
-    status: "pending",
-    propertyOne: "some value",
-    propertyTwo: "some value"
-}
-```
-
-
-
+|                          |     PouchDB (v1.1.0)      |      v1.1.0      |     PouchDB (v1.2.0)      | v1.2.0  |
+| ------------------------ | ------------------------- | ---------------- | ------------------------- | ------- |
+| `saveChanges` - 1 Entity |             N/A           | ~10ms            | ~10ms (bulk docs)         | ~10ms   |
+| `saveChanges` - 50 Entities |          N/A           | ~850ms           | ~110ms (bulk docs)        | ~115ms  |
+| `saveChanges` - 2000 Entities |          N/A         | ~30000ms         | ~8700ms (bulk docs)       | ~8800ms |
 
 
         

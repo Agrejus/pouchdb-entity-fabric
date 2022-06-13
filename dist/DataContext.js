@@ -8,6 +8,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -17,8 +28,107 @@ const pouchdb_1 = __importDefault(require("pouchdb"));
 const DbSet_1 = require("./DbSet");
 const pouchdb_find_1 = __importDefault(require("pouchdb-find"));
 pouchdb_1.default.plugin(pouchdb_find_1.default);
-class DataContext {
+class PouchDbBase {
     constructor(name, options) {
+        this._options = options;
+        this._name = name;
+    }
+    doWork(action, shouldClose = true) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const db = new pouchdb_1.default(this._name, this._options);
+            const result = yield action(db);
+            if (shouldClose) {
+                yield db.close();
+            }
+            return result;
+        });
+    }
+}
+class PouchDbInteractionBase extends PouchDbBase {
+    constructor(name, options) {
+        super(name, options);
+    }
+    /**
+     * Does a bulk operation in the data store
+     * @param entities
+     */
+    bulkDocs(entities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const response = yield this.doWork(w => w.bulkDocs(entities));
+            const result = {
+                errors: {},
+                successes: {},
+                errors_count: 0,
+                successes_count: 0
+            };
+            for (let item of response) {
+                if ('error' in item) {
+                    const error = item;
+                    result.errors_count += 1;
+                    result.errors[error.id] = {
+                        id: error.id,
+                        ok: false,
+                        error: error.message,
+                        rev: error.rev
+                    };
+                    continue;
+                }
+                const success = item;
+                result.successes_count += 1;
+                result.successes[success.id] = {
+                    id: success.id,
+                    ok: success.ok,
+                    rev: success.rev
+                };
+            }
+            return result;
+        });
+    }
+    /**
+     * Get entity from the data store, this is used by DbSet
+     * @param ids
+     */
+    get(...ids) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (ids.length === 0) {
+                return [];
+            }
+            const result = yield this.doWork(w => w.bulkGet({ docs: ids.map(x => ({ id: x })) }));
+            return result.results.map(w => {
+                const result = w.docs[0];
+                if ('error' in result) {
+                    throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`);
+                }
+                return result.ok;
+            });
+        });
+    }
+    /**
+     * Gets all data from the data store
+     */
+    getAllData(documentType) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const findOptions = {
+                    selector: {},
+                };
+                if (documentType != null) {
+                    findOptions.selector.DocumentType = documentType;
+                }
+                const result = yield this.doWork(w => w.find(findOptions));
+                return result.docs;
+            }
+            catch (e) {
+                console.log(e);
+                return [];
+            }
+        });
+    }
+}
+class DataContext extends PouchDbInteractionBase {
+    constructor(name, options) {
+        const pouchDb = __rest(options !== null && options !== void 0 ? options : {}, []);
+        super(name, pouchDb);
         this._removals = [];
         this._additions = [];
         this._attachments = [];
@@ -29,22 +139,7 @@ class DataContext {
             "entity-updated": []
         };
         this._dbSets = [];
-        this._db = new pouchdb_1.default(name, options);
-    }
-    /**
-     * Gets all data from the data store
-     */
-    getAllData(documentType) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const findOptions = {
-                selector: {}
-            };
-            if (documentType != null) {
-                findOptions.selector.DocumentType = documentType;
-            }
-            const result = yield this._db.find(findOptions);
-            return result.docs;
-        });
+        this._configuration = {};
     }
     getAllDocs() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -52,115 +147,28 @@ class DataContext {
         });
     }
     /**
+     * Enable DataContext speed optimizations.  Needs to be run once per application per database.  Typically, this should be run on application start.
+     * @returns void
+     */
+    optimize() {
+        return __awaiter(this, void 0, void 0, function* () {
+            // once this index is created any read's will rebuild the index 
+            // automatically.  The first read may be slow once new data is created
+            yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
+                yield w.createIndex({
+                    index: {
+                        fields: ["DocumentType"],
+                        name: 'autogen_document-type-index',
+                        ddoc: "autogen_document-type-index"
+                    },
+                });
+            }));
+        });
+    }
+    /**
      * Gets an instance of IDataContext to be used with DbSets
      */
     getContext() { return this; }
-    /**
-     * Inserts entity into the data store, this is used by DbSet
-     * @param entity
-     * @param onComplete
-     */
-    insertEntity(entity, onComplete) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this._db.post(entity);
-            const result = entity;
-            result._rev = response.rev;
-            if (!result._id) {
-                result._id = response.id;
-            }
-            if (onComplete != null) {
-                onComplete(result);
-            }
-            return response.ok;
-        });
-    }
-    /**
-     * Updates entity in the data store, this is used by DbSet
-     * @param entity
-     * @param onComplete
-     */
-    updateEntity(entity, onComplete) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const response = yield this._db.put(entity);
-                const result = entity;
-                result._rev = response.rev;
-                onComplete(result);
-                return response.ok;
-            }
-            catch (_a) {
-                const found = yield this.getEntity(entity._id);
-                const result = entity;
-                result._rev = found._id;
-                const response = yield this._db.put(result);
-                result._rev = response.rev;
-                onComplete(result);
-                return response.ok;
-            }
-        });
-    }
-    /**
-     * Does a bulk operation in the data store
-     * @param entities
-     */
-    bulkDocs(entities) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this._db.bulkDocs(entities);
-            return response.map(w => {
-                if ('error' in w) {
-                    const error = w;
-                    return {
-                        id: error.id,
-                        ok: false,
-                        error: error.message,
-                        rev: error.rev
-                    };
-                }
-                const success = w;
-                return {
-                    id: success.id,
-                    ok: success.ok,
-                    rev: success.rev
-                };
-            });
-        });
-    }
-    /**
-     * Remove entity in the data store, this is used by DbSet
-     * @param entity
-     */
-    removeEntity(entity) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this._db.remove(entity);
-            return response.ok;
-        });
-    }
-    /**
-     * Remove entity in the data store, this is used by DbSet
-     * @param id
-     */
-    removeEntityById(id) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const entity = yield this._db.get(id);
-            const response = yield this._db.remove(entity);
-            this._events["entity-removed"].forEach(w => w(entity));
-            return response.ok;
-        });
-    }
-    /**
-     * Get entity from the data store, this is used by DbSet
-     * @param id
-     */
-    getEntity(id) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                return yield this._db.get(id);
-            }
-            catch (e) {
-                return null;
-            }
-        });
-    }
     /**
      * Gets an API to be used by DbSets
      * @returns IData
@@ -171,7 +179,8 @@ class DataContext {
             getAllData: this.getAllData.bind(this),
             send: this._sendData.bind(this),
             detach: this._detach.bind(this),
-            makeTrackable: this._makeTrackable.bind(this)
+            makeTrackable: this._makeTrackable.bind(this),
+            get: this.get.bind(this)
         };
     }
     /**
@@ -196,7 +205,7 @@ class DataContext {
     }
     _setAttachments(data) {
         // do not filter duplicates in case devs return multiple instances of the same entity
-        this._attachments = [...this._attachments, ...data]; //.filter((value, index, self) =>  index === self.findIndex((t) => t._id === value._id));
+        this._attachments = [...this._attachments, ...data];
     }
     /**
      * Used by the context api
@@ -209,23 +218,12 @@ class DataContext {
             removeById: this._removeById
         };
     }
-    reinitialize(removals = [], removalsById = [], add = []) {
+    _reinitialize(removals = [], add = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
-        // remove attached tracking changes
-        for (let item of this._attachments) {
-            const indexableEntity = item;
-            delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
-        }
         for (let removal of removals) {
             const index = this._attachments.findIndex(w => w._id === removal._id);
-            if (index !== -1) {
-                this._attachments.splice(index, 1);
-            }
-        }
-        for (let removalById of removalsById) {
-            const index = this._attachments.findIndex(w => w._id === removalById);
             if (index !== -1) {
                 this._attachments.splice(index, 1);
             }
@@ -315,55 +313,47 @@ class DataContext {
         // make pristine again
         delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
     }
+    _getModifications() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { add, remove, removeById, updated } = this._getPendingChanges();
+            const extraRemovals = yield this.get(...removeById);
+            return {
+                add,
+                remove: [...remove, ...extraRemovals].map(w => (Object.assign(Object.assign({}, w), { _deleted: true }))),
+                updated
+            };
+        });
+    }
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { add, remove, removeById, updated } = this._getPendingChanges();
-                // remove pristine entity
-                [...add, ...remove, ...updated].forEach(w => this._makePristine(w));
-                const addsWithIds = add.filter(w => !!w._id);
-                const addsWithoutIds = add.filter(w => w._id == null);
-                const modifications = [...updated, ...addsWithIds, ...remove.map(w => (Object.assign(Object.assign({}, w), { _deleted: true })))];
+                const { add, remove, updated } = yield this._getModifications();
+                const modifications = [...add, ...remove, ...updated];
+                // remove pristine entity before we send to bulk docs
+                modifications.forEach(w => this._makePristine(w));
                 const modificationResult = yield this.bulkDocs(modifications);
-                const successfulModifications = modificationResult.filter(w => w.ok === true);
                 for (let modification of modifications) {
-                    const found = successfulModifications.find(w => w.id === modification._id);
+                    const found = modificationResult.successes[modification._id];
                     // update the rev in case we edit the record again
                     if (found && found.ok === true) {
                         const indexableEntity = modification;
                         indexableEntity._rev = found.rev;
-                        // make pristine again
+                        // make pristine again because we set the _rev above
                         this._makePristine(modification);
                     }
                 }
-                const additionsWithGeneratedIds = yield Promise.all(addsWithoutIds.map(w => this.addEntityWithoutId(w)));
-                const removalsById = yield Promise.all(removeById.map(w => this.removeEntityById(w)));
                 // removals are being grouped with updates, 
                 // need to separate out calls to events so we don't double dip
                 // on updates and removals
                 this._tryCallEvents({ remove, add, updated });
-                this.reinitialize(remove, removeById, add);
-                return [...removalsById, ...additionsWithGeneratedIds, ...modificationResult.map(w => {
-                        return w.ok;
-                    })].filter(w => w === true).length;
+                this._reinitialize(remove, add);
+                return modificationResult.successes_count;
             }
             catch (e) {
-                this.reinitialize();
+                this._reinitialize();
                 throw e;
             }
         });
-    }
-    addEntityWithoutId(entity) {
-        return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
-            try {
-                const result = yield this.insertEntity(entity);
-                resolve({ ok: result, id: "", rev: "" });
-            }
-            catch (e) {
-                console.error(e);
-                reject({ ok: false, id: "", rev: "" });
-            }
-        }));
     }
     createDbSet(documentType, ...idKeys) {
         const dbSet = new DbSet_1.DbSet(documentType, this, ...idKeys);
@@ -372,7 +362,7 @@ class DataContext {
     }
     query(callback) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield callback(this._db);
+            return yield this.doWork(w => callback(w));
         });
     }
     hasPendingChanges() {
@@ -381,6 +371,19 @@ class DataContext {
     }
     on(event, callback) {
         this._events[event].push(callback);
+    }
+    empty() {
+        return __awaiter(this, void 0, void 0, function* () {
+            for (let dbset of this) {
+                yield dbset.empty();
+            }
+            yield this.saveChanges();
+        });
+    }
+    destroyDatabase() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.doWork(w => w.destroy(), false);
+        });
     }
     [Symbol.iterator]() {
         let index = -1;

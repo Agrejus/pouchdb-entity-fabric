@@ -2,3 +2,4 @@
     - Is this useful?
 
 - Filter translator - Translate filter selector into a find selector for faster filtering
+- Move changes from 1.3 to 1.2

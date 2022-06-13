@@ -1,4 +1,4 @@
-import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IdKeys, OmittedEntity } from './typings';
+import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IdKeys, OmittedEntity } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -18,8 +18,7 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
     constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: EntityIdKeys<TDocumentType, TEntity>);
-    add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<Awaited<TEntity>[]>;
-    private _add;
+    add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
     private _getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;
     remove(...ids: string[]): Promise<void>;
@@ -32,9 +31,10 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     all(): Promise<TEntity[]>;
     filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
     match(items: IDbRecordBase[]): TEntity[];
-    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined>;
+    get(...ids: string[]): Promise<TEntity[]>;
+    find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>;
     detach(...entities: TEntity[]): void;
-    attach(...entites: TEntity[]): void;
+    attach(...entities: TEntity[]): void;
     first(): Promise<TEntity>;
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;

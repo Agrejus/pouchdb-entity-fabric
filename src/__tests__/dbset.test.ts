@@ -217,6 +217,7 @@ describe('getting started - data context', () => {
     });
 
     test('should remove many entities by id', async () => {
+
         const context = new PouchDbDataContext();
         const generated: IContact[] = [];
 
@@ -238,6 +239,7 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(20);
 
         await context.contacts.remove(...all.map(w => w._id));
+
         await context.saveChanges();
 
         all = await context.contacts.all();
@@ -704,4 +706,6 @@ describe('getting started - data context', () => {
 
         expect(afterAttach.length).toBe(2);
     });
+
+    // test new get method
 });

@@ -1,5 +1,6 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
 import { validateAttachedEntity } from './Validation';
+import { v4 as uuidv4 } from 'uuid';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -38,47 +39,44 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
-        return await Promise.all(entities.map(w => this._add(w)))
-    }
-
-    private async _add(entity: OmittedEntity<TEntity, TExtraExclusions>) {
-
-        const indexableEntity: IIndexableEntity = entity as any;
-
-        if (indexableEntity["_rev"] !== undefined) {
-            throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
-        }
-
         const data = this._api.getTrackedData();
         const { add } = data;
 
-        const addItem: IDbRecord<TDocumentType> = entity as any;
-        (addItem as any).DocumentType = this._documentType;
-        const id = this._getKeyFromEntity(entity as any);
+        return entities.map(entity => {
+            const indexableEntity: IIndexableEntity = entity as any;
 
-        if (id != undefined) {
-            const ids = add.map(w => w._id);
-
-            if (ids.includes(id)) {
-                throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
+            if (indexableEntity["_rev"] !== undefined) {
+                throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
-
-            (addItem as any)._id = id;
-        }
-
-        this._events["add"].forEach(w => w(entity as any));
-
-        const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
-
-        add.push(trackableEntity);
-
-        return trackableEntity;
+    
+            const addItem: IDbRecord<TDocumentType> = entity as any;
+            (addItem as any).DocumentType = this._documentType;
+            const id = this._getKeyFromEntity(entity as any);
+    
+            if (id != undefined) {
+                const ids = add.map(w => w._id);
+    
+                if (ids.includes(id)) {
+                    throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
+                }
+    
+                (addItem as any)._id = id;
+            } 
+    
+            this._events["add"].forEach(w => w(entity as any));
+    
+            const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
+    
+            add.push(trackableEntity);
+    
+            return trackableEntity;
+        })
     }
 
     private _getKeyFromEntity(entity: TEntity) {
 
         if (this._idKeys.length === 0) {
-            return null;
+            return uuidv4();
         }
 
         const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => {
@@ -175,7 +173,18 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    async find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined> {
+    async get(...ids:string[]) {
+        const entities = await this._api.get(...ids);
+
+        if (entities.length > 0) {
+            this._api.send(entities, false)
+        }
+
+        return entities as TEntity[];
+    }
+
+    async find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined> {
+
         const data = await this._all();
         const result = [...data].find(selector);
 
@@ -187,20 +196,28 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     detach(...entities: TEntity[]) {
-        this._detachItems(entities)
-    }
 
-    attach(...entites: TEntity[]) {
-
-        const validationFailures = entites.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
+        const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
         
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n')
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
         }
 
-        entites.forEach(w => this._api.makeTrackable(w));
-        this._api.send(entites, true)
+        this._detachItems(entities)
+    }
+
+    attach(...entities: TEntity[]) {
+
+        const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
+        
+        if (validationFailures.length > 0) {
+            const errors = validationFailures.map(w => w.error).join('\r\n')
+            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
+        }
+
+        entities.forEach(w => this._api.makeTrackable(w));
+        this._api.send(entities, true)
     }
 
     async first() {
