@@ -155,6 +155,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         return this.getAllData();
     }
 
+    /**
+     * Enable DataContext speed optimizations.  Needs to be run once per application per database.  Typically, this should be run on application start.
+     * @returns void
+     */
     async optimize() {
         // once this index is created any read's will rebuild the index 
         // automatically.  The first read may be slow once new data is created
@@ -168,13 +172,6 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 },
             });
 
-            await w.createIndex({
-                index: {
-                    fields: ["_deleted"],
-                    name: 'autogen_deleted-index',
-                    ddoc: "autogen_deleted-index"
-                },
-            });
         });
     }
 

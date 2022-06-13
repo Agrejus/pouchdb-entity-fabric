@@ -45,6 +45,10 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _dbSets;
     constructor(name?: string, options?: DataContextOptions);
     getAllDocs(): Promise<IDbRecordBase[]>;
+    /**
+     * Enable DataContext speed optimizations.  Needs to be run once per application per database.  Typically, this should be run on application start.
+     * @returns void
+     */
     optimize(): Promise<void>;
     /**
      * Gets an instance of IDataContext to be used with DbSets

@@ -179,6 +179,18 @@ export interface IDataContext {
      * @returns void
      */
     optimize(): Promise<void>
+
+    /**
+     * Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store
+     * @returns void
+     */
+    empty(): Promise<void>
+
+    /**
+     * Destroy Pouch Database
+     * @returns void
+     */
+     destroyDatabase(): Promise<void>
 }
 
 export interface ITrackedData {
