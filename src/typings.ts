@@ -57,16 +57,16 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     isMatch(first: TEntity, second: TEntity): boolean;
 
     /**
-     * Detaches specified array of items from the context so they can be modified and changes will not be persisted to the underlying data store
+     * Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store
      * @param entities 
      */
-    detach(...entities: TEntity[]): void;
+    unlink(...entities: TEntity[]): void;
 
     /**
-     * Attach an existing entities to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites 
      */
-    attach(...entites: TEntity[]): void;
+    link(...entites: TEntity[]): void;
 
     /**
      * Matches items with the same document type

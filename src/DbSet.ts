@@ -195,7 +195,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
-    detach(...entities: TEntity[]) {
+    unlink(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
         
@@ -207,7 +207,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._detachItems(entities)
     }
 
-    attach(...entities: TEntity[]) {
+    link(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
         
