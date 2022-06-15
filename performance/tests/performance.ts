@@ -1,5 +1,15 @@
 import { faker } from "@faker-js/faker";
 import { PerformanceDbDataContext } from "./performance-context";
+import packageJson from '../../package.json';
+import { promises, readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
+import * as path from 'path';
+import semver from 'semver';
+const dirTree = require("directory-tree");
+
+const getDirectories = async (source: string) =>
+    (await promises.readdir(source, { withFileTypes: true }))
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name)
 
 const generateData = async (context: PerformanceDbDataContext, count: number) => {
 
@@ -28,12 +38,95 @@ const generateData = async (context: PerformanceDbDataContext, count: number) =>
 
 }
 
+const generateDeltas = async () => {
+
+    const currentVersion = packageJson.version;
+    const currentVersionFolder = `v${currentVersion}`;
+
+    const metricsPath = path.resolve(__dirname, '../metrics');
+    const deltasPath = path.resolve(__dirname, '../metrics/deltas');
+    const previousVersionFolders = await getDirectories(metricsPath);
+    const previousVersion = previousVersionFolders.filter(w => w !== currentVersionFolder && w !== "deltas").map(w => w.replace('v', '')).sort(semver.rcompare)[0];
+    const previousVersionFolder = `v${previousVersion}`;
+
+    const currentVersionFiles = dirTree(path.resolve(metricsPath, currentVersionFolder)).children;
+    const previousVersionFiles = dirTree(path.resolve(metricsPath, previousVersionFolder)).children;
+    const result: {
+        [fileName: string]: {
+            [key: string]: {
+                delta: {
+                    min: number,
+                    max: number,
+                    average: number
+                },
+                [key: string]: {
+                    min: number,
+                    max: number,
+                    average: number
+                }
+            }
+        }
+    } = {};
+
+    for (let currentItem of currentVersionFiles) {
+        const previousItem = previousVersionFiles.find((w: any) => w.name === currentItem.name);
+        const previousData = readFileSync(previousItem.path, 'utf8');
+        const currentData = readFileSync(currentItem.path, 'utf8');
+        const previousJSON = JSON.parse(previousData) as { [key: string]: { min: number, max: number, average: number } };
+        const currentJSON = JSON.parse(currentData) as { [key: string]: { min: number, max: number, average: number } };
+
+        for (let key in currentJSON) {
+            const currentLine = currentJSON[key];
+            const previousLine = previousJSON[key];
+
+            if (previousLine == null) {
+                continue;
+            }
+
+            if (result[currentItem.name] == null) {
+                result[currentItem.name] = {}
+            }
+
+            result[currentItem.name][key] = {
+                delta: {
+                    min: currentLine.min - previousLine.min,
+                    max: currentLine.max - previousLine.max,
+                    average: currentLine.average - previousLine.average
+                },
+                [currentVersionFolder]: {
+                    min: currentLine.min,
+                    max: currentLine.max,
+                    average: currentLine.average
+                }, 
+                [previousVersionFolder]: {
+                    min: previousLine.min,
+                    max: previousLine.max,
+                    average: previousLine.average
+                }
+            }
+        }
+    }
+
+    for (let file in result) {
+        const filePath = path.resolve(deltasPath, currentVersionFolder);
+
+        if (existsSync(filePath) === false) {
+            mkdirSync(filePath);
+        }
+
+        const data = result[file];
+        writeFileSync(path.resolve(filePath, file), JSON.stringify(data, null, 2))
+    }
+}
+
 const runTest = async (generator: () => Promise<PerformanceDbDataContext>, name: string) => {
+    console.log(`Running: ${name}`);
     await destroyDatabase();
 
     const context = await generator();
 
-    context.writePerformance(name)
+    context.writePerformance(name);
+    console.log(`Completed: ${name}`);
 }
 
 const destroyDatabase = async () => {
@@ -290,7 +383,7 @@ const shouldAttachSomeEntities = async () => {
 
     const secondContext = new PerformanceDbDataContext();
 
-    secondContext.test1.attach(...items);
+    secondContext.test1.link(...items);
 
     for (let item of items) {
         item.test1 = faker.random.word();
@@ -313,7 +406,7 @@ const shouldAttachManyEntities = async () => {
 
     const secondContext = new PerformanceDbDataContext();
 
-    secondContext.test1.attach(...items);
+    secondContext.test1.link(...items);
 
     for (let item of items) {
         item.test1 = faker.random.word();
@@ -354,6 +447,8 @@ export const run = async () => {
 
         await runTest(shouldAttachSomeEntities, "shouldAttachSomeEntities");
         await runTest(shouldAttachManyEntities, "shouldAttachManyEntities");
+
+        await generateDeltas();
 
     } catch (e) {
         debugger;

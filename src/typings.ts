@@ -1,4 +1,5 @@
 import PouchDB from 'pouchdb';
+import { AdvancedDictionary } from './AdvancedDictionary';
 
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSetBase<TDocumentType> {
 
@@ -103,8 +104,8 @@ export type KeyOf<T> = keyof T;
 export type IdKeys<T> = KeyOf<T>[];
 export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev">>;
 
-export interface IIndexableEntity {
-    [key: string]: any;
+export interface IIndexableEntity<T extends any = any> {
+    [key: string]: T;
 }
 
 export interface IDbSetBase<TDocumentType extends string> {
@@ -196,6 +197,6 @@ export interface IDataContext {
 export interface ITrackedData {
     add: IDbRecordBase[];
     remove: IDbRecordBase[];
-    attach: IDbRecordBase[];
+    attach: AdvancedDictionary<IDbRecordBase>;
     removeById: string[]
 }

@@ -48,27 +48,27 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             if (indexableEntity["_rev"] !== undefined) {
                 throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
-    
+
             const addItem: IDbRecord<TDocumentType> = entity as any;
             (addItem as any).DocumentType = this._documentType;
             const id = this._getKeyFromEntity(entity as any);
-    
+
             if (id != undefined) {
                 const ids = add.map(w => w._id);
-    
+
                 if (ids.includes(id)) {
                     throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
                 }
-    
+
                 (addItem as any)._id = id;
-            } 
-    
+            }
+
             this._events["add"].forEach(w => w(entity as any));
-    
+
             const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
-    
+
             add.push(trackableEntity);
-    
+
             return trackableEntity;
         })
     }
@@ -154,7 +154,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     async all() {
         const result = await this._all();
 
-        this._api.send(result, false)
+        this._api.send(result, false);
 
         return result;
     }
@@ -173,7 +173,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 
-    async get(...ids:string[]) {
+    async get(...ids: string[]) {
         const entities = await this._api.get(...ids);
 
         if (entities.length > 0) {
@@ -198,7 +198,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     unlink(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
-        
+
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n')
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
@@ -210,7 +210,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     link(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
-        
+
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n')
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)

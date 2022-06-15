@@ -170,7 +170,7 @@ export interface ITest20 extends IDbRecord<PerformanceDocumentTypes> {
     test4: string;
 }
 
-const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], isDbSet: boolean, ...prototypes: any[]) => {
+const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], propertyTimesToIgnore: string[], isDbSet: boolean, ...prototypes: any[]) => {
     const keys = [...prototypes.map(w => Object.getOwnPropertyNames(w))].flat().filter(w => w.startsWith("_") === false && propertiesToIgnore.includes(w) === false);
 
     if (!isDbSet) {
@@ -193,6 +193,10 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
                     min: minVaue,
                     max: maxValue,
                     average: averageValue
+                }
+
+                if (propertyTimesToIgnore.includes(item.name) === false) {
+                    result[item.name]['times'] = times;
                 }
             }
             const fileNameAndPath = `./performance/metrics/v${packageJson.version}/performance-${name}.json`;
@@ -245,7 +249,7 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'PerformanceDbDataContext'
         ]
 
-        overrideWithPerformance(this, propertiesToIgnore, false, DataContext.prototype, PerformanceDbDataContext.prototype);
+        overrideWithPerformance(this, propertiesToIgnore, ['add', 'remove'], false, DataContext.prototype, PerformanceDbDataContext.prototype);
     }
 
     protected async bulkDocs(entities: IDbRecordBase[]) {
@@ -268,7 +272,7 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'DocumentType'
         ];
 
-        overrideWithPerformance(dbSet, propertiesToIgnore, true, DbSet.prototype);
+        overrideWithPerformance(dbSet, propertiesToIgnore, [], true, DbSet.prototype);
 
         return dbSet;
     }

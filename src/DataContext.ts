@@ -2,6 +2,7 @@ import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
+import { AdvancedDictionary } from './AdvancedDictionary';
 
 PouchDB.plugin(findAdapter);
 
@@ -85,6 +86,7 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
      * @param ids 
      */
     protected async get(...ids: string[]) {
+
         if (ids.length === 0) {
             return [];
         }
@@ -97,6 +99,7 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
             if ('error' in result) {
                 throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`)
             }
+
             return result.ok as IDbRecordBase;
         });
     }
@@ -119,7 +122,6 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
             return result.docs as IDbRecordBase[];
         } catch (e) {
-            console.log(e);
             return [] as IDbRecordBase[];
         }
     }
@@ -129,7 +131,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     protected _removals: IDbRecordBase[] = [];
     protected _additions: IDbRecordBase[] = [];
-    protected _attachments: IDbRecordBase[] = [];
+    protected _attachments: AdvancedDictionary<IDbRecordBase> = new AdvancedDictionary<IDbRecordBase>("_id");
 
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
@@ -200,7 +202,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @param data 
      */
     private _detach(data: IDbRecordBase[]) {
-        this._attachments = this._attachments.filter(w => data.some(x => x._id === w._id) === false);
+        this._attachments.remove(...data);
     }
 
     /**
@@ -208,20 +210,16 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @param data 
      */
     private _sendData(data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) {
-        if (shouldThrowOnDuplicate) {
-            const duplicate = this._attachments.find(w => data.some(x => x._id === w._id));
+        if (shouldThrowOnDuplicate && data.length > 0) {
+
+            const [duplicate] = this._attachments.get(...data)
 
             if (duplicate) {
                 throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
             }
         }
 
-        this._setAttachments(data);
-    }
-
-    private _setAttachments(data: IDbRecordBase[]) {
-        // do not filter duplicates in case devs return multiple instances of the same entity
-        this._attachments = [...this._attachments, ...data];
+        this._attachments.push(...data)
     }
 
     /**
@@ -241,16 +239,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         this._removals = [];
         this._removeById = [];
 
-        for (let removal of removals) {
-            const index = this._attachments.findIndex(w => w._id === removal._id);
-
-            if (index !== -1) {
-                this._attachments.splice(index, 1)
-            }
-        }
-
+        this._attachments.remove(...removals);
+        
         // move additions to attachments so we can track changes
-        this._setAttachments(add);
+        this._attachments.push(...add);
     }
 
     /**
@@ -314,6 +306,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     private _getPendingChanges() {
         const { add, remove, removeById } = this._getTrackedData();
+
         const updated = this._attachments.filter(w => {
 
             const indexableEntity = w as IIndexableEntity;
@@ -355,11 +348,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
-    private _makePristine(entity: IDbRecordBase) {
-        const indexableEntity = entity as IIndexableEntity;
+    private _makePristine(...entities: IDbRecordBase[]) {
 
-        // make pristine again
-        delete indexableEntity[PRISTINE_ENTITY_KEY];
+        for (let i = 0; i < entities.length; i++) {
+            const indexableEntity = entities[i] as IIndexableEntity;
+
+            // make pristine again
+            delete indexableEntity[PRISTINE_ENTITY_KEY];
+        }
     }
 
     private async _getModifications() {
@@ -382,12 +378,12 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             const modifications = [...add, ...remove, ...updated];
 
             // remove pristine entity before we send to bulk docs
-            modifications.forEach(w => this._makePristine(w))
+            this._makePristine(...modifications)
 
             const modificationResult = await this.bulkDocs(modifications);
 
-            for (let modification of modifications) {
-
+            for (let i = 0; i < modifications.length; i++) {
+                const modification = modifications[i];
                 const found = modificationResult.successes[modification._id];
 
                 // update the rev in case we edit the record again
