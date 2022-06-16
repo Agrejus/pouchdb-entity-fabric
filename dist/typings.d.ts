@@ -1,4 +1,5 @@
 /// <reference types="pouchdb-core" />
+import { AdvancedDictionary } from './AdvancedDictionary';
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSetBase<TDocumentType> {
     /**
      * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
@@ -46,15 +47,15 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      */
     isMatch(first: TEntity, second: TEntity): boolean;
     /**
-     * Detaches specified array of items from the context so they can be modified and changes will not be persisted to the underlying data store
+     * Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store
      * @param entities
      */
-    detach(...entities: TEntity[]): void;
+    unlink(...entities: TEntity[]): void;
     /**
-     * Attach an existing entities to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites
      */
-    attach(...entites: TEntity[]): void;
+    link(...entites: TEntity[]): void;
     /**
      * Matches items with the same document type
      * @param entities
@@ -85,8 +86,8 @@ export declare type DbSetEvent = "add" | "remove";
 export declare type KeyOf<T> = keyof T;
 export declare type IdKeys<T> = KeyOf<T>[];
 export declare type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev">>;
-export interface IIndexableEntity {
-    [key: string]: any;
+export interface IIndexableEntity<T extends any = any> {
+    [key: string]: T;
 }
 export interface IDbSetBase<TDocumentType extends string> {
     get DocumentType(): TDocumentType;
@@ -152,10 +153,14 @@ export interface IDataContext {
      * @returns void
      */
     destroyDatabase(): Promise<void>;
+    purge(purgeType: "memory" | "disk"): Promise<{
+        doc_count: number;
+        loss_count: number;
+    }>;
 }
 export interface ITrackedData {
     add: IDbRecordBase[];
     remove: IDbRecordBase[];
-    attach: IDbRecordBase[];
+    attach: AdvancedDictionary<IDbRecordBase>;
     removeById: string[];
 }

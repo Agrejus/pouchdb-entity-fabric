@@ -275,26 +275,26 @@ export class ExtendedDbSetContext extends DataContext<DocumentTypes> {
 }
 ```
 
-## Attaching/Detaching Entities
-Attaching entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, attach, and save changes.
+## Linking/Unlinking Entities
+Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, attach, and save changes.
 
-Detaching entities is useful to make changes to the entity that will not be persisted to the underlying data store after saveChanges() is called.
+Unlinking entities is useful to make changes to the entity that will not be persisted to the underlying data store after saveChanges() is called.
 
-### Attaching
+### Linking
 ```typescript
 
 const someNewContext = new PouchDbDataContext();
 
-someNewContext.myFirstDbSet.attach(someEntity); // NOTE: Ensure changes are made to the entity after its attached
+someNewContext.myFirstDbSet.link(someEntity); // NOTE: Ensure changes are made to the entity after its attached
 
 someEntity.propertyOne = "some changed value"
 
 await context.saveChanges(); // Changes will be persisted
 ```
 
-### Detaching
+### Unlinking
 ```typescript
-context.myFirstDbSet.detach(someEntity);
+context.myFirstDbSet.unlink(someEntity);
 
 someEntity.propertyOne = "some changed value"
 
@@ -326,8 +326,8 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>` | Filter entities for the underlying document type |
 | `match(items: IDbRecordBase[]): TEntity[]` | Matches base entities and returns entities with matching document types.  This is useful for matching entites from `getAllDocs` in the data context, because those entites are generic and can belong to any `DbSet` |
 | `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity \| undefined>` | Find an entity for the underlying document type |
-| `detach(...entities: TEntity[]): void` | Detaches an entity from the data context.  This is useful for detaching and entity, modifying it and changes will not be persisted to PouchDB |
-| `attach(...entites: TEntity[]): void` | Attaches an entity to the context |
+| `unlink(...entities: TEntity[]): void` | Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store |
+| `link(...entites: TEntity[]): void` | Link an existing entitiy or entities to the underlying Data Context from another Data Context, saveChanges must be called to persist these items to the store |
 | `first(): Promise<TEntity>` | Get first item in the DbSet |  
 | `on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void` | Called when an item is queued for creation in the underlying data context |
 | `on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> \| DbSetIdOnlyEventCallback): void` | Called when an item is queued for removal in the underlying data context |
@@ -346,18 +346,16 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `optimize()` | Add optimizations to increase performance of PouchDB |
 
 ## Changes
-### 1.1.0 -> 1.2.0 
-- Added `empty()` to `DataContext<>`
-- Added `destroyDatabase()` to `DataContext<>`
-- Added `optimize()` to `DataContext<>`
-- Added `get()` to `DbSet<>`
-- Improved persistance performance:
+### 1.2.0 -> 1.3.0 
+- Renamed `attach()` to `link()` on `DbSet<>`
+- Renamed `detach()` to `unlink()` on `DbSet<>`
+- Improved persistance performance for removing entities:
 
-|                          |     PouchDB (v1.1.0)      |      v1.1.0      |     PouchDB (v1.2.0)      | v1.2.0  |
-| ------------------------ | ------------------------- | ---------------- | ------------------------- | ------- |
-| `saveChanges` - 1 Entity |             N/A           | ~10ms            | ~10ms (bulk docs)         | ~10ms   |
-| `saveChanges` - 50 Entities |          N/A           | ~850ms           | ~110ms (bulk docs)        | ~115ms  |
-| `saveChanges` - 2000 Entities |          N/A         | ~30000ms         | ~8700ms (bulk docs)       | ~8800ms |
+|                          |      v1.1.0      | v1.2.0   |
+| ------------------------ | ---------------- | -------- |
+| `remove` - 1 Entity | ~10ms            | ~10ms    |
+| `remove` - 50 Entities | ~850ms        | ~115ms   |
+| `remove` - 2000 Entities | N/A         | ~30000ms | 
 
 
         

@@ -1,10 +1,12 @@
 import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
+import memoryAdapter from 'pouchdb-adapter-memory';
 import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 
 PouchDB.plugin(findAdapter);
+PouchDB.plugin(memoryAdapter);
 
 abstract class PouchDbBase {
 
@@ -240,7 +242,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         this._removeById = [];
 
         this._attachments.remove(...removals);
-        
+
         // move additions to attachments so we can track changes
         this._attachments.push(...add);
     }
@@ -441,6 +443,66 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     async destroyDatabase() {
         await this.doWork(w => w.destroy(), false)
+    }
+
+    async purge(purgeType: "memory" | "disk" = "memory") {
+
+        return await this.doWork(async source => {
+
+            const dbInfo = await source.info();
+
+            if (dbInfo.doc_count === 0 && dbInfo.update_seq === 0) {
+                return;
+            }
+
+            const options: PouchDB.Configuration.DatabaseConfiguration = {  };
+
+            if (purgeType === 'memory') {
+                options.adapter = purgeType;
+            }
+
+            const temp = new PouchDB('__pdb-ef_purge', options);
+            const replicationResult = await source.replicate.to(temp, {
+                filter: doc => {
+                    if (doc._deleted === true) {
+                        return false
+                    }
+
+                    return doc;
+                }
+            });
+
+            if (replicationResult.status !== "complete") {
+                try {
+                    await temp.destroy();
+                } catch { } // swallow any potential destroy error
+                throw new Error(`Could not purge deleted documents.  Reason: ${replicationResult.errors.join('\r\n')}`)
+            }
+
+            // destroy the source database
+            await source.destroy();
+
+            return await this.doWork(async destination => {
+                try {
+                    const replicationResult = await temp.replicate.to(destination);
+
+                    if (replicationResult.status !== "complete") {
+                        try {
+                            await temp.destroy();
+                            await destination.destroy();
+                        } catch { } // swallow any potential destroy error
+                        throw new Error(`Could not purge deleted documents.  Reason: ${replicationResult.errors.join('\r\n')}`)
+                    }
+
+                    return {
+                        doc_count: replicationResult.docs_written,
+                        loss_count: Math.abs(dbInfo.doc_count - replicationResult.docs_written)
+                    };
+                } catch (e) {
+
+                }
+            })
+        }, false);
     }
 
     [Symbol.iterator]() {

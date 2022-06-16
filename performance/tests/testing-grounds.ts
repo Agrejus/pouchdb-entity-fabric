@@ -41,12 +41,9 @@ export const run = async () => {
 
         const context = new PerformanceDbDataContext();
 
-        // await generateData(context, 250);
+        await generateData(context, 250, 1);
     
         await context.test1.empty();
-        await context.test4.empty();
-        await context.test5.empty();
-        await context.test19.empty();
     
         await context.saveChanges();
 

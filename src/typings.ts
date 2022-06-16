@@ -191,7 +191,9 @@ export interface IDataContext {
      * Destroy Pouch Database
      * @returns void
      */
-     destroyDatabase(): Promise<void>
+    destroyDatabase(): Promise<void>;
+
+    purge(purgeType: "memory" | "disk"): Promise<{ doc_count: number; loss_count: number; }>
 }
 
 export interface ITrackedData {

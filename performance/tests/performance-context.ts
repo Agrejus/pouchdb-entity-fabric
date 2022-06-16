@@ -233,7 +233,7 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], pr
 export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTypes> {
 
     constructor(options?: DataContextOptions) {
-        super('test-db', options);
+        super('test-db1', options);
         const propertiesToIgnore = [
             'insertEntity',
             'getContext',

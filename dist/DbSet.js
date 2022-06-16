@@ -162,7 +162,7 @@ class DbSet {
             return result;
         });
     }
-    detach(...entities) {
+    unlink(...entities) {
         const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n');
@@ -170,7 +170,7 @@ class DbSet {
         }
         this._detachItems(entities);
     }
-    attach(...entities) {
+    link(...entities) {
         const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n');
