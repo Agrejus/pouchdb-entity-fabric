@@ -195,6 +195,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
+    detach(...entities: TEntity[]) {
+        this.unlink(...entities);
+    }
+
     unlink(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
@@ -218,6 +222,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
         entities.forEach(w => this._api.makeTrackable(w));
         this._api.send(entities, true)
+    }
+
+    attach(...entities: TEntity[]) {
+        this.link(...entities);
     }
 
     async first() {

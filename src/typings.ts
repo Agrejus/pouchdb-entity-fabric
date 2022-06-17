@@ -66,10 +66,25 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     unlink(...entities: TEntity[]): void;
 
     /**
+     * Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store
+     * @param entities Entity or entities to unlink from the data context
+     * @deprecated Use {@link unlink} instead.
+     */
+    detach(...entities: TEntity[]): void;
+
+    /**
      * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites Entity or entities to link from the data context
      */
     link(...entites: TEntity[]): void;
+
+    /**
+     * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * @param entites Entity or entities to link from the data context
+     * @deprecated Use {@link link} instead.
+     */
+    attach(...entites: TEntity[]): void;
+
 
     /**
      * Matches items with the same document type.  Useful for retrieving all docs and calling match() to find the ones that belong in the db set
@@ -158,7 +173,7 @@ export interface IBulkDocsResponse {
 }
 
 export interface IPurgeResponse {
-    doc_count: number; 
+    doc_count: number;
     loss_count: number;
 }
 
