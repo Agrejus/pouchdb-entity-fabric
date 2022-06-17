@@ -2,7 +2,7 @@ import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 
 PouchDB.plugin(findAdapter);
@@ -164,6 +164,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @returns void
      */
     async optimize() {
+
         // once this index is created any read's will rebuild the index 
         // automatically.  The first read may be slow once new data is created
         await this.doWork(async w => {
@@ -434,6 +435,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     async empty() {
+        
         for (let dbset of this) {
             await dbset.empty();
         }
@@ -449,17 +451,13 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         return await this.doWork(async source => {
 
-            const dbInfo = await source.info();
-
-            if (dbInfo.doc_count === 0 && dbInfo.update_seq === 0) {
-                return;
-            }
-
-            const options: PouchDB.Configuration.DatabaseConfiguration = {  };
+            const options: PouchDB.Configuration.DatabaseConfiguration = {};
 
             if (purgeType === 'memory') {
                 options.adapter = purgeType;
             }
+
+            const dbInfo = await source.info();
 
             const temp = new PouchDB('__pdb-ef_purge', options);
             const replicationResult = await source.replicate.to(temp, {
@@ -472,7 +470,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 }
             });
 
-            if (replicationResult.status !== "complete") {
+            if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
                 try {
                     await temp.destroy();
                 } catch { } // swallow any potential destroy error
@@ -481,14 +479,15 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
             // destroy the source database
             await source.destroy();
+            let closeDestination = true;
 
             return await this.doWork(async destination => {
                 try {
                     const replicationResult = await temp.replicate.to(destination);
 
-                    if (replicationResult.status !== "complete") {
+                    if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
                         try {
-                            await temp.destroy();
+                            closeDestination = false;
                             await destination.destroy();
                         } catch { } // swallow any potential destroy error
                         throw new Error(`Could not purge deleted documents.  Reason: ${replicationResult.errors.join('\r\n')}`)
@@ -497,11 +496,11 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                     return {
                         doc_count: replicationResult.docs_written,
                         loss_count: Math.abs(dbInfo.doc_count - replicationResult.docs_written)
-                    };
+                    } as IPurgeResponse;
                 } catch (e) {
 
                 }
-            })
+            }, closeDestination)
         }, false);
     }
 

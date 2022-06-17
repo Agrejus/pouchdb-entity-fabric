@@ -169,7 +169,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
-    match(items: IDbRecordBase[]) {
+    match(...items: IDbRecordBase[]) {
         return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
     }
 

@@ -420,7 +420,7 @@ describe('getting started - data context', () => {
 
         const allDocs = await context.getAllDocs();
 
-        const contacts = context.contacts.match(allDocs);
+        const contacts = context.contacts.match(...allDocs);
 
         expect(contacts.length).toBe(20);
     });
@@ -442,6 +442,12 @@ describe('getting started - data context', () => {
         await context.saveChanges();
 
         const filtered = await context.contacts.find(w => w.firstName === "John");
+
+        expect(filtered).toBeDefined();
+
+        if (filtered == null) {
+            return
+        }
 
         expect(filtered._id).toBe("Contacts/John/Doe");
     });
@@ -479,7 +485,7 @@ describe('getting started - data context', () => {
 
         await context.saveChanges();
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -487,6 +493,12 @@ describe('getting started - data context', () => {
         await context.saveChanges();
 
         const updated = await context.contacts.find(w => w.firstName === "James");
+        
+        expect(updated).toBeDefined();
+
+        if (updated == null) {
+            return;
+        }
 
         expect(updated.firstName).toBe("James");
     });
@@ -505,7 +517,13 @@ describe('getting started - data context', () => {
 
         const contact = await context.contacts.find(w => w.firstName === "James");
 
-        context.contacts.detach(contact);
+        expect(contact).toBeDefined();
+
+        if (contact == null) {
+            return;
+        }
+
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -513,6 +531,12 @@ describe('getting started - data context', () => {
         await context.saveChanges();
 
         const updated = await context.contacts.find(w => w.firstName === "James");
+
+        expect(updated).toBeDefined();
+
+        if (updated == null) {
+            return;
+        }
 
         expect(updated.firstName).toBe("James");
     });
@@ -531,7 +555,7 @@ describe('getting started - data context', () => {
 
         const contact = await context.contacts.first();
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -540,7 +564,7 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
-        expect(updated.firstName).toBe("James");
+        expect(updated?.firstName).toBe("James");
     });
 
     it('should detach entities from context reference after adding and getting from filter', async () => {
@@ -557,7 +581,7 @@ describe('getting started - data context', () => {
 
         const [contact] = await context.contacts.filter(w => w.firstName === "James");
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -566,7 +590,7 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
-        expect(updated.firstName).toBe("James");
+        expect(updated?.firstName).toBe("James");
     });
 
     it('should detach one entity from context reference after retrieving from list', async () => {
@@ -597,7 +621,7 @@ describe('getting started - data context', () => {
 
         const [one, two] = await context.contacts.all();
 
-        context.contacts.detach(one);
+        context.contacts.unlink(one);
 
         one.firstName = "Value One";
         two.firstName = "Value Two"
@@ -628,7 +652,7 @@ describe('getting started - data context', () => {
 
         const [contact] = await context.contacts.filter(w => w.firstName === "James");
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -637,14 +661,14 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
-        expect(updated.firstName).toBe("James");
+        expect(updated?.firstName).toBe("James");
 
         contact.firstName = "James";
 
         const secondContext = new PouchDbDataContext();
 
         // attaching re-enables entity tracking for properties changed
-        secondContext.contacts.attach(contact);
+        secondContext.contacts.link(contact);
 
         contact.firstName = "Test";
 
@@ -673,17 +697,18 @@ describe('getting started - data context', () => {
 
         await context.saveChanges();
 
-        const [one, two] = await context.contacts.all();
+        const otherContext = new PouchDbDataContext();
+        const [one, two] = await otherContext.contacts.all();
 
-        context.contacts.detach(one, two);
+        otherContext.contacts.unlink(one, two);
 
         one.firstName = "Test";
         two.firstName = "Test";
 
-        expect(context.hasPendingChanges()).toBe(false);
-        await context.saveChanges();
+        expect(otherContext.hasPendingChanges()).toBe(false);
+        await otherContext.saveChanges();
 
-        const [updatedOne, updatedTwo] = await context.contacts.all();
+        const [updatedOne, updatedTwo] = await otherContext.contacts.all();
 
         expect(updatedOne.firstName).toBe("James");
         expect(updatedTwo.firstName).toBe("John");
@@ -694,7 +719,7 @@ describe('getting started - data context', () => {
         const secondContext = new PouchDbDataContext();
 
         // attaching re-enables entity tracking for properties changed
-        secondContext.contacts.attach(one, two);
+        secondContext.contacts.link(one, two);
 
         one.firstName = "Test";
         two.firstName = "Test";

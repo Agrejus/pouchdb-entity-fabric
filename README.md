@@ -324,7 +324,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `all(): Promise<TEntity[]>` | Get all entities for the underlying document type |
 | `get(...ids: string[]): Promise<TEntity[]>` | Find entity by an id or ids |
 | `filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>` | Filter entities for the underlying document type |
-| `match(items: IDbRecordBase[]): TEntity[]` | Matches base entities and returns entities with matching document types.  This is useful for matching entites from `getAllDocs` in the data context, because those entites are generic and can belong to any `DbSet` |
+| `match(...items: IDbRecordBase[]): TEntity[]` | Matches base entities and returns entities with matching document types.  This is useful for matching entites from `getAllDocs` in the data context, because those entites are generic and can belong to any `DbSet` |
 | `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity \| undefined>` | Find an entity for the underlying document type |
 | `unlink(...entities: TEntity[]): void` | Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store |
 | `link(...entites: TEntity[]): void` | Link an existing entitiy or entities to the underlying Data Context from another Data Context, saveChanges must be called to persist these items to the store |
@@ -341,9 +341,9 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void` | Subscribe to events on the data context |
 | `hasPendingChanges(): boolean` | Check whether or not the context has any pending changes |
 | `query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>` | Invoke a query on PouchDB and return the result |
-| `empty()` | Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store |
-| `destroyDatabase()` | Destroy Pouch Database |
-| `optimize()` | Add optimizations to increase performance of PouchDB |
+| `empty(): Promise<void>` | Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store |
+| `destroyDatabase(): Promise<void>` | Destroy Pouch Database |
+| `optimize(): Promise<void>` | Add optimizations to increase performance of PouchDB |
 
 ## Changes
 ### 1.2.0 -> 1.3.0 
