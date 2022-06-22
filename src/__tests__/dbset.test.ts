@@ -11,7 +11,8 @@ describe('getting started - data context', () => {
     enum DocumentTypes {
         Notes = "Notes",
         Contacts = "Contacts",
-        Books = "Books"
+        Books = "Books",
+        Cars = "Cars"
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -34,6 +35,13 @@ describe('getting started - data context', () => {
         status: "pending" | "approved" | "rejected";
     }
 
+    interface ICar extends IDbRecord<DocumentTypes> {
+        make: string;
+        model: string;
+        year: number;
+        manufactureDate: Date;
+    }
+
 
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
@@ -52,6 +60,7 @@ describe('getting started - data context', () => {
         notes = this.createDbSet<INote>(DocumentTypes.Notes);
         contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
         books = this.createDbSet<IBook, "status">(DocumentTypes.Books);
+        cars = this.createDbSet<ICar>(DocumentTypes.Cars, w => w.manufactureDate.toISOString(), w => w.make, "model")
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
@@ -125,6 +134,26 @@ describe('getting started - data context', () => {
         expect(note.contents).toBe("Some Note");
         expect(note.createdDate).toBeDefined();
         expect(note.userId).toBe("jdemeuse");
+    });
+
+    test('should add entity and create id from selector', async () => {
+        const now = new Date();
+        const context = new PouchDbDataContext();
+        const [car] = await context.cars.add({
+            make: "Chevrolet",
+            manufactureDate: now,
+            model: "Silverado",
+            year: 2021
+        });
+
+        expect(car.DocumentType).toBe(DocumentTypes.Cars);
+        expect(car._id).toBe(`${DocumentTypes.Cars}/${now.toISOString()}/Chevrolet/Silverado`);
+        expect(car._rev).not.toBeDefined();
+
+        expect(car.make).toBe("Chevrolet");
+        expect(car.model).toBe("Silverado");
+        expect(car.year).toBe(2021);
+        expect(car.manufactureDate).toBe(now);
     });
 
     test('should add entity, exlude a property and set the default on the add event', async () => {
@@ -493,7 +522,7 @@ describe('getting started - data context', () => {
         await context.saveChanges();
 
         const updated = await context.contacts.find(w => w.firstName === "James");
-        
+
         expect(updated).toBeDefined();
 
         if (updated == null) {

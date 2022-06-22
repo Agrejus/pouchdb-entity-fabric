@@ -384,14 +384,11 @@ class DataContext extends PouchDbInteractionBase {
     purge(purgeType = "memory") {
         return __awaiter(this, void 0, void 0, function* () {
             return yield this.doWork((source) => __awaiter(this, void 0, void 0, function* () {
-                const dbInfo = yield source.info();
-                if (dbInfo.doc_count === 0 && dbInfo.update_seq === 0) {
-                    return;
-                }
                 const options = {};
                 if (purgeType === 'memory') {
                     options.adapter = purgeType;
                 }
+                const dbInfo = yield source.info();
                 const temp = new pouchdb_1.default('__pdb-ef_purge', options);
                 const replicationResult = yield source.replicate.to(temp, {
                     filter: doc => {
@@ -401,7 +398,7 @@ class DataContext extends PouchDbInteractionBase {
                         return doc;
                     }
                 });
-                if (replicationResult.status !== "complete") {
+                if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
                     try {
                         yield temp.destroy();
                     }
@@ -410,12 +407,13 @@ class DataContext extends PouchDbInteractionBase {
                 }
                 // destroy the source database
                 yield source.destroy();
+                let closeDestination = true;
                 return yield this.doWork((destination) => __awaiter(this, void 0, void 0, function* () {
                     try {
                         const replicationResult = yield temp.replicate.to(destination);
-                        if (replicationResult.status !== "complete") {
+                        if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
                             try {
-                                yield temp.destroy();
+                                closeDestination = false;
                                 yield destination.destroy();
                             }
                             catch (_b) { } // swallow any potential destroy error
@@ -428,7 +426,7 @@ class DataContext extends PouchDbInteractionBase {
                     }
                     catch (e) {
                     }
-                }));
+                }), closeDestination);
             }), false);
         });
     }

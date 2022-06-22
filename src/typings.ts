@@ -117,9 +117,10 @@ export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDb
 export type DbSetIdOnlyEventCallback = (entity: string) => void;
 export type DbSetEvent = "add" | "remove";
 
-export type KeyOf<T> = keyof T;
+export type DocumentKeySelector<T> = (entity: T) => any
+export type KeyOf<T> = keyof T | DocumentKeySelector<T>;
 export type IdKeys<T> = KeyOf<T>[];
-export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev">>;
+export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev" | "DocumentType">>;
 
 export interface IIndexableEntity<T extends any = any> {
     [key: string]: T;

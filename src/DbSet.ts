@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,7 +16,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }
 
-    private _idKeys: IdKeys<TEntity>;
+    private _idKeys: EntityIdKeys<TDocumentType, TEntity>;
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
@@ -78,17 +78,18 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         if (this._idKeys.length === 0) {
             return uuidv4();
         }
+        const indexableEntity = entity as IIndexableEntity
 
-        const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => {
-
-            const value = (entity as any)[w];
-
-            if (value instanceof Date) {
-                return value.toISOString();
+        const keyData = this._idKeys.map(w => {
+            if (typeof w === "string") {
+                return indexableEntity[w];
             }
 
-            return value
-        })
+            const selector: DocumentKeySelector<TEntity> = w as any;
+
+            return String(selector(entity));
+        });
+
         return [this.DocumentType, ...keyData].join("/");
     }
 

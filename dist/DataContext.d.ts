@@ -2,7 +2,7 @@
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
-import { DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase } from './typings';
+import { DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPurgeResponse } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 declare abstract class PouchDbBase {
     private _options?;
@@ -94,10 +94,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;
     empty(): Promise<void>;
     destroyDatabase(): Promise<void>;
-    purge(purgeType?: "memory" | "disk"): Promise<{
-        doc_count: number;
-        loss_count: number;
-    }>;
+    purge(purgeType?: "memory" | "disk"): Promise<IPurgeResponse>;
     [Symbol.iterator](): {
         next: () => {
             value: IDbSetBase<string>;

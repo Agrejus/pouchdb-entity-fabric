@@ -65,12 +65,13 @@ class DbSet {
         if (this._idKeys.length === 0) {
             return (0, uuid_1.v4)();
         }
-        const keyData = Object.keys(entity).filter((w) => this._idKeys.includes(w)).map(w => {
-            const value = entity[w];
-            if (value instanceof Date) {
-                return value.toISOString();
+        const indexableEntity = entity;
+        const keyData = this._idKeys.map(w => {
+            if (typeof w === "string") {
+                return indexableEntity[w];
             }
-            return value;
+            const selector = w;
+            return String(selector(entity));
         });
         return [this.DocumentType, ...keyData].join("/");
     }
@@ -140,7 +141,7 @@ class DbSet {
             return result;
         });
     }
-    match(items) {
+    match(...items) {
         return items.filter(w => w.DocumentType === this.DocumentType);
     }
     get(...ids) {
@@ -162,6 +163,9 @@ class DbSet {
             return result;
         });
     }
+    detach(...entities) {
+        this.unlink(...entities);
+    }
     unlink(...entities) {
         const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
         if (validationFailures.length > 0) {
@@ -178,6 +182,9 @@ class DbSet {
         }
         entities.forEach(w => this._api.makeTrackable(w));
         this._api.send(entities, true);
+    }
+    attach(...entities) {
+        this.link(...entities);
     }
     first() {
         return __awaiter(this, void 0, void 0, function* () {
