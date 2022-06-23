@@ -5,9 +5,10 @@
 import { DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPurgeResponse } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 declare abstract class PouchDbBase {
-    private _options?;
-    private _name?;
+    protected readonly _dbOptions?: PouchDB.Configuration.DatabaseConfiguration;
+    private readonly _dbName?;
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration);
+    protected createDb(): PouchDB.Database<{}>;
     protected doWork<T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose?: boolean): Promise<T>;
 }
 declare abstract class PouchDbInteractionBase<TDocumentType extends string> extends PouchDbBase {
@@ -88,7 +89,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _makePristine;
     private _getModifications;
     saveChanges(): Promise<number>;
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>;
     query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
     hasPendingChanges(): boolean;
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;

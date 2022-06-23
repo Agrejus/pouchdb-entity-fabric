@@ -1,7 +1,7 @@
 import PouchDB from 'pouchdb';
 import { AdvancedDictionary } from './AdvancedDictionary';
 
-export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSetBase<TDocumentType> {
+export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
 
     /**
      * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
@@ -76,14 +76,14 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites Entity or entities to link from the data context
      */
-    link(...entites: TEntity[]): void;
+    link(...entites: TEntity[]): Promise<void>;
 
     /**
      * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites Entity or entities to link from the data context
      * @deprecated Use {@link link} instead.
      */
-    attach(...entites: TEntity[]): void;
+    attach(...entites: TEntity[]): Promise<void>;
 
 
     /**
@@ -108,7 +108,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
 }
 
-export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) | void = void> = TExtraExclusions extends keyof TEntity ? Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions> : Omit<TEntity, "_id" | "_rev" | "DocumentType">;
+export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
 
 export type DataContextEventCallback<TDocumentType> = ({ DocumentType }: { DocumentType: TDocumentType }) => void;
 export type DataContextEvent = 'entity-created' | 'entity-removed' | 'entity-updated';

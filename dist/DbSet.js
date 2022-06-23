@@ -175,16 +175,29 @@ class DbSet {
         this._detachItems(entities);
     }
     link(...entities) {
-        const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
-        if (validationFailures.length > 0) {
-            const errors = validationFailures.map(w => w.error).join('\r\n');
-            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
-        }
-        entities.forEach(w => this._api.makeTrackable(w));
-        this._api.send(entities, true);
+        return __awaiter(this, void 0, void 0, function* () {
+            const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
+            if (validationFailures.length > 0) {
+                const errors = validationFailures.map(w => w.error).join('\r\n');
+                throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
+            }
+            // Find the existing _rev just in case it's not in sync
+            const found = yield this._api.get(...entities.map(w => w._id));
+            if (found.length != entities.length) {
+                throw new Error(`Error linking entities, document not found`);
+            }
+            const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
+            entities.forEach(w => {
+                this._api.makeTrackable(w);
+                w._rev = foundDictionary[w._id];
+            });
+            this._api.send(entities, true);
+        });
     }
     attach(...entities) {
-        this.link(...entities);
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.link(...entities);
+        });
     }
     first() {
         return __awaiter(this, void 0, void 0, function* () {

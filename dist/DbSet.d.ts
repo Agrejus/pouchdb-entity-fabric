@@ -3,7 +3,7 @@ export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
     get IdKeys(): EntityIdKeys<TDocumentType, TEntity>;
     get DocumentType(): TDocumentType;
     private _idKeys;
@@ -35,8 +35,8 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>;
     detach(...entities: TEntity[]): void;
     unlink(...entities: TEntity[]): void;
-    link(...entities: TEntity[]): void;
-    attach(...entities: TEntity[]): void;
+    link(...entities: TEntity[]): Promise<void>;
+    attach(...entities: TEntity[]): Promise<void>;
     first(): Promise<TEntity>;
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;

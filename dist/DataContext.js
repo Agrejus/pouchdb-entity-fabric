@@ -33,12 +33,15 @@ pouchdb_1.default.plugin(pouchdb_find_1.default);
 pouchdb_1.default.plugin(pouchdb_adapter_memory_1.default);
 class PouchDbBase {
     constructor(name, options) {
-        this._options = options;
-        this._name = name;
+        this._dbOptions = options;
+        this._dbName = name;
+    }
+    createDb() {
+        return new pouchdb_1.default(this._dbName, this._dbOptions);
     }
     doWork(action, shouldClose = true) {
         return __awaiter(this, void 0, void 0, function* () {
-            const db = new pouchdb_1.default(this._name, this._options);
+            const db = this.createDb();
             const result = yield action(db);
             if (shouldClose) {
                 yield db.close();

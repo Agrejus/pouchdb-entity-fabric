@@ -11,7 +11,7 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
 
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }
@@ -35,6 +35,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._documentType = documentType;
         this._context = context as IPrivateContext<TDocumentType>;
         this._idKeys = idKeys;
+
         this._api = this._context._getApi();
     }
 
@@ -212,7 +213,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._detachItems(entities)
     }
 
-    link(...entities: TEntity[]) {
+    async link(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
 
@@ -221,12 +222,25 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
         }
 
-        entities.forEach(w => this._api.makeTrackable(w));
+        // Find the existing _rev just in case it's not in sync
+        const found = await this._api.get(...entities.map(w => w._id));
+
+        if (found.length != entities.length) {
+            throw new Error(`Error linking entities, document not found`)
+        }
+
+        const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
+
+        entities.forEach(w => {
+            this._api.makeTrackable(w);
+            (w as any)._rev = foundDictionary[w._id]
+        });
+
         this._api.send(entities, true)
     }
 
-    attach(...entities: TEntity[]) {
-        this.link(...entities);
+    async attach(...entities: TEntity[]) {
+        await this.link(...entities);
     }
 
     async first() {

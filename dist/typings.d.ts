@@ -1,6 +1,6 @@
 /// <reference types="pouchdb-core" />
 import { AdvancedDictionary } from './AdvancedDictionary';
-export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSetBase<TDocumentType> {
+export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
     /**
      * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
      * @param entities Entity or entities to add to the data context
@@ -64,13 +64,13 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites Entity or entities to link from the data context
      */
-    link(...entites: TEntity[]): void;
+    link(...entites: TEntity[]): Promise<void>;
     /**
      * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites Entity or entities to link from the data context
      * @deprecated Use {@link link} instead.
      */
-    attach(...entites: TEntity[]): void;
+    attach(...entites: TEntity[]): Promise<void>;
     /**
      * Matches items with the same document type.  Useful for retrieving all docs and calling match() to find the ones that belong in the db set
      * @param entities Entity or entities to match on document type.
@@ -90,7 +90,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      */
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
 }
-export declare type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) | void = void> = TExtraExclusions extends keyof TEntity ? Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions> : Omit<TEntity, "_id" | "_rev" | "DocumentType">;
+export declare type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
 export declare type DataContextEventCallback<TDocumentType> = ({ DocumentType }: {
     DocumentType: TDocumentType;
 }) => void;

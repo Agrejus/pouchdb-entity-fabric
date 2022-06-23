@@ -12,7 +12,8 @@ describe('getting started - data context', () => {
         Notes = "Notes",
         Contacts = "Contacts",
         Books = "Books",
-        Cars = "Cars"
+        Cars = "Cars",
+        Preference = "Preference"
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -30,7 +31,7 @@ describe('getting started - data context', () => {
 
     interface IBook extends IDbRecord<DocumentTypes> {
         author: string;
-        publishDate?: Date;
+        publishDate?:  Date;
         rejectedCount: number;
         status: "pending" | "approved" | "rejected";
     }
@@ -40,6 +41,11 @@ describe('getting started - data context', () => {
         model: string;
         year: number;
         manufactureDate: Date;
+    }
+
+    interface IPreference extends IDbRecord<DocumentTypes> {
+        isSomePropertyOn: boolean;
+        isOtherPropertyOn: boolean;
     }
 
 
@@ -59,8 +65,9 @@ describe('getting started - data context', () => {
 
         notes = this.createDbSet<INote>(DocumentTypes.Notes);
         contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
-        books = this.createDbSet<IBook, "status">(DocumentTypes.Books);
-        cars = this.createDbSet<ICar>(DocumentTypes.Cars, w => w.manufactureDate.toISOString(), w => w.make, "model")
+        books = this.createDbSet<IBook, "status" | "rejectedCount">(DocumentTypes.Books);
+        cars = this.createDbSet<ICar>(DocumentTypes.Cars, w => w.manufactureDate.toISOString(), w => w.make, "model");
+        preference = this.createDbSet<IPreference>(DocumentTypes.Preference, _ => "static")
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
@@ -94,6 +101,78 @@ describe('getting started - data context', () => {
         expect(contact.lastName).toBe("DeMeuse");
         expect(contact.phone).toBe("111-111-1111");
         expect(contact.address).toBe("1234 Test St");
+    });
+
+    test('should only allow one single entity per dbset', async () => {
+        const context = new PouchDbDataContext();
+        const [preference] = await context.preference.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        expect(preference.DocumentType).toBe(DocumentTypes.Preference);
+        expect(preference._id).toBe(`${DocumentTypes.Preference}/static`);
+        expect(preference._rev).not.toBeDefined();
+
+        expect(preference.isOtherPropertyOn).toBe(true);
+        expect(preference.isSomePropertyOn).toBe(false);
+    });
+
+    test('should only allow one single entity per dbset and update one entity', async () => {
+        const context = new PouchDbDataContext();
+        const [preference] = await context.preference.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        expect(preference.DocumentType).toBe(DocumentTypes.Preference);
+        expect(preference._id).toBe(`${DocumentTypes.Preference}/static`);
+        expect(preference._rev).not.toBeDefined();
+
+        expect(preference.isOtherPropertyOn).toBe(true);
+        expect(preference.isSomePropertyOn).toBe(false);
+
+        await context.saveChanges();
+
+        const [preference2] = await context.preference.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        await context.saveChanges();
+
+        const preferences = await context.preference.all();
+
+        expect(preferences.length).toBe(1)
+    });
+
+    test('should update an entity with previous rev', async () => {
+
+        const context = new DefaultPropertiesDataContext();
+        const [newBook] = await context.books.add({
+            author: "James",
+            publishDate: new Date()
+        });
+
+        await context.saveChanges();
+
+        expect(newBook._rev).toBeDefined();
+
+        const book = await context.books.first();
+
+        context.books.unlink(book);
+
+        const secondBook = await context.books.first();
+        secondBook.author = "DeMeuse"
+        await context.saveChanges();
+
+        const secondaryContext = new DefaultPropertiesDataContext();
+        await secondaryContext.books.link(book);
+
+        book.author = "James DeMeuse";
+        await secondaryContext.saveChanges();
+
+        expect(book._rev.startsWith("3")).toBe(true)
     });
 
     test('should add entity, save, and set _rev', async () => {
@@ -160,7 +239,6 @@ describe('getting started - data context', () => {
         const context = new DefaultPropertiesDataContext();
         const [book] = await context.books.add({
             author: "James DeMeuse",
-            rejectedCount: 0,
             publishDate: new Date()
         });
 
@@ -172,7 +250,6 @@ describe('getting started - data context', () => {
 
         expect(book.author).toBe("James DeMeuse");
         expect(book.publishDate).toBeDefined();
-        expect(book.rejectedCount).toBe(0);
         expect(book.status).toBe("pending");
     });
 
@@ -434,8 +511,7 @@ describe('getting started - data context', () => {
             });
 
             await context.books.add({
-                author: faker.name.firstName(),
-                rejectedCount: 1
+                author: faker.name.firstName()
             });
 
             await context.notes.add({
@@ -635,8 +711,7 @@ describe('getting started - data context', () => {
             });
 
             await context.books.add({
-                author: faker.name.firstName(),
-                rejectedCount: 1
+                author: faker.name.firstName()
             });
 
             await context.notes.add({
@@ -697,7 +772,7 @@ describe('getting started - data context', () => {
         const secondContext = new PouchDbDataContext();
 
         // attaching re-enables entity tracking for properties changed
-        secondContext.contacts.link(contact);
+        await secondContext.contacts.link(contact);
 
         contact.firstName = "Test";
 
@@ -748,7 +823,7 @@ describe('getting started - data context', () => {
         const secondContext = new PouchDbDataContext();
 
         // attaching re-enables entity tracking for properties changed
-        secondContext.contacts.link(one, two);
+        await secondContext.contacts.link(one, two);
 
         one.firstName = "Test";
         two.firstName = "Test";

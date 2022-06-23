@@ -10,16 +10,20 @@ PouchDB.plugin(memoryAdapter);
 
 abstract class PouchDbBase {
 
-    private _options?: PouchDB.Configuration.DatabaseConfiguration;
-    private _name?: string;
+    protected readonly _dbOptions?: PouchDB.Configuration.DatabaseConfiguration;
+    private readonly _dbName?: string;
 
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
-        this._options = options;
-        this._name = name;
+        this._dbOptions = options;
+        this._dbName = name;
+    }
+
+    protected createDb() {
+        return new PouchDB(this._dbName, this._dbOptions);
     }
 
     protected async doWork<T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose: boolean = true) {
-        const db = new PouchDB(this._name, this._options);
+        const db = this.createDb();
         const result = await action(db);
 
         if (shouldClose) {
@@ -413,7 +417,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
         const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, ...idKeys);
 
         this._dbSets.push(dbSet);
