@@ -22,7 +22,5 @@ $views.
 
 explainChanges()
 
-
-
 Maybe?
 - Way to undo changes?

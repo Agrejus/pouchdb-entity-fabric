@@ -120,7 +120,12 @@ export type DbSetEvent = "add" | "remove";
 export type DocumentKeySelector<T> = (entity: T) => any
 export type KeyOf<T> = keyof T | DocumentKeySelector<T>;
 export type IdKeys<T> = KeyOf<T>[];
-export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev" | "DocumentType">>;
+export type IdKey<T> = KeyOf<T>;
+export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = EntityIdKey<TDocumentType, TEntity>[];
+export type EntityIdKey<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKey<Omit<TEntity, "_id" | "_rev" | "DocumentType">>;
+export type DeepPartial<T> = T extends object ? {
+    [P in keyof T]?: DeepPartial<T[P]>;
+} : T;
 
 export interface IIndexableEntity<T extends any = any> {
     [key: string]: T;
@@ -150,7 +155,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
-    makeTrackable<T extends Object>(entity: T): T;
+    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T;
 }
 
 export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentType> {

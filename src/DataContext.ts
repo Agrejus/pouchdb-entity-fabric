@@ -2,8 +2,9 @@ import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
+import { DbSetBuilder } from './DbSetBuilder';
 
 PouchDB.plugin(findAdapter);
 PouchDB.plugin(memoryAdapter);
@@ -283,7 +284,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
-    private _makeTrackable<T extends Object>(entity: T): T {
+    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
@@ -308,7 +309,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        return new Proxy(entity, proxyHandler) as any
+        return new Proxy({ ...defaults, ...entity }, proxyHandler) as any
     }
 
     private _getPendingChanges() {
@@ -417,8 +418,22 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    /**
+     * Starts the dbset fluent API.  Only required function call is create(), all others are optional
+     * @param documentType Document Type for the entity
+     */
+    protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
+        return new DbSetBuilder<TDocumentType, TEntity>({ documentType, context: this });
+    }
+
+    /**
+     * Create a DbSet
+     * @param documentType Document Type for the entity
+     * @param idKeys IdKeys for tyhe entity
+     * @deprecated Use {@link dbset} instead.
+     */
     protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, ...idKeys);
+        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, {} as any, ...idKeys);
 
         this._dbSets.push(dbSet);
 
@@ -439,7 +454,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     async empty() {
-        
+
         for (let dbset of this) {
             await dbset.empty();
         }

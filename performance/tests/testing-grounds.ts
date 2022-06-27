@@ -1,5 +1,6 @@
 import { DataContext } from "../../src/DataContext";
-import { IDbRecord } from "../../src/typings";
+import { DbSetBuilder } from "../../src/DbSetBuilder";
+import { IDbRecord, IDbSet } from "../../src/typings";
 
 enum DocumentTypes {
     Notes = "Notes",
@@ -24,7 +25,7 @@ interface INote extends IDbRecord<DocumentTypes> {
 
 interface IBook extends IDbRecord<DocumentTypes> {
     author: string;
-    publishDate?:  | string;
+    publishDate?: | string;
     rejectedCount: number;
     status: "pending" | "approved" | "rejected";
 }
@@ -57,6 +58,15 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
     }
 
     books = this.createDbSet<IBook, "status" | "rejectedCount">(DocumentTypes.Books);
+
+    contacts = this.dbset<IContact>(DocumentTypes.Contacts)
+        .defaults({ address: "address", firstName: "firstname", lastName: "test" })
+        .exclude("address", "firstName", "lastName")
+        .keys(w =>
+            w.add("firstName")
+                .add("lastName")
+                .add(w => w.phone.toLocaleLowerCase()))
+        .create();
 }
 
 class DefaultPropertiesDataContext extends PouchDbDataContext {
@@ -78,11 +88,12 @@ export const run = async () => {
             publishDate: new Date().toDateString()
         });
 
+        const [x] = await context.contacts.add({ phone: "1" })
+        debugger;
         await context.saveChanges();
 
         const book = await context.books.first();
 
-       
     } catch (e) {
         debugger;
         console.log(e)
