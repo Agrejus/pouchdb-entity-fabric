@@ -373,7 +373,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         return {
             add,
-            remove: [...remove, ...extraRemovals].map(w => ({ ...w, _deleted: true })),
+            remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
             updated
         }
     }
@@ -421,6 +421,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional
      * @param documentType Document Type for the entity
+     * @returns DbSetBuilder
      */
     protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
         return new DbSetBuilder<TDocumentType, TEntity>({ documentType, context: this });

@@ -61,7 +61,7 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
 
     contacts = this.dbset<IContact>(DocumentTypes.Contacts)
         .defaults({ address: "address", firstName: "firstname", lastName: "test" })
-        .exclude("address", "firstName", "lastName")
+        .exclude("address").exclude("firstName").exclude("phone")
         .keys(w =>
             w.add("firstName")
                 .add("lastName")
@@ -88,8 +88,9 @@ export const run = async () => {
             publishDate: new Date().toDateString()
         });
 
-        const [x] = await context.contacts.add({ phone: "1" })
+        const [x] = await context.contacts.add({ lastName: "" })
         debugger;
+
         await context.saveChanges();
 
         const book = await context.books.first();

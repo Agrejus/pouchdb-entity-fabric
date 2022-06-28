@@ -4,6 +4,7 @@
 /// <reference types="pouchdb-replication" />
 import { DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPurgeResponse } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
+import { DbSetBuilder } from './DbSetBuilder';
 declare abstract class PouchDbBase {
     protected readonly _dbOptions?: PouchDB.Configuration.DatabaseConfiguration;
     private readonly _dbName?;
@@ -89,6 +90,18 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _makePristine;
     private _getModifications;
     saveChanges(): Promise<number>;
+    /**
+     * Starts the dbset fluent API.  Only required function call is create(), all others are optional
+     * @param documentType Document Type for the entity
+     * @returns DbSetBuilder
+     */
+    protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType): DbSetBuilder<TDocumentType, TEntity, never>;
+    /**
+     * Create a DbSet
+     * @param documentType Document Type for the entity
+     * @param idKeys IdKeys for tyhe entity
+     * @deprecated Use {@link dbset} instead.
+     */
     protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>;
     query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
     hasPendingChanges(): boolean;

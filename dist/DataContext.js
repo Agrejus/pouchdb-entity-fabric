@@ -29,6 +29,7 @@ const DbSet_1 = require("./DbSet");
 const pouchdb_find_1 = __importDefault(require("pouchdb-find"));
 const pouchdb_adapter_memory_1 = __importDefault(require("pouchdb-adapter-memory"));
 const AdvancedDictionary_1 = require("./AdvancedDictionary");
+const DbSetBuilder_1 = require("./DbSetBuilder");
 pouchdb_1.default.plugin(pouchdb_find_1.default);
 pouchdb_1.default.plugin(pouchdb_adapter_memory_1.default);
 class PouchDbBase {
@@ -251,7 +252,7 @@ class DataContext extends PouchDbInteractionBase {
             return first[w] != second[w];
         }) === false;
     }
-    _makeTrackable(entity) {
+    _makeTrackable(entity, defaults) {
         const proxyHandler = {
             set: (entity, property, value) => {
                 const indexableEntity = entity;
@@ -269,7 +270,7 @@ class DataContext extends PouchDbInteractionBase {
                 return true;
             }
         };
-        return new Proxy(entity, proxyHandler);
+        return new Proxy(Object.assign(Object.assign({}, defaults), entity), proxyHandler);
     }
     _getPendingChanges() {
         const { add, remove, removeById } = this._getTrackedData();
@@ -317,7 +318,7 @@ class DataContext extends PouchDbInteractionBase {
             const extraRemovals = yield this.get(...removeById);
             return {
                 add,
-                remove: [...remove, ...extraRemovals].map(w => (Object.assign(Object.assign({}, w), { _deleted: true }))),
+                remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
                 updated
             };
         });
@@ -354,8 +355,22 @@ class DataContext extends PouchDbInteractionBase {
             }
         });
     }
+    /**
+     * Starts the dbset fluent API.  Only required function call is create(), all others are optional
+     * @param documentType Document Type for the entity
+     * @returns DbSetBuilder
+     */
+    dbset(documentType) {
+        return new DbSetBuilder_1.DbSetBuilder({ documentType, context: this });
+    }
+    /**
+     * Create a DbSet
+     * @param documentType Document Type for the entity
+     * @param idKeys IdKeys for tyhe entity
+     * @deprecated Use {@link dbset} instead.
+     */
     createDbSet(documentType, ...idKeys) {
-        const dbSet = new DbSet_1.DbSet(documentType, this, ...idKeys);
+        const dbSet = new DbSet_1.DbSet(documentType, this, {}, ...idKeys);
         this._dbSets.push(dbSet);
         return dbSet;
     }

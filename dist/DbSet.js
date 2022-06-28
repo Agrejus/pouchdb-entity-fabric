@@ -23,7 +23,7 @@ class DbSet {
      * @param context Will be 'this' from the data context
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
-    constructor(documentType, context, ...idKeys) {
+    constructor(documentType, context, defaults, ...idKeys) {
         this._events = {
             "add": [],
             "remove": []
@@ -31,7 +31,13 @@ class DbSet {
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys;
+        this._defaults = defaults;
         this._api = this._context._getApi();
+        const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
+        // Allow spread operator to work on the class for extending it
+        for (let property of properties) {
+            this[property] = this[property];
+        }
     }
     get IdKeys() { return this._idKeys; }
     get DocumentType() { return this._documentType; }
@@ -55,7 +61,7 @@ class DbSet {
                     addItem._id = id;
                 }
                 this._events["add"].forEach(w => w(entity));
-                const trackableEntity = this._api.makeTrackable(addItem);
+                const trackableEntity = this._api.makeTrackable(addItem, this._defaults);
                 add.push(trackableEntity);
                 return trackableEntity;
             });
@@ -123,7 +129,7 @@ class DbSet {
     _all() {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._api.getAllData(this._documentType);
-            return data.map(w => this._api.makeTrackable(w));
+            return data.map(w => this._api.makeTrackable(w, this._defaults));
         });
     }
     all() {
@@ -188,7 +194,7 @@ class DbSet {
             }
             const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
             entities.forEach(w => {
-                this._api.makeTrackable(w);
+                this._api.makeTrackable(w, this._defaults);
                 w._rev = foundDictionary[w._id];
             });
             this._api.send(entities, true);
