@@ -3,6 +3,7 @@ import { IDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
+import { run } from "../test-setup/test";
 
 describe('getting started - data context', () => {
 
@@ -837,4 +838,7 @@ describe('getting started - data context', () => {
     });
 
     // test new get method
+    it('items', async () => {
+        
+    })
 });

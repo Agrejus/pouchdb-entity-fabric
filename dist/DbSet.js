@@ -35,6 +35,7 @@ class DbSet {
         this._api = this._context._getApi();
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
         // Allow spread operator to work on the class for extending it
+        // THIS NEEDS TO BE TESTED!!!!!!!!!!!!!!!!!!!!!!!!
         for (let property of properties) {
             this[property] = this[property];
         }
