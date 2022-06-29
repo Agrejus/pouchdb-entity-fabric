@@ -1,11 +1,11 @@
 import { DbSet } from "./DbSet";
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, OmittedEntity } from "./typings";
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, OmittedEntity } from "./typings";
 
 interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> {
     context: IDataContext;
     documentType: TDocumentType;
     idKeys?: EntityIdKeys<TDocumentType, TEntity>;
-    defaults?: DeepPartial<OmittedEntity<TEntity>>;
+    defaults?: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     exclusions?: (keyof TEntity)[];
     events?: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
 }
@@ -15,7 +15,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _context: IDataContext;
     private _documentType: TDocumentType;
     private _idKeys: EntityIdKeys<TDocumentType, TEntity>;
-    private _defaults: DeepPartial<OmittedEntity<TEntity>>;
+    private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     private _exclusions: (keyof TEntity)[];
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
 
@@ -25,7 +25,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys ?? [];
-        this._defaults = defaults ?? {} as any;
+        this._defaults = defaults ?? { add: {} as any, retrieve: {} as any };
         this._exclusions = exclusions ?? [];
         this._events = events ?? {
             "add": [],
@@ -60,14 +60,46 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     }
 
     /**
-     * Set default values on add or retrieval of entities.  This is useful to retroactively add new properties
+     * Set default separately for add and retrieval.  This is useful to retroactively add new properties
      * that are not nullable or to supply a default to an excluded property.  Default's will only be 
      * set when the property does not exist or is excluded
-     * @param defaultEntity Pick one or more properties and set their default value
+     * @param value Pick one or more properties and set their default value
      * @returns DbSetBuilder
      */
-    defaults(defaultEntity: DeepPartial<OmittedEntity<TEntity>>) {
-        this._defaults = { ...this._defaults, ...defaultEntity };
+    defaults(value: DbSetPickDefaultActionOptional<TDocumentType, TEntity>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>
+
+    /**
+     * Set default values for both add and retrieval of entities.  This is useful to retroactively add new properties
+     * that are not nullable or to supply a default to an excluded property.  Default's will only be 
+     * set when the property does not exist or is excluded
+     * @param value Pick one or more properties and set their default value
+     * @returns DbSetBuilder
+     */
+    defaults(value: DeepPartial<OmittedEntity<TEntity>>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>
+    defaults(value: DbSetPickDefaultActionOptional<TDocumentType, TEntity> | DeepPartial<OmittedEntity<TEntity>>) {
+
+        if ("add" in value) {
+            this._defaults = {
+                ...this._defaults,
+                add: { ...this._defaults.add, ...value.add }
+            };
+        }
+
+        if ("retrieve" in value) {
+            this._defaults = {
+                ...this._defaults,
+                retrieve: { ...this._defaults.retrieve, ...value.retrieve }
+            };
+        }
+
+        if (!("retrieve" in value) && !("add" in value)) {
+            this._defaults = {
+                ...this._defaults,
+                add: { ...this._defaults.add, ...value },
+                retrieve: { ...this._defaults.add, ...value },
+            };
+        }
+
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._buildParams());
     }
 
@@ -89,8 +121,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
      * @param callback 
      * @returns DbSetBuilder
      */
-    on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
-    on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
+    on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>;
+    on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>;
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>) {
         this._events[event].push(callback);
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._buildParams());

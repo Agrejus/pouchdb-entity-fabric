@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,7 +16,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     get IdKeys() { return this._idKeys }
     get DocumentType() { return this._documentType }
 
-    private _defaults: DeepPartial<OmittedEntity<TEntity>>;
+    private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     private _idKeys: EntityIdKeys<TDocumentType, TEntity>;
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
@@ -32,7 +32,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      * @param context Will be 'this' from the data context
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
-    constructor(documentType: TDocumentType, context: IDataContext, defaults: DeepPartial<OmittedEntity<TEntity>>, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
+    constructor(documentType: TDocumentType, context: IDataContext, defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
         this._documentType = documentType;
         this._context = context as IPrivateContext<TDocumentType>;
         this._idKeys = idKeys;
@@ -43,8 +43,6 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
 
         // Allow spread operator to work on the class for extending it
-
-        // THIS NEEDS TO BE TESTED!!!!!!!!!!!!!!!!!!!!!!!!
         for(let property of properties) {
             (this as any)[property] = (this as any)[property]
         }
@@ -77,7 +75,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
             this._events["add"].forEach(w => w(entity as any));
 
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults) as TEntity;
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add) as TEntity;
 
             add.push(trackableEntity);
 
@@ -161,7 +159,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     private async _all() {
         const data = await this._api.getAllData(this._documentType)
-        return data.map(w => this._api.makeTrackable(w, this._defaults) as TEntity);
+        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve) as TEntity);
     }
 
     async all() {
@@ -243,7 +241,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
 
         entities.forEach(w => {
-            this._api.makeTrackable(w, this._defaults);
+            this._api.makeTrackable(w, this._defaults.add);
             (w as any)._rev = foundDictionary[w._id]
         });
 
