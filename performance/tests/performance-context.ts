@@ -262,8 +262,8 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
         return await this.doWork(w => w.getIndexes());
     }
 
-    protected createPerformanceDbSet<TEntity extends IDbRecord<PerformanceDocumentTypes>, TExtraExclusions extends (keyof TEntity) = never>(documentType: PerformanceDocumentTypes, ...idKeys: EntityIdKeys<PerformanceDocumentTypes, TEntity>): IDbSet<PerformanceDocumentTypes, TEntity, TExtraExclusions> {
-        const dbSet = this.createDbSet<TEntity, TExtraExclusions>(documentType, ...idKeys)
+    protected createPerformanceDbSet<TEntity extends IDbRecord<PerformanceDocumentTypes>>(documentType: PerformanceDocumentTypes) {
+        const dbSet = this.dbset<TEntity>(documentType).create()
 
         const propertiesToIgnore = [
             'DbSet',

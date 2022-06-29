@@ -3,10 +3,19 @@ import { IDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
+import { v4 as uuidv4 } from 'uuid';
 
 describe('dbset - deprecated', () => {
 
     PouchDB.plugin(memoryAdapter);
+
+    const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
+    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T) => {
+        const name = `${uuidv4()}-db`;
+        const result = new Context(name);
+        dbs[name] = result;
+        return result;
+    }
 
     enum DocumentTypes {
         Notes = "Notes",
@@ -51,8 +60,8 @@ describe('dbset - deprecated', () => {
 
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
-        constructor() {
-            super('test-db', { adapter: 'memory' });
+        constructor(name: string) {
+            super(name);
         }
 
         async empty() {
@@ -71,21 +80,21 @@ describe('dbset - deprecated', () => {
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
-        constructor() {
-            super();
+        constructor(name: string) {
+            super(name);
             this.books.on("add", entity => {
                 entity.status = "pending";
             })
         }
     }
 
-    beforeEach(async () => {
-        const context = new PouchDbDataContext();
-        await context.empty();
-    });
+    afterAll(async () => {
+        const dbNames = Object.keys(dbs)
+        await Promise.all(dbNames.map(w => dbs[w].destroyDatabase()));
+    })
 
     it('should add entity and return reference', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -104,7 +113,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should only allow one single entity per dbset', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [preference] = await context.preference.add({
             isOtherPropertyOn: true,
             isSomePropertyOn: false
@@ -119,7 +128,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should only allow one single entity per dbset and update one entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [preference] = await context.preference.add({
             isOtherPropertyOn: true,
             isSomePropertyOn: false
@@ -148,7 +157,7 @@ describe('dbset - deprecated', () => {
 
     it('should update an entity with previous rev', async () => {
 
-        const context = new DefaultPropertiesDataContext();
+        const context = dbFactory(DefaultPropertiesDataContext);
         const [newBook] = await context.books.add({
             author: "James",
             publishDate: new Date()
@@ -166,7 +175,7 @@ describe('dbset - deprecated', () => {
         secondBook.author = "DeMeuse"
         await context.saveChanges();
 
-        const secondaryContext = new DefaultPropertiesDataContext();
+        const secondaryContext = dbFactory(DefaultPropertiesDataContext);
         await secondaryContext.books.link(book);
 
         book.author = "James DeMeuse";
@@ -176,7 +185,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should add entity, save, and set _rev', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -197,7 +206,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should add entity, save, and generate an id', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [note] = await context.notes.add({
             contents: "Some Note",
             createdDate: new Date(),
@@ -217,7 +226,7 @@ describe('dbset - deprecated', () => {
 
     it('should add entity and create id from selector', async () => {
         const now = new Date();
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [car] = await context.cars.add({
             make: "Chevrolet",
             manufactureDate: now,
@@ -236,7 +245,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should add entity, exlude a property and set the default on the add event', async () => {
-        const context = new DefaultPropertiesDataContext();
+        const context = dbFactory(DefaultPropertiesDataContext);
         const [book] = await context.books.add({
             author: "James DeMeuse",
             publishDate: new Date()
@@ -254,7 +263,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should remove one entity by reference', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -274,7 +283,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should remove one entity by id', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -294,7 +303,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should remove many entities by reference', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -324,7 +333,7 @@ describe('dbset - deprecated', () => {
 
     it('should remove many entities by id', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -354,7 +363,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should remove correct entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [one, _] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -380,7 +389,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should get first entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -404,7 +413,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should match entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [one] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -425,7 +434,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should not match entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [_, one] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -446,7 +455,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should empty entities from dbset', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -475,7 +484,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should filter entities', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -499,7 +508,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should match correct entities from base documents', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
 
         for (let i = 0; i < 20; i++) {
@@ -531,7 +540,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should find correct entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -558,7 +567,7 @@ describe('dbset - deprecated', () => {
     });
 
     it('should find no entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -580,7 +589,7 @@ describe('dbset - deprecated', () => {
 
     it('should detach entities from context reference after adding', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -610,7 +619,7 @@ describe('dbset - deprecated', () => {
 
     it('should detach entities from context reference after adding and getting from find', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -648,7 +657,7 @@ describe('dbset - deprecated', () => {
 
     it('should detach entities from context reference after adding and getting from first', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -674,7 +683,7 @@ describe('dbset - deprecated', () => {
 
     it('should detach entities from context reference after adding and getting from filter', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -700,7 +709,7 @@ describe('dbset - deprecated', () => {
 
     it('should detach one entity from context reference after retrieving from list', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         for (let i = 0; i < 20; i++) {
             await context.contacts.add({
@@ -744,7 +753,7 @@ describe('dbset - deprecated', () => {
 
     it('should attach one entity', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -769,7 +778,7 @@ describe('dbset - deprecated', () => {
 
         contact.firstName = "James";
 
-        const secondContext = new PouchDbDataContext();
+        const secondContext = dbFactory(PouchDbDataContext);
 
         // attaching re-enables entity tracking for properties changed
         await secondContext.contacts.link(contact);
@@ -786,7 +795,7 @@ describe('dbset - deprecated', () => {
 
     it('should attach many entities', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -801,7 +810,7 @@ describe('dbset - deprecated', () => {
 
         await context.saveChanges();
 
-        const otherContext = new PouchDbDataContext();
+        const otherContext = dbFactory(PouchDbDataContext);
         const [one, two] = await otherContext.contacts.all();
 
         otherContext.contacts.unlink(one, two);
@@ -820,7 +829,7 @@ describe('dbset - deprecated', () => {
         one.firstName = "James";
         two.firstName = "John";
 
-        const secondContext = new PouchDbDataContext();
+        const secondContext = dbFactory(PouchDbDataContext);
 
         // attaching re-enables entity tracking for properties changed
         await secondContext.contacts.link(one, two);

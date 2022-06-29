@@ -3,8 +3,17 @@ import { IDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
+import { v4 as uuidv4 } from 'uuid';
 
 describe('dbset - fluent api', () => {
+
+    const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
+    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T) => {
+        const name = `${uuidv4()}-db`;
+        const result = new Context(name);
+        dbs[name] = result;
+        return result;
+    }
 
     PouchDB.plugin(memoryAdapter);
 
@@ -51,8 +60,8 @@ describe('dbset - fluent api', () => {
 
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
-        constructor() {
-            super('test-db', { adapter: 'memory' });
+        constructor(name: string) {
+            super(name);
         }
 
         async empty() {
@@ -76,21 +85,21 @@ describe('dbset - fluent api', () => {
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
-        constructor() {
-            super();
+        constructor(name: string) {
+            super(name);
             this.books.on("add", entity => {
                 entity.status = "pending";
             })
         }
     }
 
-    beforeEach(async () => {
-        const context = new PouchDbDataContext();
-        await context.empty();
-    });
+    afterAll(async () => {
+        const dbNames = Object.keys(dbs)
+        await Promise.all(dbNames.map(w => dbs[w].destroyDatabase()));
+    })
 
     it('should add entity and return reference', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -109,7 +118,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should only allow one single entity per dbset', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [preference] = await context.preference.add({
             isOtherPropertyOn: true,
             isSomePropertyOn: false
@@ -124,7 +133,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should only allow one single entity per dbset and update one entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [preference] = await context.preference.add({
             isOtherPropertyOn: true,
             isSomePropertyOn: false
@@ -153,7 +162,7 @@ describe('dbset - fluent api', () => {
 
     it('should update an entity with previous rev', async () => {
 
-        const context = new DefaultPropertiesDataContext();
+        const context = dbFactory(DefaultPropertiesDataContext);
         const [newBook] = await context.books.add({
             author: "James",
             publishDate: new Date()
@@ -171,7 +180,7 @@ describe('dbset - fluent api', () => {
         secondBook.author = "DeMeuse"
         await context.saveChanges();
 
-        const secondaryContext = new DefaultPropertiesDataContext();
+        const secondaryContext = dbFactory(DefaultPropertiesDataContext);
         await secondaryContext.books.link(book);
 
         book.author = "James DeMeuse";
@@ -181,7 +190,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should add entity, save, and set _rev', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -202,7 +211,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should add entity, save, and generate an id', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [note] = await context.notes.add({
             contents: "Some Note",
             createdDate: new Date(),
@@ -222,7 +231,7 @@ describe('dbset - fluent api', () => {
 
     it('should add entity and create id from selector', async () => {
         const now = new Date();
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [car] = await context.cars.add({
             make: "Chevrolet",
             manufactureDate: now,
@@ -241,7 +250,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should add entity, exlude a property and set the default on the add event', async () => {
-        const context = new DefaultPropertiesDataContext();
+        const context = dbFactory(DefaultPropertiesDataContext);
         const [book] = await context.books.add({
             author: "James DeMeuse",
             publishDate: new Date()
@@ -259,7 +268,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should remove one entity by reference', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -279,7 +288,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should remove one entity by id', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -299,7 +308,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should remove many entities by reference', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -329,7 +338,7 @@ describe('dbset - fluent api', () => {
 
     it('should remove many entities by id', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -359,7 +368,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should remove correct entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [one, _] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -385,7 +394,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should get first entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -409,7 +418,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should match entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [one] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -430,7 +439,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should not match entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [_, one] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -451,7 +460,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should empty entities from dbset', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -480,7 +489,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should filter entities', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -504,7 +513,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should match correct entities from base documents', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
 
         for (let i = 0; i < 20; i++) {
@@ -536,7 +545,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should find correct entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -563,7 +572,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('should find no entity', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -585,7 +594,7 @@ describe('dbset - fluent api', () => {
 
     it('should detach entities from context reference after adding', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -615,7 +624,7 @@ describe('dbset - fluent api', () => {
 
     it('should detach entities from context reference after adding and getting from find', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -653,7 +662,7 @@ describe('dbset - fluent api', () => {
 
     it('should detach entities from context reference after adding and getting from first', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -679,7 +688,7 @@ describe('dbset - fluent api', () => {
 
     it('should detach entities from context reference after adding and getting from filter', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -705,7 +714,7 @@ describe('dbset - fluent api', () => {
 
     it('should detach one entity from context reference after retrieving from list', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         for (let i = 0; i < 20; i++) {
             await context.contacts.add({
@@ -749,7 +758,7 @@ describe('dbset - fluent api', () => {
 
     it('should attach one entity', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -774,7 +783,7 @@ describe('dbset - fluent api', () => {
 
         contact.firstName = "James";
 
-        const secondContext = new PouchDbDataContext();
+        const secondContext = dbFactory(PouchDbDataContext);
 
         // attaching re-enables entity tracking for properties changed
         await secondContext.contacts.link(contact);
@@ -791,7 +800,7 @@ describe('dbset - fluent api', () => {
 
     it('should attach many entities', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -806,7 +815,7 @@ describe('dbset - fluent api', () => {
 
         await context.saveChanges();
 
-        const otherContext = new PouchDbDataContext();
+        const otherContext = dbFactory(PouchDbDataContext);
         const [one, two] = await otherContext.contacts.all();
 
         otherContext.contacts.unlink(one, two);
@@ -825,7 +834,7 @@ describe('dbset - fluent api', () => {
         one.firstName = "James";
         two.firstName = "John";
 
-        const secondContext = new PouchDbDataContext();
+        const secondContext = dbFactory(PouchDbDataContext);
 
         // attaching re-enables entity tracking for properties changed
         await secondContext.contacts.link(one, two);
@@ -842,7 +851,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('extended dbset should call base methods with no issues', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.overrideContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -858,7 +867,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('dbset should set defaults on add', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const date = new Date();
         const [book] = await context.booksWithDefaults.add({
             author: "james",
@@ -875,7 +884,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('dbset should set defaults after fetch', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const date = new Date();
         await context.booksNoDefaults.add({
             author: "james",
@@ -897,7 +906,7 @@ describe('dbset - fluent api', () => {
 
     it('should set _rev on linked entity', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -928,7 +937,7 @@ describe('dbset - fluent api', () => {
 
         await context.saveChanges();
 
-        const secondContext = new PouchDbDataContext();
+        const secondContext = dbFactory(PouchDbDataContext);
 
         expect(contact._rev).not.toBe(updated._rev);
 
@@ -938,7 +947,7 @@ describe('dbset - fluent api', () => {
     });
 
     it('dbset should set defaults after fetch for add and retrieve', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const date = new Date();
         await context.booksNoDefaults.add({
             author: "james",

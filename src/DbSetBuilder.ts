@@ -1,5 +1,5 @@
 import { DbSet } from "./DbSet";
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, OmittedEntity } from "./typings";
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, OmittedEntity } from "./typings";
 
 interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> {
     context: IDataContext;
@@ -18,8 +18,9 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     private _exclusions: (keyof TEntity)[];
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
+    private _onCreate: (dbset: IDbSetBase<string>) => void;
 
-    constructor(params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions>) {
+    constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions>) {
 
         const { context, documentType, idKeys, defaults, exclusions, events } = params;
         this._documentType = documentType;
@@ -31,6 +32,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             "add": [],
             "remove": []
         };
+
+        this._onCreate = onCreate;
     }
 
     private _buildParams<T extends (keyof TEntity) = never>() {
@@ -56,7 +59,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         builder(idBuilder);
 
         this._idKeys.push(...idBuilder.Ids);
-        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._buildParams());
+        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._onCreate, this._buildParams());
     }
 
     /**
@@ -100,7 +103,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             };
         }
 
-        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._buildParams());
+        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._onCreate, this._buildParams());
     }
 
     /**
@@ -112,7 +115,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
      */
     exclude<T extends (keyof OmittedEntity<TEntity>)>(...exclusions: T[]) {
         this._exclusions.push(...exclusions);
-        return new DbSetBuilder<TDocumentType, TEntity, T | TExtraExclusions>(this._buildParams<T>());
+        return new DbSetBuilder<TDocumentType, TEntity, T | TExtraExclusions>(this._onCreate, this._buildParams<T>());
     }
 
     /**
@@ -125,7 +128,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>;
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>) {
         this._events[event].push(callback);
-        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._buildParams());
+        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions>(this._onCreate, this._buildParams());
     }
 
     /**
@@ -137,7 +140,11 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
 
         const dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions> = new DbSet<TDocumentType, TEntity, TExtraExclusions>(this._documentType, this._context, this._defaults, ...this._idKeys);
 
-        return extend(dbset);
+        const result = extend(dbset);
+
+        this._onCreate(result);
+
+        return result;
     }
 }
 

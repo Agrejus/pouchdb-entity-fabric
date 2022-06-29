@@ -205,6 +205,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    private addDbSet(dbset: IDbSetBase<string>) {
+        this._dbSets.push(dbset);
+    }
+
     /**
      * Used by the context api
      * @param data 
@@ -424,7 +428,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @returns DbSetBuilder
      */
     protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
-        return new DbSetBuilder<TDocumentType, TEntity>({ documentType, context: this });
+        return new DbSetBuilder<TDocumentType, TEntity>(this.addDbSet.bind(this), { documentType, context: this });
     }
 
     /**

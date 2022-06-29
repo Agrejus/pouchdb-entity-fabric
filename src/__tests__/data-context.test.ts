@@ -2,10 +2,19 @@ import { DataContext } from "../DataContext";
 import { IDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
+import { v4 as uuidv4 } from 'uuid';
 
 describe('data context', () => {
 
     PouchDB.plugin(memoryAdapter);
+
+    const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
+    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T) => {
+        const name = `${uuidv4()}-db`;
+        const result = new Context(name);
+        dbs[name] = result;
+        return result;
+    }
 
     enum DocumentTypes {
         Notes = "Notes",
@@ -36,8 +45,8 @@ describe('data context', () => {
 
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
-        constructor() {
-            super('test-db', { adapter: 'memory' });
+        constructor(name: string) {
+            super(name);
         }
 
         async empty() {
@@ -58,19 +67,27 @@ describe('data context', () => {
     }
 
     class CreateDbOverrideContext extends PouchDbDataContext {
+
+        private _name:string
+
+        constructor(name: string) {
+            super(name);
+            this._name = name;
+        }
+
         protected createDb(){
-            return new PouchDB('other-db', { adapter: 'memory' })
+            return new PouchDB(this._name)
         }
     }
-
-    beforeEach(async () => {
-        const context = new PouchDbDataContext();
-        await context.empty();
-    });
+    
+    afterAll(async () => {
+        const dbNames = Object.keys(dbs)
+        await Promise.all(dbNames.map(w => dbs[w].destroyDatabase()));
+    })
 
     it('should save changes when entity is added and a non auto generated id', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -92,7 +109,7 @@ describe('data context', () => {
 
     it('should save changes when entity is added and a non auto generated id - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -114,7 +131,7 @@ describe('data context', () => {
 
     it('should save changes when entities are added and a non auto generated id', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         const [one, two] = await context.contacts.add({
             firstName: "James",
@@ -146,7 +163,7 @@ describe('data context', () => {
 
     it('should save changes when entities are added and a non auto generated id - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         const [one, two] = await context.extendedContacts.add({
             firstName: "James",
@@ -177,7 +194,7 @@ describe('data context', () => {
     });
 
     it('should add entity with auto generated id', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [note] = await context.notes.add({
             contents: "some new note",
             createdDate: new Date(),
@@ -198,7 +215,7 @@ describe('data context', () => {
     });
 
     it('should add entity with auto generated id - extended', async () => {
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [note] = await context.extendedNotes.add({
             contents: "some new note",
             createdDate: new Date(),
@@ -221,7 +238,7 @@ describe('data context', () => {
 
     it('should save changes when more than one entity is added', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first, second] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -251,7 +268,7 @@ describe('data context', () => {
 
     it('should save changes when more than one entity is added - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first, second] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -281,7 +298,7 @@ describe('data context', () => {
 
     it('should save changes when entity is removed', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -310,7 +327,7 @@ describe('data context', () => {
 
     it('should save changes when entity is removed - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -339,7 +356,7 @@ describe('data context', () => {
 
     it('should save changes when entities are removed', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first, second] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -373,7 +390,7 @@ describe('data context', () => {
 
     it('should save changes when entities are removed - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first, second] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -407,7 +424,7 @@ describe('data context', () => {
 
     it('should save changes when entities are removed by id', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first, second] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -441,7 +458,7 @@ describe('data context', () => {
 
     it('should save changes when entities are removed by id - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [first, second] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -475,7 +492,7 @@ describe('data context', () => {
 
     it('should save changes when entity is updated', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -505,7 +522,7 @@ describe('data context', () => {
 
     it('should save changes when entity is updated - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -535,7 +552,7 @@ describe('data context', () => {
 
     it('should show no changes when property is set to same value', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -559,7 +576,7 @@ describe('data context', () => {
 
     it('should show no changes when property is set to same value - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -583,7 +600,7 @@ describe('data context', () => {
 
     it('should save changes when two of the same entities with different references are updated', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -626,7 +643,7 @@ describe('data context', () => {
 
     it('should save changes when two of the same entities with different references are updated - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.extendedContacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -669,7 +686,7 @@ describe('data context', () => {
 
     it('should get all data', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         await context.contacts.add({
             firstName: "James",
@@ -701,7 +718,7 @@ describe('data context', () => {
 
     it('should get all data - extended', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         await context.extendedContacts.add({
             firstName: "James",
@@ -733,7 +750,7 @@ describe('data context', () => {
 
     it('should on entity created event', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const onEntityCreatedMock = jest.fn();
         const onEntityRemovedMock = jest.fn();
         const onEntityUpdatedMock = jest.fn();
@@ -771,7 +788,7 @@ describe('data context', () => {
 
     it('should on entity created event - extend', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const onEntityCreatedMock = jest.fn();
         const onEntityRemovedMock = jest.fn();
         const onEntityUpdatedMock = jest.fn();
@@ -809,7 +826,7 @@ describe('data context', () => {
 
     it('should on entity updated event', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const onEntityCreatedMock = jest.fn();
         const onEntityRemovedMock = jest.fn();
         const onEntityUpdatedMock = jest.fn();
@@ -854,7 +871,7 @@ describe('data context', () => {
 
     it('should on entity updated event - extend', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const onEntityCreatedMock = jest.fn();
         const onEntityRemovedMock = jest.fn();
         const onEntityUpdatedMock = jest.fn();
@@ -899,7 +916,7 @@ describe('data context', () => {
 
     it('should on entity removed event', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const onEntityCreatedMock = jest.fn();
         const onEntityRemovedMock = jest.fn();
         const onEntityUpdatedMock = jest.fn();
@@ -947,7 +964,7 @@ describe('data context', () => {
 
     it('should on entity removed event - extend', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const onEntityCreatedMock = jest.fn();
         const onEntityRemovedMock = jest.fn();
         const onEntityUpdatedMock = jest.fn();
@@ -995,17 +1012,17 @@ describe('data context', () => {
 
     it('should iterate over dbsets', async () => {
         const interation = jest.fn();
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         for (let dbset of context) {
             interation();
         }
 
-        expect(interation).toHaveBeenCalledTimes(3);
+        expect(interation).toHaveBeenCalledTimes(6);
     });
 
     it('should override createdb function', async () => {
-        const context = new CreateDbOverrideContext();
+        const context = dbFactory(CreateDbOverrideContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -1030,11 +1047,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ contents: "some contents" });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext;
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "some contents" }, retrieve: { contents: "some contents" } });
     });
@@ -1043,11 +1063,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "some contents" }, retrieve: {  } });
     });
@@ -1056,11 +1079,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: {  }, retrieve: { contents: "some contents" } });
     });
@@ -1069,11 +1095,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" }, add: { contents: "other contents" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "other contents" }, retrieve: { contents: "some contents" } });
     });
@@ -1083,11 +1112,14 @@ describe('data context', () => {
         const date = new Date()
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ contents: "some contents", createdDate: date, userId: "jdemeuse" });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "some contents", createdDate: date, userId: "jdemeuse" }, retrieve: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
     });
@@ -1097,11 +1129,14 @@ describe('data context', () => {
         const date = new Date()
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "some contents", createdDate: date, userId: "jdemeuse" }, retrieve: {  } });
     });
@@ -1111,11 +1146,14 @@ describe('data context', () => {
         const date = new Date()
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { }, retrieve: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
     });
@@ -1125,11 +1163,14 @@ describe('data context', () => {
         const date = new Date()
         class FluentContext extends PouchDbDataContext {
 
-
+            constructor(name: string) {
+                super(name);
+            }
+            
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ contents: "some contents" }).defaults({ createdDate: date }).defaults({ userId: "jdemeuse" });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "some contents", createdDate: date, userId: "jdemeuse" }, retrieve: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
     });
@@ -1139,11 +1180,14 @@ describe('data context', () => {
         const date = new Date()
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } }).defaults({ add: { createdDate: date } }).defaults({ add: { userId: "jdemeuse" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "some contents", createdDate: date, userId: "jdemeuse" }, retrieve: {  } });
     });
@@ -1153,11 +1197,14 @@ describe('data context', () => {
         const date = new Date()
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" } }).defaults({ retrieve: { createdDate: date } }).defaults({ retrieve: { userId: "jdemeuse" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: {}, retrieve: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
     });
@@ -1167,11 +1214,14 @@ describe('data context', () => {
         const date = new Date()
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } }).defaults({ add: { userId: "other" } }).defaults({ retrieve: { createdDate: date } }).defaults({ retrieve: { userId: "jdemeuse" } });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._defaults).toEqual({ add: { contents: "some contents", userId: "other"}, retrieve: { createdDate: date, userId: "jdemeuse" } });
     });
@@ -1180,11 +1230,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).exclude("contents");
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._exclusions).toEqual([ "contents" ]);
     });
@@ -1193,11 +1246,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).exclude("contents", "createdDate");
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._exclusions).toEqual([ "contents", "createdDate" ]);
     });
@@ -1206,11 +1262,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).exclude("contents").exclude("createdDate");
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._exclusions).toEqual([ "contents", "createdDate" ]);
     });
@@ -1219,11 +1278,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).keys(w => w.add("contents"));
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._idKeys).toEqual([ "contents" ]);
     });
@@ -1232,11 +1294,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).keys(w => w.add("contents").add("userId"));
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._idKeys).toEqual([ "contents", "userId" ]);
     });
@@ -1245,11 +1310,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).keys(w => w.add("contents")).keys(w => w.add("userId"));
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._idKeys).toEqual([ "contents", "userId" ]);
     });
@@ -1258,11 +1326,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).on("add", _ => {});
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._events["add"].length).toBe(1);
     });
@@ -1271,11 +1342,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
-
+            constructor(name: string) {
+                super(name);
+            }
+            
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).on("add", _ => {}).on("remove", _ => {});
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._events["add"].length).toBe(1);
         expect((context.dbsetTest as any)._events["remove"].length).toBe(1);
@@ -1285,11 +1359,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).on("add", _ => {}).on("add", _ => {}).on("remove", _ => {}).on("remove", _ => {}).on("remove", _ => {});
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect((context.dbsetTest as any)._events["add"].length).toBe(2);
         expect((context.dbsetTest as any)._events["remove"].length).toBe(3);
@@ -1299,11 +1376,14 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).create();
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect(context.dbsetTest.add).toBeDefined();
     });
@@ -1312,6 +1392,9 @@ describe('data context', () => {
 
         class FluentContext extends PouchDbDataContext {
 
+            constructor(name: string) {
+                super(name);
+            }
 
             dbsetTest = this.dbset<INote>(DocumentTypes.Notes).create(w => {
                 return {
@@ -1323,7 +1406,7 @@ describe('data context', () => {
             });
         }
 
-        const context = new FluentContext();
+        const context = dbFactory(FluentContext) as FluentContext
 
         expect(context.dbsetTest.add).toBeDefined();
         expect(context.dbsetTest.newFunction).toBeDefined();
