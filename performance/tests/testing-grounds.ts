@@ -15,6 +15,9 @@ interface IContact extends IDbRecord<DocumentTypes> {
     lastName: string;
     address: string;
     phone: string;
+    retroFit: string;
+    syncStatus: "pending" | "approved" | "rejected";
+    syncRetryCount: 0;
 }
 
 interface INote extends IDbRecord<DocumentTypes> {
@@ -60,8 +63,17 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
     books = this.createDbSet<IBook, "status" | "rejectedCount">(DocumentTypes.Books);
 
     contacts = this.dbset<IContact>(DocumentTypes.Contacts)
-        .defaults({ address: "address", firstName: "firstname", lastName: "test" })
-        .exclude("address").exclude("firstName").exclude("phone")
+        .defaults({ syncStatus: "pending", syncRetryCount: 0, retroFit: "default" })
+        .exclude("syncStatus", "syncRetryCount")
+        .keys(w =>
+            w.add("firstName")
+                .add("lastName")
+                .add(w => w.phone.toLocaleLowerCase()))
+        .create();
+
+    contactsRetro = this.dbset<IContact>(DocumentTypes.Contacts)
+        .defaults({ add: { syncStatus: "pending", syncRetryCount: 0, retroFit: "default" } })
+        .exclude("syncStatus", "syncRetryCount", "retroFit")
         .keys(w =>
             w.add("firstName")
                 .add("lastName")
@@ -82,18 +94,29 @@ export const run = async () => {
     try {
 
         debugger;
-        const context = new DefaultPropertiesDataContext();
-        const [newBook] = await context.books.add({
-            author: "James",
-            publishDate: new Date().toDateString()
+        const context = new PouchDbDataContext();
+
+        // create a new contact
+        const [first] = await context.contactsRetro.add({
+            address: "some address",
+            firstName: "first name",
+            lastName: "last name",
+            phone: "phone"
         });
 
-        const [x] = await context.contacts.add({ lastName: "" })
         debugger;
 
         await context.saveChanges();
 
-        const book = await context.books.first();
+        first.retroFit = "some new value";
+        first.firstName = "Skyler";
+
+        await context.saveChanges();
+
+        const contact = await context.contacts.first();
+
+
+        debugger;
 
     } catch (e) {
         debugger;

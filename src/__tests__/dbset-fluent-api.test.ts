@@ -3,9 +3,8 @@ import { IDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
-import { run } from "../test-setup/test";
 
-describe('getting started - data context', () => {
+describe('dbset - fluent api', () => {
 
     PouchDB.plugin(memoryAdapter);
 
@@ -32,7 +31,7 @@ describe('getting started - data context', () => {
 
     interface IBook extends IDbRecord<DocumentTypes> {
         author: string;
-        publishDate?:  Date;
+        publishDate?: Date;
         rejectedCount: number;
         status: "pending" | "approved" | "rejected";
     }
@@ -64,11 +63,16 @@ describe('getting started - data context', () => {
             await this.saveChanges();
         }
 
-        notes = this.createDbSet<INote>(DocumentTypes.Notes);
-        contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
-        books = this.createDbSet<IBook, "status" | "rejectedCount">(DocumentTypes.Books);
-        cars = this.createDbSet<ICar>(DocumentTypes.Cars, w => w.manufactureDate.toISOString(), w => w.make, "model");
-        preference = this.createDbSet<IPreference>(DocumentTypes.Preference, _ => "static")
+        notes = this.dbset<INote>(DocumentTypes.Notes).create();
+        contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
+        books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
+        cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
+        preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
+
+        overrideContacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, otherFirst: w.first }));
+        booksWithDefaults = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
+        booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
+        booksNoDefaults = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
@@ -85,7 +89,7 @@ describe('getting started - data context', () => {
         await context.empty();
     });
 
-    test('should add entity and return reference', async () => {
+    it('should add entity and return reference', async () => {
         const context = new PouchDbDataContext();
         const [contact] = await context.contacts.add({
             firstName: "James",
@@ -104,7 +108,7 @@ describe('getting started - data context', () => {
         expect(contact.address).toBe("1234 Test St");
     });
 
-    test('should only allow one single entity per dbset', async () => {
+    it('should only allow one single entity per dbset', async () => {
         const context = new PouchDbDataContext();
         const [preference] = await context.preference.add({
             isOtherPropertyOn: true,
@@ -119,7 +123,7 @@ describe('getting started - data context', () => {
         expect(preference.isSomePropertyOn).toBe(false);
     });
 
-    test('should only allow one single entity per dbset and update one entity', async () => {
+    it('should only allow one single entity per dbset and update one entity', async () => {
         const context = new PouchDbDataContext();
         const [preference] = await context.preference.add({
             isOtherPropertyOn: true,
@@ -147,7 +151,7 @@ describe('getting started - data context', () => {
         expect(preferences.length).toBe(1)
     });
 
-    test('should update an entity with previous rev', async () => {
+    it('should update an entity with previous rev', async () => {
 
         const context = new DefaultPropertiesDataContext();
         const [newBook] = await context.books.add({
@@ -176,7 +180,7 @@ describe('getting started - data context', () => {
         expect(book._rev.startsWith("3")).toBe(true)
     });
 
-    test('should add entity, save, and set _rev', async () => {
+    it('should add entity, save, and set _rev', async () => {
         const context = new PouchDbDataContext();
         const [contact] = await context.contacts.add({
             firstName: "James",
@@ -197,7 +201,7 @@ describe('getting started - data context', () => {
         expect(contact.address).toBe("1234 Test St");
     });
 
-    test('should add entity, save, and generate an id', async () => {
+    it('should add entity, save, and generate an id', async () => {
         const context = new PouchDbDataContext();
         const [note] = await context.notes.add({
             contents: "Some Note",
@@ -216,7 +220,7 @@ describe('getting started - data context', () => {
         expect(note.userId).toBe("jdemeuse");
     });
 
-    test('should add entity and create id from selector', async () => {
+    it('should add entity and create id from selector', async () => {
         const now = new Date();
         const context = new PouchDbDataContext();
         const [car] = await context.cars.add({
@@ -236,7 +240,7 @@ describe('getting started - data context', () => {
         expect(car.manufactureDate).toBe(now);
     });
 
-    test('should add entity, exlude a property and set the default on the add event', async () => {
+    it('should add entity, exlude a property and set the default on the add event', async () => {
         const context = new DefaultPropertiesDataContext();
         const [book] = await context.books.add({
             author: "James DeMeuse",
@@ -254,7 +258,7 @@ describe('getting started - data context', () => {
         expect(book.status).toBe("pending");
     });
 
-    test('should remove one entity by reference', async () => {
+    it('should remove one entity by reference', async () => {
         const context = new PouchDbDataContext();
         const [contact] = await context.contacts.add({
             firstName: "James",
@@ -274,7 +278,7 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove one entity by id', async () => {
+    it('should remove one entity by id', async () => {
         const context = new PouchDbDataContext();
         const [contact] = await context.contacts.add({
             firstName: "James",
@@ -294,7 +298,7 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove many entities by reference', async () => {
+    it('should remove many entities by reference', async () => {
         const context = new PouchDbDataContext();
         const generated: IContact[] = [];
 
@@ -323,7 +327,7 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove many entities by id', async () => {
+    it('should remove many entities by id', async () => {
 
         const context = new PouchDbDataContext();
         const generated: IContact[] = [];
@@ -354,7 +358,7 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove correct entity', async () => {
+    it('should remove correct entity', async () => {
         const context = new PouchDbDataContext();
         const [one, _] = await context.contacts.add({
             firstName: "James",
@@ -380,7 +384,7 @@ describe('getting started - data context', () => {
         expect(all[0]._id).toBe("Contacts/John/Doe");
     });
 
-    test('should get first entity', async () => {
+    it('should get first entity', async () => {
         const context = new PouchDbDataContext();
         await context.contacts.add({
             firstName: "James",
@@ -404,7 +408,7 @@ describe('getting started - data context', () => {
         expect(first.address).toBe("1234 Test St");
     });
 
-    test('should match entity', async () => {
+    it('should match entity', async () => {
         const context = new PouchDbDataContext();
         const [one] = await context.contacts.add({
             firstName: "James",
@@ -425,7 +429,7 @@ describe('getting started - data context', () => {
         expect(doesMatch).toBe(true);
     });
 
-    test('should not match entity', async () => {
+    it('should not match entity', async () => {
         const context = new PouchDbDataContext();
         const [_, one] = await context.contacts.add({
             firstName: "James",
@@ -446,7 +450,7 @@ describe('getting started - data context', () => {
         expect(doesMatch).toBe(false);
     });
 
-    test('should empty entities from dbset', async () => {
+    it('should empty entities from dbset', async () => {
         const context = new PouchDbDataContext();
         const generated: IContact[] = [];
 
@@ -475,7 +479,7 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should filter entities', async () => {
+    it('should filter entities', async () => {
         const context = new PouchDbDataContext();
         const [first] = await context.contacts.add({
             firstName: "James",
@@ -499,7 +503,7 @@ describe('getting started - data context', () => {
         expect(doesMatch).toBe(true);
     });
 
-    test('should match correct entities from base documents', async () => {
+    it('should match correct entities from base documents', async () => {
         const context = new PouchDbDataContext();
 
 
@@ -531,7 +535,7 @@ describe('getting started - data context', () => {
         expect(contacts.length).toBe(20);
     });
 
-    test('should find correct entity', async () => {
+    it('should find correct entity', async () => {
         const context = new PouchDbDataContext();
         await context.contacts.add({
             firstName: "James",
@@ -558,7 +562,7 @@ describe('getting started - data context', () => {
         expect(filtered._id).toBe("Contacts/John/Doe");
     });
 
-    test('should find no entity', async () => {
+    it('should find no entity', async () => {
         const context = new PouchDbDataContext();
         await context.contacts.add({
             firstName: "James",
@@ -837,8 +841,133 @@ describe('getting started - data context', () => {
         expect(afterAttach.length).toBe(2);
     });
 
-    // test new get method
-    it('items', async () => {
-        
-    })
+    it('extended dbset should call base methods with no issues', async () => {
+        const context = new PouchDbDataContext();
+        await context.overrideContacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const first = await context.overrideContacts.otherFirst();
+
+        expect(first).toBeDefined();
+    });
+
+    it('dbset should set defaults on add', async () => {
+        const context = new PouchDbDataContext();
+        const date = new Date();
+        const [book] = await context.booksWithDefaults.add({
+            author: "james",
+            publishDate: date
+        });
+
+        expect(book.status).toBe("pending");
+        expect(book.rejectedCount).toBe(0);
+        expect(book.author).toBe("james");
+        expect(book.DocumentType).toBe(DocumentTypes.Books);
+        expect(book.publishDate).toBe(date);
+        expect(book._id).toBeDefined();
+        expect(book._rev).not.toBeDefined();
+    });
+
+    it('dbset should set defaults after fetch', async () => {
+        const context = new PouchDbDataContext();
+        const date = new Date();
+        await context.booksNoDefaults.add({
+            author: "james",
+            publishDate: date
+        });
+
+        await context.saveChanges();
+
+        const book = await context.booksWithDefaults.first();
+
+        expect(book.status).toBe("pending");
+        expect(book.rejectedCount).toBe(0);
+        expect(book.author).toBe("james");
+        expect(book.DocumentType).toBe(DocumentTypes.Books);
+        expect(book.publishDate).toBe(date.toISOString());
+        expect(book._id).toBeDefined();
+        expect(book._rev).toBeDefined();
+    });
+
+    it('should set _rev on linked entity', async () => {
+
+        const context = new PouchDbDataContext();
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const [contact] = await context.contacts.filter(w => w.firstName === "James");
+
+        context.contacts.unlink(contact);
+
+        contact.firstName = "Test";
+
+        expect(context.hasPendingChanges()).toBe(false);
+        await context.saveChanges();
+
+        const updated = await context.contacts.find(w => w.firstName === "James");
+
+        if (updated == null) {
+            throw new Error('contact not found')
+        }
+
+        expect(updated.firstName).toBe("James");
+
+        updated.firstName = "UPDATE ME";
+
+        await context.saveChanges();
+
+        const secondContext = new PouchDbDataContext();
+
+        expect(contact._rev).not.toBe(updated._rev);
+
+        await secondContext.contacts.link(contact);
+
+        expect(contact._rev).toBe(updated._rev);
+    });
+
+    it('dbset should set defaults after fetch for add and retrieve', async () => {
+        const context = new PouchDbDataContext();
+        const date = new Date();
+        await context.booksNoDefaults.add({
+            author: "james",
+            publishDate: date
+        });
+
+        await context.saveChanges();
+
+        const retrievedBook = await context.booksWithTwoDefaults.first();
+
+        const [addedBook] = await context.booksWithTwoDefaults.add({
+            author: "james",
+            publishDate: date
+        });
+
+        expect(retrievedBook.status).toBe("approved");
+        expect(retrievedBook.rejectedCount).toBe(-1);
+        expect(retrievedBook.author).toBe("james");
+        expect(retrievedBook.DocumentType).toBe(DocumentTypes.Books);
+        expect(retrievedBook.publishDate).toBe(date.toISOString());
+        expect(retrievedBook._id).toBeDefined();
+        expect(retrievedBook._rev).toBeDefined();
+
+        expect(addedBook.status).toBe("pending");
+        expect(addedBook.rejectedCount).toBe(0);
+        expect(addedBook.author).toBe("james");
+        expect(addedBook.DocumentType).toBe(DocumentTypes.Books);
+        expect(addedBook.publishDate).toBe(date);
+        expect(addedBook._id).toBeDefined();
+        expect(addedBook._rev).not.toBeDefined();
+    });
 });
