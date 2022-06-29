@@ -10,8 +10,8 @@ describe('dbset - deprecated', () => {
     PouchDB.plugin(memoryAdapter);
 
     const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
-    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T) => {
-        const name = `${uuidv4()}-db`;
+    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T, dbname?: string) => {
+        const name = dbname ?? `${uuidv4()}-db`;
         const result = new Context(name);
         dbs[name] = result;
         return result;
@@ -157,7 +157,8 @@ describe('dbset - deprecated', () => {
 
     it('should update an entity with previous rev', async () => {
 
-        const context = dbFactory(DefaultPropertiesDataContext);
+        const dbname = uuidv4()
+        const context = dbFactory(DefaultPropertiesDataContext, dbname);
         const [newBook] = await context.books.add({
             author: "James",
             publishDate: new Date()
@@ -175,7 +176,7 @@ describe('dbset - deprecated', () => {
         secondBook.author = "DeMeuse"
         await context.saveChanges();
 
-        const secondaryContext = dbFactory(DefaultPropertiesDataContext);
+        const secondaryContext = dbFactory(DefaultPropertiesDataContext, dbname);
         await secondaryContext.books.link(book);
 
         book.author = "James DeMeuse";
@@ -753,7 +754,8 @@ describe('dbset - deprecated', () => {
 
     it('should attach one entity', async () => {
 
-        const context = dbFactory(PouchDbDataContext);
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -778,7 +780,7 @@ describe('dbset - deprecated', () => {
 
         contact.firstName = "James";
 
-        const secondContext = dbFactory(PouchDbDataContext);
+        const secondContext = dbFactory(PouchDbDataContext, dbname);
 
         // attaching re-enables entity tracking for properties changed
         await secondContext.contacts.link(contact);
@@ -795,7 +797,8 @@ describe('dbset - deprecated', () => {
 
     it('should attach many entities', async () => {
 
-        const context = dbFactory(PouchDbDataContext);
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -810,7 +813,7 @@ describe('dbset - deprecated', () => {
 
         await context.saveChanges();
 
-        const otherContext = dbFactory(PouchDbDataContext);
+        const otherContext = dbFactory(PouchDbDataContext, dbname);
         const [one, two] = await otherContext.contacts.all();
 
         otherContext.contacts.unlink(one, two);
@@ -829,7 +832,7 @@ describe('dbset - deprecated', () => {
         one.firstName = "James";
         two.firstName = "John";
 
-        const secondContext = dbFactory(PouchDbDataContext);
+        const secondContext = dbFactory(PouchDbDataContext, dbname);
 
         // attaching re-enables entity tracking for properties changed
         await secondContext.contacts.link(one, two);

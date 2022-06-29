@@ -9,8 +9,8 @@ describe('data context', () => {
     PouchDB.plugin(memoryAdapter);
 
     const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
-    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T) => {
-        const name = `${uuidv4()}-db`;
+    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T, dbname?: string) => {
+        const name = dbname ?? `${uuidv4()}-db`;
         const result = new Context(name);
         dbs[name] = result;
         return result;
