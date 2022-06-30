@@ -366,7 +366,10 @@ const result = await context.purge();
 The DbSet Fluent API is a very powerful mechanism to create a dbset that will fit the software's needs.  With the Fluent API, a DbSet can exclude properties when adding them, have defaults to either retroactively add new columns or to set values for excluded properties.  There is also advanced entity key building, adding events, and extending the functionality of the dbset.
 
 #### DbSet Fluent API - Key Builder
-The key builder in the Fluent API can be used to build a custom key
+The key builder in the Fluent API can be used to build a custom key for each entity that is added to the dbset
+
+
+
 
 
 
@@ -522,6 +525,48 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `empty(): Promise<void>` | Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store |
 | `destroyDatabase(): Promise<void>` | Destroy Pouch Database |
 | `optimize(): Promise<void>` | Add optimizations to increase performance of PouchDB |
+
+## Issues
+
+### Web Workers
+When pushing Proxy classes (entities) to a WebWorker, structuredCloning will fail because Proxy classes cannot be deeply cloned
+
+Work Around - override structuredClone and clone the proxy properly by called `DataContext.asUntracked()`
+
+### Comlink
+When pushing Proxy classes (entities) to a WebWorker, structuredCloning will fail because Proxy classes cannot be deeply cloned
+
+Work Around - Create a wrapper for comlink and provide the proper cloning mechanism
+```typescript
+import { transferHandlers, wrap, TransferHandler, expose } from 'comlink';
+import { DataContext } from 'pouchdb-entity-fabric';
+
+// handle cloning of proxy object
+const proxyTransferhandler: TransferHandler<{ data: any }, any> = {
+	canHandle: ((e: any) => {
+        // we assume or proxy is e.data
+		try {
+			const canHandle = e != null && 'data' in e && DataContext.isProxy(e.data ?? {})
+
+			return canHandle;
+		} catch {
+			return false
+		}
+	}) as any,
+	serialize: (value) => {
+		const clone = { ...value, data: { ...value.data } };
+		return [clone, []]
+	},
+	deserialize: (value) => {
+		return value;
+	}
+}
+
+transferHandlers.set("EVENT", proxyTransferhandler);
+
+export { transferHandlers, wrap, expose };
+```
+
 
 ## Changes
 ### 1.2.0 -> 1.3.0 

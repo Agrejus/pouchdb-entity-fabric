@@ -79,7 +79,7 @@ class DbSet {
             const selector = w;
             return String(selector(entity));
         });
-        return [this.DocumentType, ...keyData].join("/");
+        return [this._documentType, ...keyData].join("/");
     }
     isMatch(first, second) {
         return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
@@ -148,7 +148,7 @@ class DbSet {
         });
     }
     match(...items) {
-        return items.filter(w => w.DocumentType === this.DocumentType);
+        return items.filter(w => w.DocumentType === this._documentType);
     }
     get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {

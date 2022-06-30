@@ -100,7 +100,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             return String(selector(entity));
         });
 
-        return [this.DocumentType, ...keyData].join("/");
+        return [this._documentType, ...keyData].join("/");
     }
 
     isMatch(first: TEntity, second: TEntity) {
@@ -181,7 +181,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     match(...items: IDbRecordBase[]) {
-        return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
+        return items.filter(w => w.DocumentType === this._documentType) as TEntity[]
     }
 
     async get(...ids: string[]) {
