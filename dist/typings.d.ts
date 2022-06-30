@@ -89,6 +89,16 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @returns void
      */
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+    /**
+     * Get DbSet info
+     * @returns IDbSetInfo
+     */
+    info(): IDbSetInfo<TDocumentType, TEntity>;
+}
+export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
+    DocumentType: TDocumentType;
+    IdKeys: EntityIdKeys<TDocumentType, TEntity>;
+    Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
 }
 export declare type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
 export declare type DataContextEventCallback<TDocumentType> = ({ DocumentType }: {
@@ -122,6 +132,10 @@ export interface IIndexableEntity<T extends any = any> {
     [key: string]: T;
 }
 export interface IDbSetBase<TDocumentType extends string> {
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType(): TDocumentType;
     /**
      * Remove all entities from the underlying data context, saveChanges must be called to persist these changes to the store

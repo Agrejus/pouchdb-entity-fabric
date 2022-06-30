@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -13,7 +13,16 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
  */
 export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
 
+    /**
+     * Get the IdKeys for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get IdKeys() { return this._idKeys }
+
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType() { return this._documentType }
 
     private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
@@ -46,6 +55,14 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         for(let property of properties) {
             (this as any)[property] = (this as any)[property]
         }
+    }
+
+    info() {
+        return {
+            DocumentType: this._documentType,
+            IdKeys: this._idKeys,
+            Defaults: this._defaults
+        } as IDbSetInfo<TDocumentType, TEntity>
     }
 
     async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {

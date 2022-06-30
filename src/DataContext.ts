@@ -151,7 +151,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         "entity-updated": []
     }
 
-    private _dbSets: IDbSetBase<string>[] = [];
+    private _dbSets: { [key: string]: IDbSetBase<string> } = {} as { [key: string]: IDbSetBase<string> };
 
     constructor(name?: string, options?: DataContextOptions) {
         const { ...pouchDb } = options ?? {};
@@ -163,7 +163,15 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     async getAllDocs() {
-        return this.getAllData();
+        const all = await this.getAllData();
+
+        return all.map(w => {
+
+            const dbSet = this._dbSets[w.DocumentType] as IDbSet<any, any, any>;
+            const info = dbSet.info();
+
+            return this._makeTrackable(w, info.Defaults.retrieve)
+        });
     }
 
     /**
@@ -208,7 +216,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     private addDbSet(dbset: IDbSetBase<string>) {
-        this._dbSets.push(dbset);
+
+        const info = (dbset as IDbSet<any, any, any>).info();
+
+        if (this._dbSets[info.DocumentType] != null) {
+            throw new Error(`Can only have one DbSet per document type in a context, please create a new context instead`)
+        }
+
+        this._dbSets[info.DocumentType] = dbset;
     }
 
     /**
@@ -450,7 +465,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
         const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, {} as any, ...idKeys);
 
-        this._dbSets.push(dbSet);
+        this.addDbSet(dbSet)
 
         return dbSet;
     }
@@ -539,7 +554,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     static asUntracked(...entities: IDbRecordBase[]) {
-        return entities.map(w => ({...w}));
+        return entities.map(w => ({ ...w }));
     }
 
     static isProxy(entities: IDbRecordBase) {
@@ -548,7 +563,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     [Symbol.iterator]() {
         let index = -1;
-        const data = this._dbSets;
+        const data = Object.keys(this._dbSets).map(w => this._dbSets[w]);
 
         return {
             next: () => ({ value: data[++index], done: !(index in data) })

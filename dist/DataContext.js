@@ -144,12 +144,17 @@ class DataContext extends PouchDbInteractionBase {
             "entity-removed": [],
             "entity-updated": []
         };
-        this._dbSets = [];
+        this._dbSets = {};
         this._configuration = {};
     }
     getAllDocs() {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.getAllData();
+            const all = yield this.getAllData();
+            return all.map(w => {
+                const dbSet = this._dbSets[w.DocumentType];
+                const info = dbSet.info();
+                return this._makeTrackable(w, info.Defaults.retrieve);
+            });
         });
     }
     /**
@@ -190,7 +195,11 @@ class DataContext extends PouchDbInteractionBase {
         };
     }
     addDbSet(dbset) {
-        this._dbSets.push(dbset);
+        const info = dbset.info();
+        if (this._dbSets[info.DocumentType] != null) {
+            throw new Error(`Can only have one DbSet per document type in a context, please create a new context instead`);
+        }
+        this._dbSets[info.DocumentType] = dbset;
     }
     /**
      * Used by the context api
@@ -380,7 +389,7 @@ class DataContext extends PouchDbInteractionBase {
      */
     createDbSet(documentType, ...idKeys) {
         const dbSet = new DbSet_1.DbSet(documentType, this, {}, ...idKeys);
-        this._dbSets.push(dbSet);
+        this.addDbSet(dbSet);
         return dbSet;
     }
     query(callback) {
@@ -465,7 +474,7 @@ class DataContext extends PouchDbInteractionBase {
     }
     [Symbol.iterator]() {
         let index = -1;
-        const data = this._dbSets;
+        const data = Object.keys(this._dbSets).map(w => this._dbSets[w]);
         return {
             next: () => ({ value: data[++index], done: !(index in data) })
         };

@@ -366,98 +366,135 @@ const result = await context.purge();
 The DbSet Fluent API is a very powerful mechanism to create a dbset that will fit the software's needs.  With the Fluent API, a DbSet can exclude properties when adding them, have defaults to either retroactively add new columns or to set values for excluded properties.  There is also advanced entity key building, adding events, and extending the functionality of the dbset.
 
 #### DbSet Fluent API - Key Builder
-The key builder in the Fluent API can be used to build a custom key for each entity that is added to the dbset
+The key builder in the Fluent API can be used to build a custom key for each entity that is added to the dbset.  With the fluent key builder, the id will be created in the order the properties are specified.
 
-
-
-
-
-
-## Default Property Values
-With TypeScript/JavaScript, it can be hard to set default types unless a class is created and default types are set in the constructor.  This can get messy because extra syntax is required to create a class for each entity, instead of just an interface.  With an interface, they cannot have an initializer, meaning a default type cannot be set.  Also, when giving an Entity Type to a `DbSet<>`, optional properties will be optional throughout there usage, what if we want optional only on creation and set a default later?  To help with default property values, we can use property exclusion coupled with the `on()` event on a `DbSet<>`.  Below is an example of setting a sequence number to zero for every entity added, but not requiring the developer to set a sequence number when an item is being added and also maintaining the property as required (not optional).  
 
 ```typescript
-
 import { DataContext } from 'pouchdb-entity-fabric';
 
 export enum DocumentTypes {
-    SomeDocument = "SomeDocument"
+    MyFirstDocument = "MyFirstDocument"
 }
 
-interface ISomeEntity extends IDbRecord<DocumentTypes> {
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
     propertyOne: string;
     propertyTwo: string;
-    sequenceNumber: number;
+    dateProperty: Date
 }
 
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).keys(w => w.add("propertyOne").add(x => x.dateProperty.toISOString())).create();
+}
+```
+
+#### DbSet Fluent API - Exclusions
+Exclusions exist for developers to specify properties that need to be omitted when an entity is added to the dbset via the `add()` method.  When exclusions are specified, it is implied these properties will be set later in the `add` event or using defaults, below
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+    dateProperty: Date
+}
 
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
-
-    someDbSet = this.dbset<ISomeEntity>(DocumentTypes.SomeDocument).keys(w => w.add("propertyOne").add("propertyTwo")).exclude("sequenceNumber")..defaults({ sequenceNumber: 0 })create();
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).exclude("dateProperty").create();
 }
 
 const context = new PouchDbDataContext();
 
-// notice status is not required here, it will be set by the on event later
-const [ result ] = await context.someDbSet.add({ propertyOne: "some value", propertyTwo: "some value" });
+const [item] = await context.myFirstDbSet.add({
+    propertyOne: "some value",
+    propertyTwo: "some value"
+});
 
-await context.saveChanges();
+// PLEASE MAKE SURE dateProperty is set before calling save changes
+```
+
+#### DbSet Fluent API - Defaults
+Defaults are handy with exclusions becuase the value will be the same every time we add an entity or retroactively adding properties that are not nullable.  There are two defaults, `add` and `retrieve`.  `add` defaults will be set when `add()` is called on the dbset. `retrieve` defaults will be set when retrieving data from the dbset using one of `all()`, `filter()`, `find()`, `get()`, `first()`, `getAllDocs()`.  
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+    dateProperty: Date
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).exclude("dateProperty").defaults({ dateProperty: new Date() }).create();
+}
+
+const context = new PouchDbDataContext();
+
+const [item] = await context.myFirstDbSet.add({
+    propertyOne: "some value",
+    propertyTwo: "some value"
+});
+
+// dateProperty will be set to a new date on add and will be set when the document is retrieved if it does not exist
 
 // result
 {
     _id: "SomeDocument/some value/some value",
     _rev: "<generated>",
-    DocumentType: "SomeDocument",
-    sequenceNumber: 0,
+    dateProperty: new Date(),
+    DocumentType: "MyFirstDocument",
     propertyOne: "some value",
     propertyTwo: "some value"
 }
 ```
 
-## Extending DbSet
-A `DbSet<>` can be extended to override or add functionality to it
+Conversely, we can set defaults for `add` and `retrieve` if we need.
+
+#### DbSet Fluent API - Extending the DbSet
+Dev's can add more functionality to a dbset if needed by extending the existing dbset that gets created
+
 ```typescript
-enum DocumentTypes {
-    Notes = "Notes",
-    Contacts = "Contacts",
-    Books = "Books"
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
 }
 
-interface ISomeDocument extends IDbRecord<TDocumentType> {
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
     propertyOne: string;
     propertyTwo: string;
+    dateProperty: Date
 }
 
-interface IExtendedDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-    replaceAll(entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<void>;
-}
-
-export class ExtendedDbSetContext extends DataContext<DocumentTypes> {
-    constructor() {
-        super('some-db')
-    }
-
-    protected createExtendedDbSet<TEntity extends IBaseEntity, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: DocumentTypes, ...idKeys: IdKeys<TEntity>) {
-        const dbSet = this.createDbSet<TEntity, TExtraExclusions>(documentType, ...idKeys);
-        const result: IExtendedDbSet<DocumentTypes, TEntity, TExtraExclusions> = dbSet as any;
-
-        // extra db set methods here
-        result.replaceAll = async (entities: TEntity[]) => {
-            const items = await result.all();
-            await result.removeRange(items);
-            await result.addRange(entities);
-            await this.saveChanges();
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create(w => {
+        return {
+            ...w,
+            someNewMethod: () => {
+                return true
+            }
         }
-
-        return result;
-    }
-
-    myExtendedDbSet = this.createExtendedDbSet<IMyFirstEntity>(DocumentTypes.MyFirstDocument, "propertyOne", "propertyTwo");
+    });
 }
+
+const context = new PouchDbDataContext();
+
+const value = context.myFirstDbSet.someNewMethod();
+
+// value will be true
 ```
 
 ## Linking/Unlinking Entities
-Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.
+Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.  When an entity is linked, the dbset will automatically grab the latest _rev in the database for the document and set it on the linked entity.
 
 Unlinking entities is useful to make changes to the entity that will not be persisted to the underlying data store after saveChanges() is called.
 
@@ -466,7 +503,7 @@ Unlinking entities is useful to make changes to the entity that will not be pers
 
 const someNewContext = new PouchDbDataContext();
 
-someNewContext.myFirstDbSet.link(someEntity); // NOTE: Ensure changes are made to the entity after its attached
+await someNewContext.myFirstDbSet.link(someEntity); // NOTE: Ensure changes are made to the entity after its attached
 
 someEntity.propertyOne = "some changed value"
 
@@ -480,6 +517,39 @@ context.myFirstDbSet.unlink(someEntity);
 someEntity.propertyOne = "some changed value"
 
 await context.saveChanges(); // No Changes will be peristed
+```
+
+## Get All Documents
+If dev's want to get all documents in the database and filter that down by dbset, we can use `getAllDocs()` with `match()` to speed up this process.  `getAllDocs()` will be faster than fetching data on each dbset.
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument",
+    MySecondDocument = "MySecondDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+interface IMySecondEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
+    mySecondDbSet = this.dbset<IMySecondEntity>(DocumentTypes.MySecondDocument).create();
+}
+
+const context = new PouchDbDataContext();
+const all = await context.getAllDocs();
+const myFirstDocuments = await context.myFirstDbSet.match(...all);
+const mySecondDocuments = await context.mySecondDbSet.match(...all);
+
 ```
 
 ## DbSet Events
@@ -497,34 +567,36 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 ### DbSet Methods
 | Method | Description |
 | ----- | --- |
-| `add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<Awaited<TEntity>[]>` | Add an entity or entities to the context and return it as a reference, save changes must be called to persist changes |
-| `isMatch(first: TEntity, second: TEntity): boolean` | Checks for equality between two entities from the context.  This is useful to check and see if an entity belongs in the `DbSet` |
-| `remove(...ids: string[]): Promise<void>` | Remove an entity or entities by id from the context, save changes must be called to persist changes |
-| `remove(...entities: TEntity[]): Promise<void>` | Remove an entity or entities from the context, save changes must be called to persist changes |
+| `add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>` | Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
+| `isMatch(first: TEntity, second: TEntity): boolean` | Check for equality between two entities |
+| `remove(...ids: string[]): Promise<void>` | Remove one or more entities by id from the underlying data context, saveChanges must be called to persist these items to the store |
+| `remove(...entities: TEntity[]): Promise<void>` | Remove one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
 | `empty(): Promise<void>` | Remove all entities from the DbSet, save changes must be called to persist changes |
-| `all(): Promise<TEntity[]>` | Get all entities for the underlying document type |
+| `all(): Promise<TEntity[]>` | Return all items in the underlying data store for the document type |
 | `get(...ids: string[]): Promise<TEntity[]>` | Find entity by an id or ids |
-| `filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>` | Filter entities for the underlying document type |
-| `match(...items: IDbRecordBase[]): TEntity[]` | Matches base entities and returns entities with matching document types.  This is useful for matching entites from `getAllDocs` in the data context, because those entites are generic and can belong to any `DbSet` |
+| `filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>` | Filter items in the underlying data store and return the results |
+| `match(...items: IDbRecordBase[]): TEntity[]` | Matches items with the same document type.  Useful for retrieving all docs and calling match() to find the ones that belong in the db set |
 | `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity \| undefined>` | Find an entity for the underlying document type |
 | `unlink(...entities: TEntity[]): void` | Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store |
-| `link(...entites: TEntity[]): void` | Link an existing entitiy or entities to the underlying Data Context from another Data Context, saveChanges must be called to persist these items to the store |
+| `link(...entites: TEntity[]): Promise<void>` | Link an existing entitiy or entities to the underlying Data Context from another Data Context, saveChanges must be called to persist these items to the store |
 | `first(): Promise<TEntity>` | Get first item in the DbSet |  
 | `on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void` | Called when an item is queued for creation in the underlying data context |
 | `on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> \| DbSetIdOnlyEventCallback): void` | Called when an item is queued for removal in the underlying data context |
+| `nfo(): IDbSetInfo<TDocumentType, TEntity>` | Get DbSet info |
 
 ### DataContext Methods
 | Method | Description |
 | ----- | --- |
 | `saveChanges(): Promise<number>` | Persist all changes to PouchDB, returns a count of all documents modified |
 | `getAllDocs(): Promise<IDbRecordBase[]>` | Get all documents regardless of document type |
-| `protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) \| void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>` | Method used to create a DbSet in the context.  NOTE: This is a protected method |
+| `protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType): IDbSet<TDocumentType, TEntity, TExtraExclusions>` | Starts the dbset fluent API.  Only required function call is create(), all others are optional |
 | `on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void` | Subscribe to events on the data context |
 | `hasPendingChanges(): boolean` | Check whether or not the context has any pending changes |
 | `query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>` | Invoke a query on PouchDB and return the result |
 | `empty(): Promise<void>` | Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store |
 | `destroyDatabase(): Promise<void>` | Destroy Pouch Database |
 | `optimize(): Promise<void>` | Add optimizations to increase performance of PouchDB |
+| `protected createDb():PouchDB.Database<{}> ` | Can override and create a new instance of PouchDB |
 
 ## Issues
 
@@ -578,14 +650,16 @@ export { transferHandlers, wrap, expose };
 - Added `DbSetBuilder<>`.  Called inside of `DataContext<>` using `this.dbset()`
 - Added `purge()` on `DataContext<>`
 - Added `protected createDb()` on `DataContext<>`
+- `getAllDocs()` will now return tracked entities
+- Added `asUntracked()` to `DataContext<>`
+- Added `isProxy()` to `DataContext<>`
 - Improved persistance performance for removing entities:
 
-|                          |      v1.1.0      | v1.2.0   |
+|                          |      v1.2.0      | v1.3.0   |
 | ------------------------ | ---------------- | -------- |
 | `remove` - 1 Entity | ~10ms            | ~10ms    |
 | `remove` - 50 Entities | ~850ms        | ~115ms   |
 | `remove` - 2000 Entities | N/A         | ~30000ms | 
-
 
         
     

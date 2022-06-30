@@ -39,8 +39,23 @@ class DbSet {
             this[property] = this[property];
         }
     }
+    /**
+     * Get the IdKeys for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get IdKeys() { return this._idKeys; }
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType() { return this._documentType; }
+    info() {
+        return {
+            DocumentType: this._documentType,
+            IdKeys: this._idKeys,
+            Defaults: this._defaults
+        };
+    }
     add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = this._api.getTrackedData();

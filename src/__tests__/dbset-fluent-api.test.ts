@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 describe('dbset - fluent api', () => {
 
-    const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
+    const dbs: { [key: string]: DataContext<DocumentTypes> } = {}
     const dbFactory = <T extends typeof PouchDbDataContext>(Context: T, dbname?: string) => {
         const name = dbname ?? `${uuidv4()}-db`;
         const result = new Context(name);
@@ -15,12 +15,27 @@ describe('dbset - fluent api', () => {
         return result;
     }
 
+    const createDbContexts = <T extends DataContext<DocumentTypes>>(factory: (name: string) => T[]) => {
+        const name = `${uuidv4()}-db`;
+        const contexts = factory(name);
+
+        for (const context of contexts) {
+            dbs[name] = context;
+        }
+
+        return contexts;
+    }
+
     PouchDB.plugin(memoryAdapter);
 
     enum DocumentTypes {
         Notes = "Notes",
         Contacts = "Contacts",
+        OverrideContacts = "OverrideContacts",
         Books = "Books",
+        BooksWithDefaults = "BooksWithDefaults",
+        BooksWithNoDefaults = "BooksWithNoDefaults",
+        BooksWithTwoDefaults = "BooksWithTwoDefaults",
         Cars = "Cars",
         Preference = "Preference"
     }
@@ -64,24 +79,35 @@ describe('dbset - fluent api', () => {
             super(name);
         }
 
-        async empty() {
-            for (let dbset of this) {
-                await dbset.empty();
-            }
-
-            await this.saveChanges();
-        }
-
         notes = this.dbset<INote>(DocumentTypes.Notes).create();
         contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
         books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
         cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
         preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
 
-        overrideContacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, otherFirst: w.first }));
-        booksWithDefaults = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
-        booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
-        booksNoDefaults = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
+        overrideContacts = this.dbset<IContact>(DocumentTypes.OverrideContacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, otherFirst: w.first }));
+        booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
+        booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
+        booksNoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithNoDefaults).exclude("status", "rejectedCount").create();
+    }
+
+    class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
+
+        constructor(name: string) {
+            super(name);
+        }
+
+        booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").create();
+    }
+
+
+    class BooksWithTwoDefaultContext extends DataContext<DocumentTypes> {
+
+        constructor(name: string) {
+            super(name);
+        }
+
+        booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").create();
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
@@ -881,28 +907,28 @@ describe('dbset - fluent api', () => {
         expect(book.status).toBe("pending");
         expect(book.rejectedCount).toBe(0);
         expect(book.author).toBe("james");
-        expect(book.DocumentType).toBe(DocumentTypes.Books);
+        expect(book.DocumentType).toBe(DocumentTypes.BooksWithDefaults);
         expect(book.publishDate).toBe(date);
         expect(book._id).toBeDefined();
         expect(book._rev).not.toBeDefined();
     });
 
     it('dbset should set defaults after fetch', async () => {
-        const context = dbFactory(PouchDbDataContext);
+        const [missingContext, context] = createDbContexts(name => [new BooksWithOneDefaultContext(name), new PouchDbDataContext(name)]);
         const date = new Date();
-        await context.booksNoDefaults.add({
+        await missingContext.booksWithDefaults.add({
             author: "james",
             publishDate: date
         });
 
-        await context.saveChanges();
+        await missingContext.saveChanges();
 
         const book = await context.booksWithDefaults.first();
 
         expect(book.status).toBe("pending");
         expect(book.rejectedCount).toBe(0);
         expect(book.author).toBe("james");
-        expect(book.DocumentType).toBe(DocumentTypes.Books);
+        expect(book.DocumentType).toBe(DocumentTypes.BooksWithDefaults);
         expect(book.publishDate).toBe(date.toISOString());
         expect(book._id).toBeDefined();
         expect(book._rev).toBeDefined();
@@ -952,14 +978,14 @@ describe('dbset - fluent api', () => {
     });
 
     it('dbset should set defaults after fetch for add and retrieve', async () => {
-        const context = dbFactory(PouchDbDataContext);
+        const [missingContext, context] = createDbContexts(name => [new BooksWithTwoDefaultContext(name), new PouchDbDataContext(name)]);
         const date = new Date();
-        await context.booksNoDefaults.add({
+        await missingContext.booksWithTwoDefaults.add({
             author: "james",
             publishDate: date
         });
 
-        await context.saveChanges();
+        await missingContext.saveChanges();
 
         const retrievedBook = await context.booksWithTwoDefaults.first();
 
@@ -971,7 +997,7 @@ describe('dbset - fluent api', () => {
         expect(retrievedBook.status).toBe("approved");
         expect(retrievedBook.rejectedCount).toBe(-1);
         expect(retrievedBook.author).toBe("james");
-        expect(retrievedBook.DocumentType).toBe(DocumentTypes.Books);
+        expect(retrievedBook.DocumentType).toBe(DocumentTypes.BooksWithTwoDefaults);
         expect(retrievedBook.publishDate).toBe(date.toISOString());
         expect(retrievedBook._id).toBeDefined();
         expect(retrievedBook._rev).toBeDefined();
@@ -979,7 +1005,42 @@ describe('dbset - fluent api', () => {
         expect(addedBook.status).toBe("pending");
         expect(addedBook.rejectedCount).toBe(0);
         expect(addedBook.author).toBe("james");
-        expect(addedBook.DocumentType).toBe(DocumentTypes.Books);
+        expect(addedBook.DocumentType).toBe(DocumentTypes.BooksWithTwoDefaults);
+        expect(addedBook.publishDate).toBe(date);
+        expect(addedBook._id).toBeDefined();
+        expect(addedBook._rev).not.toBeDefined();
+    });
+
+    it('dbset should set defaults after fetch for add and retrieve for all docs', async () => {
+        const [missingContext, context] = createDbContexts(name => [new BooksWithTwoDefaultContext(name), new PouchDbDataContext(name)]);
+        const date = new Date();
+        await missingContext.booksWithTwoDefaults.add({
+            author: "james",
+            publishDate: date
+        });
+
+        await missingContext.saveChanges();
+
+        const all = await context.getAllDocs();
+        const [retrievedBook] = context.booksWithTwoDefaults.match(...all)
+
+        const [addedBook] = await context.booksWithTwoDefaults.add({
+            author: "james",
+            publishDate: date
+        });
+
+        expect(retrievedBook.status).toBe("approved");
+        expect(retrievedBook.rejectedCount).toBe(-1);
+        expect(retrievedBook.author).toBe("james");
+        expect(retrievedBook.DocumentType).toBe(DocumentTypes.BooksWithTwoDefaults);
+        expect(retrievedBook.publishDate).toBe(date.toISOString());
+        expect(retrievedBook._id).toBeDefined();
+        expect(retrievedBook._rev).toBeDefined();
+
+        expect(addedBook.status).toBe("pending");
+        expect(addedBook.rejectedCount).toBe(0);
+        expect(addedBook.author).toBe("james");
+        expect(addedBook.DocumentType).toBe(DocumentTypes.BooksWithTwoDefaults);
         expect(addedBook.publishDate).toBe(date);
         expect(addedBook._id).toBeDefined();
         expect(addedBook._rev).not.toBeDefined();

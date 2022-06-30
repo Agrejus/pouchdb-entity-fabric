@@ -106,6 +106,18 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @returns void
      */
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+
+    /**
+     * Get DbSet info
+     * @returns IDbSetInfo
+     */
+    info() : IDbSetInfo<TDocumentType, TEntity>
+}
+
+export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
+    DocumentType: TDocumentType,
+    IdKeys: EntityIdKeys<TDocumentType, TEntity>,
+    Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>
 }
 
 export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -138,6 +150,10 @@ export interface IIndexableEntity<T extends any = any> {
 
 export interface IDbSetBase<TDocumentType extends string> {
 
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType(): TDocumentType;
 
     /**

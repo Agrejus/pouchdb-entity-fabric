@@ -18,8 +18,12 @@ describe('data context', () => {
 
     enum DocumentTypes {
         Notes = "Notes",
+        NotesTest = "NotesTest",
+        ExtendedNotes = "ExtendedNotes",
         Contacts = "Contacts",
-        Books = "Books"
+        ExtendedContacts = "ExtendedContacts",
+        Books = "Books",
+        ExtendedBooks = "ExtendedBooks"
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -61,9 +65,9 @@ describe('data context', () => {
         contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
         books = this.createDbSet<IBook, "status">(DocumentTypes.Books);
 
-        extendedNotes = this.dbset<INote>(DocumentTypes.Notes).create(w => ({ ...w, extendedFn: () => true }));
-        extendedContacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, extendedFn: () => true }));
-        extendedBooks = this.dbset<IBook>(DocumentTypes.Books).exclude("status").create(w => ({ ...w, extendedFn: () => true }));
+        extendedNotes = this.dbset<INote>(DocumentTypes.ExtendedNotes).create(w => ({ ...w, extendedFn: () => true }));
+        extendedContacts = this.dbset<IContact>(DocumentTypes.ExtendedContacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, extendedFn: () => true }));
+        extendedBooks = this.dbset<IBook>(DocumentTypes.ExtendedBooks).exclude("status").create(w => ({ ...w, extendedFn: () => true }));
     }
 
     class CreateDbOverrideContext extends PouchDbDataContext {
@@ -126,7 +130,7 @@ describe('data context', () => {
         expect(contacts.length).toBe(1);
         expect(contact._id).toBeDefined();
         expect(contact._rev).toBeDefined();
-        expect(contact.DocumentType).toBe(DocumentTypes.Contacts)
+        expect(contact.DocumentType).toBe(DocumentTypes.ExtendedContacts)
     });
 
     it('should save changes when entities are added and a non auto generated id', async () => {
@@ -186,11 +190,11 @@ describe('data context', () => {
         expect(contacts.length).toBe(2);
         expect(one._id).toBeDefined();
         expect(one._rev).toBeDefined();
-        expect(one.DocumentType).toBe(DocumentTypes.Contacts);
+        expect(one.DocumentType).toBe(DocumentTypes.ExtendedContacts);
 
         expect(two._id).toBeDefined();
         expect(two._rev).toBeDefined();
-        expect(two.DocumentType).toBe(DocumentTypes.Contacts);
+        expect(two.DocumentType).toBe(DocumentTypes.ExtendedContacts);
     });
 
     it('should add entity with auto generated id', async () => {
@@ -290,10 +294,10 @@ describe('data context', () => {
         expect(contacts.length).toBe(2);
         expect(first._id).toBeDefined();
         expect(first._rev).toBeDefined();
-        expect(first.DocumentType).toBe(DocumentTypes.Contacts);
+        expect(first.DocumentType).toBe(DocumentTypes.ExtendedContacts);
         expect(second._id).toBeDefined();
         expect(second._rev).toBeDefined();
-        expect(second.DocumentType).toBe(DocumentTypes.Contacts);
+        expect(second.DocumentType).toBe(DocumentTypes.ExtendedContacts);
     });
 
     it('should save changes when entity is removed', async () => {
@@ -1380,7 +1384,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).create();
+            dbsetTest = this.dbset<INote>(DocumentTypes.NotesTest).create();
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -1396,7 +1400,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).create(w => {
+            dbsetTest = this.dbset<INote>(DocumentTypes.NotesTest).create(w => {
                 return {
                     ...w,
                     newFunction: () => {
