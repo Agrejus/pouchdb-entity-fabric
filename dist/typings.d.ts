@@ -107,6 +107,17 @@ export declare type EntityIdKey<TDocumentType extends string, TEntity extends ID
 export declare type DeepPartial<T> = T extends object ? {
     [P in keyof T]?: DeepPartial<T[P]>;
 } : T;
+export declare type DbSetActionDictionaryOptional<T> = DbSetActionDictionaryRequired<T> | {
+    add: T;
+} | {
+    retrieve: T;
+};
+export declare type DbSetActionDictionaryRequired<T> = {
+    add: T;
+    retrieve: T;
+};
+export declare type DbSetPickDefaultActionOptional<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = DbSetActionDictionaryOptional<DeepPartial<OmittedEntity<TEntity>>>;
+export declare type DbSetPickDefaultActionRequired<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = DbSetActionDictionaryRequired<DeepPartial<OmittedEntity<TEntity>>>;
 export interface IIndexableEntity<T extends any = any> {
     [key: string]: T;
 }

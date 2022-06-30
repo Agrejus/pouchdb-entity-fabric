@@ -3,17 +3,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DbSetBuilder = void 0;
 const DbSet_1 = require("./DbSet");
 class DbSetBuilder {
-    constructor(params) {
+    constructor(onCreate, params) {
         const { context, documentType, idKeys, defaults, exclusions, events } = params;
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys !== null && idKeys !== void 0 ? idKeys : [];
-        this._defaults = defaults !== null && defaults !== void 0 ? defaults : {};
+        this._defaults = defaults !== null && defaults !== void 0 ? defaults : { add: {}, retrieve: {} };
         this._exclusions = exclusions !== null && exclusions !== void 0 ? exclusions : [];
         this._events = events !== null && events !== void 0 ? events : {
             "add": [],
             "remove": []
         };
+        this._onCreate = onCreate;
     }
     _buildParams() {
         return {
@@ -35,18 +36,19 @@ class DbSetBuilder {
         const idBuilder = new IdBuilder();
         builder(idBuilder);
         this._idKeys.push(...idBuilder.Ids);
-        return new DbSetBuilder(this._buildParams());
+        return new DbSetBuilder(this._onCreate, this._buildParams());
     }
-    /**
-     * Set default values on add or retrieval of entities.  This is useful to retroactively add new properties
-     * that are not nullable or to supply a default to an excluded property.  Default's will only be
-     * set when the property does not exist or is excluded
-     * @param defaultEntity Pick one or more properties and set their default value
-     * @returns DbSetBuilder
-     */
-    defaults(defaultEntity) {
-        this._defaults = Object.assign(Object.assign({}, this._defaults), defaultEntity);
-        return new DbSetBuilder(this._buildParams());
+    defaults(value) {
+        if ("add" in value) {
+            this._defaults = Object.assign(Object.assign({}, this._defaults), { add: Object.assign(Object.assign({}, this._defaults.add), value.add) });
+        }
+        if ("retrieve" in value) {
+            this._defaults = Object.assign(Object.assign({}, this._defaults), { retrieve: Object.assign(Object.assign({}, this._defaults.retrieve), value.retrieve) });
+        }
+        if (!("retrieve" in value) && !("add" in value)) {
+            this._defaults = Object.assign(Object.assign({}, this._defaults), { add: Object.assign(Object.assign({}, this._defaults.add), value), retrieve: Object.assign(Object.assign({}, this._defaults.add), value) });
+        }
+        return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
      * Exclude properties from the DbSet.add(). This is useful for defaults.  Properties can be excluded
@@ -57,11 +59,11 @@ class DbSetBuilder {
      */
     exclude(...exclusions) {
         this._exclusions.push(...exclusions);
-        return new DbSetBuilder(this._buildParams());
+        return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     on(event, callback) {
         this._events[event].push(callback);
-        return new DbSetBuilder(this._buildParams());
+        return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
      * Must call to fully create the DbSet.  Can use the extend callback to add functionality to the DbSet
@@ -70,7 +72,9 @@ class DbSetBuilder {
      */
     create(extend = w => w) {
         const dbset = new DbSet_1.DbSet(this._documentType, this._context, this._defaults, ...this._idKeys);
-        return extend(dbset);
+        const result = extend(dbset);
+        this._onCreate(result);
+        return result;
     }
 }
 exports.DbSetBuilder = DbSetBuilder;

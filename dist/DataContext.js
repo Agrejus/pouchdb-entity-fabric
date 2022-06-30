@@ -189,6 +189,9 @@ class DataContext extends PouchDbInteractionBase {
             get: this.get.bind(this)
         };
     }
+    addDbSet(dbset) {
+        this._dbSets.push(dbset);
+    }
     /**
      * Used by the context api
      * @param data
@@ -268,6 +271,12 @@ class DataContext extends PouchDbInteractionBase {
                 }
                 indexableEntity[key] = value;
                 return true;
+            },
+            get: (target, property, receiver) => {
+                if (property === DataContext.PROXY_MARKER) {
+                    return true;
+                }
+                return Reflect.get(target, property, receiver);
             }
         };
         return new Proxy(Object.assign(Object.assign({}, defaults), entity), proxyHandler);
@@ -361,7 +370,7 @@ class DataContext extends PouchDbInteractionBase {
      * @returns DbSetBuilder
      */
     dbset(documentType) {
-        return new DbSetBuilder_1.DbSetBuilder({ documentType, context: this });
+        return new DbSetBuilder_1.DbSetBuilder(this.addDbSet.bind(this), { documentType, context: this });
     }
     /**
      * Create a DbSet
@@ -448,6 +457,12 @@ class DataContext extends PouchDbInteractionBase {
             }), false);
         });
     }
+    static asUntracked(...entities) {
+        return entities.map(w => (Object.assign({}, w)));
+    }
+    static isProxy(entities) {
+        return entities[DataContext.PROXY_MARKER] === true;
+    }
     [Symbol.iterator]() {
         let index = -1;
         const data = this._dbSets;
@@ -457,4 +472,5 @@ class DataContext extends PouchDbInteractionBase {
     }
 }
 exports.DataContext = DataContext;
+DataContext.PROXY_MARKER = '__isProxy';
 //# sourceMappingURL=DataContext.js.map

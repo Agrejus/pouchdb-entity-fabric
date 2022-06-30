@@ -169,6 +169,7 @@ describe('dbset - fluent api', () => {
             publishDate: new Date()
         });
 
+
         await context.saveChanges();
 
         expect(newBook._rev).toBeDefined();

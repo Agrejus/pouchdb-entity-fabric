@@ -39,6 +39,7 @@ declare abstract class PouchDbInteractionBase<TDocumentType extends string> exte
     protected getAllData(documentType?: TDocumentType): Promise<IDbRecordBase[]>;
 }
 export declare class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
+    static PROXY_MARKER: string;
     protected _removals: IDbRecordBase[];
     protected _additions: IDbRecordBase[];
     protected _attachments: AdvancedDictionary<IDbRecordBase>;
@@ -62,6 +63,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns IData
      */
     private _getApi;
+    private addDbSet;
     /**
      * Used by the context api
      * @param data
@@ -109,6 +111,12 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     empty(): Promise<void>;
     destroyDatabase(): Promise<void>;
     purge(purgeType?: "memory" | "disk"): Promise<IPurgeResponse>;
+    static asUntracked(...entities: IDbRecordBase[]): {
+        _id: string;
+        _rev: string;
+        DocumentType: any;
+    }[];
+    static isProxy(entities: IDbRecordBase): boolean;
     [Symbol.iterator](): {
         next: () => {
             value: IDbSetBase<string>;

@@ -2,7 +2,7 @@ import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder } from './DbSetBuilder';
 
@@ -135,6 +135,8 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 }
 
 export class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
+
+    static PROXY_MARKER: string = '__isProxy';
 
     protected _removals: IDbRecordBase[] = [];
     protected _additions: IDbRecordBase[] = [];
@@ -310,10 +312,18 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 indexableEntity[key] = value;
 
                 return true;
+            },
+            get: (target, property, receiver) => {
+
+                if (property === DataContext.PROXY_MARKER) {
+                    return true;
+                }
+
+                return Reflect.get(target, property, receiver);
             }
         }
 
-        return new Proxy({ ...defaults, ...entity }, proxyHandler) as any
+        return new Proxy({ ...defaults, ...entity }, proxyHandler) as T
     }
 
     private _getPendingChanges() {
@@ -526,6 +536,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 }
             }, closeDestination)
         }, false);
+    }
+
+    static asUntracked(...entities: IDbRecordBase[]) {
+        return entities.map(w => ({...w}));
+    }
+
+    static isProxy(entities: IDbRecordBase) {
+        return (entities as IIndexableEntity)[DataContext.PROXY_MARKER] === true;
     }
 
     [Symbol.iterator]() {
