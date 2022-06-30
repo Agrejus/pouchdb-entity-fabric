@@ -23,7 +23,7 @@ class DbSet {
      * @param context Will be 'this' from the data context
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
-    constructor(documentType, context, ...idKeys) {
+    constructor(documentType, context, defaults, ...idKeys) {
         this._events = {
             "add": [],
             "remove": []
@@ -31,10 +31,31 @@ class DbSet {
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys;
+        this._defaults = defaults;
         this._api = this._context._getApi();
+        const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
+        // Allow spread operator to work on the class for extending it
+        for (let property of properties) {
+            this[property] = this[property];
+        }
     }
+    /**
+     * Get the IdKeys for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get IdKeys() { return this._idKeys; }
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType() { return this._documentType; }
+    info() {
+        return {
+            DocumentType: this._documentType,
+            IdKeys: this._idKeys,
+            Defaults: this._defaults
+        };
+    }
     add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = this._api.getTrackedData();
@@ -55,7 +76,7 @@ class DbSet {
                     addItem._id = id;
                 }
                 this._events["add"].forEach(w => w(entity));
-                const trackableEntity = this._api.makeTrackable(addItem);
+                const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add);
                 add.push(trackableEntity);
                 return trackableEntity;
             });
@@ -65,14 +86,15 @@ class DbSet {
         if (this._idKeys.length === 0) {
             return (0, uuid_1.v4)();
         }
-        const keyData = Object.keys(entity).filter((w) => this._idKeys.includes(w)).map(w => {
-            const value = entity[w];
-            if (value instanceof Date) {
-                return value.toISOString();
+        const indexableEntity = entity;
+        const keyData = this._idKeys.map(w => {
+            if (typeof w === "string") {
+                return indexableEntity[w];
             }
-            return value;
+            const selector = w;
+            return String(selector(entity));
         });
-        return [this.DocumentType, ...keyData].join("/");
+        return [this._documentType, ...keyData].join("/");
     }
     isMatch(first, second) {
         return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
@@ -122,7 +144,7 @@ class DbSet {
     _all() {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._api.getAllData(this._documentType);
-            return data.map(w => this._api.makeTrackable(w));
+            return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve));
         });
     }
     all() {
@@ -140,8 +162,8 @@ class DbSet {
             return result;
         });
     }
-    match(items) {
-        return items.filter(w => w.DocumentType === this.DocumentType);
+    match(...items) {
+        return items.filter(w => w.DocumentType === this._documentType);
     }
     get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -163,6 +185,9 @@ class DbSet {
         });
     }
     detach(...entities) {
+        this.unlink(...entities);
+    }
+    unlink(...entities) {
         const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n');
@@ -170,14 +195,30 @@ class DbSet {
         }
         this._detachItems(entities);
     }
+    link(...entities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
+            if (validationFailures.length > 0) {
+                const errors = validationFailures.map(w => w.error).join('\r\n');
+                throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
+            }
+            // Find the existing _rev just in case it's not in sync
+            const found = yield this._api.get(...entities.map(w => w._id));
+            if (found.length != entities.length) {
+                throw new Error(`Error linking entities, document not found`);
+            }
+            const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
+            entities.forEach(w => {
+                this._api.makeTrackable(w, this._defaults.add);
+                w._rev = foundDictionary[w._id];
+            });
+            this._api.send(entities, true);
+        });
+    }
     attach(...entities) {
-        const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
-        if (validationFailures.length > 0) {
-            const errors = validationFailures.map(w => w.error).join('\r\n');
-            throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
-        }
-        entities.forEach(w => this._api.makeTrackable(w));
-        this._api.send(entities, true);
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.link(...entities);
+        });
     }
     first() {
         return __awaiter(this, void 0, void 0, function* () {

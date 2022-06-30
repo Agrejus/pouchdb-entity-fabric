@@ -170,7 +170,7 @@ export interface ITest20 extends IDbRecord<PerformanceDocumentTypes> {
     test4: string;
 }
 
-const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], isDbSet: boolean, ...prototypes: any[]) => {
+const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], propertyTimesToIgnore: string[], isDbSet: boolean, ...prototypes: any[]) => {
     const keys = [...prototypes.map(w => Object.getOwnPropertyNames(w))].flat().filter(w => w.startsWith("_") === false && propertiesToIgnore.includes(w) === false);
 
     if (!isDbSet) {
@@ -193,6 +193,10 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
                     min: minVaue,
                     max: maxValue,
                     average: averageValue
+                }
+
+                if (propertyTimesToIgnore.includes(item.name) === false) {
+                    result[item.name]['times'] = times;
                 }
             }
             const fileNameAndPath = `./performance/metrics/v${packageJson.version}/performance-${name}.json`;
@@ -229,7 +233,7 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], is
 export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTypes> {
 
     constructor(options?: DataContextOptions) {
-        super('test-db', options);
+        super('test-db1', options);
         const propertiesToIgnore = [
             'insertEntity',
             'getContext',
@@ -245,7 +249,7 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'PerformanceDbDataContext'
         ]
 
-        overrideWithPerformance(this, propertiesToIgnore, false, DataContext.prototype, PerformanceDbDataContext.prototype);
+        overrideWithPerformance(this, propertiesToIgnore, ['add', 'remove'], false, DataContext.prototype, PerformanceDbDataContext.prototype);
     }
 
     protected async bulkDocs(entities: IDbRecordBase[]) {
@@ -258,8 +262,8 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
         return await this.doWork(w => w.getIndexes());
     }
 
-    protected createPerformanceDbSet<TEntity extends IDbRecord<PerformanceDocumentTypes>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: PerformanceDocumentTypes, ...idKeys: EntityIdKeys<PerformanceDocumentTypes, TEntity>): IDbSet<PerformanceDocumentTypes, TEntity, TExtraExclusions> {
-        const dbSet = this.createDbSet<TEntity, TExtraExclusions>(documentType, ...idKeys)
+    protected createPerformanceDbSet<TEntity extends IDbRecord<PerformanceDocumentTypes>>(documentType: PerformanceDocumentTypes) {
+        const dbSet = this.dbset<TEntity>(documentType).create()
 
         const propertiesToIgnore = [
             'DbSet',
@@ -268,7 +272,7 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'DocumentType'
         ];
 
-        overrideWithPerformance(dbSet, propertiesToIgnore, true, DbSet.prototype);
+        overrideWithPerformance(dbSet, propertiesToIgnore, [], true, DbSet.prototype);
 
         return dbSet;
     }

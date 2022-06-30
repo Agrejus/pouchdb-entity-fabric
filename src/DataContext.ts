@@ -1,22 +1,30 @@
 import PouchDB from 'pouchdb';
 import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbAdditionRecord, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, ITrackedData } from './typings';
+import memoryAdapter from 'pouchdb-adapter-memory';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
+import { AdvancedDictionary } from './AdvancedDictionary';
+import { DbSetBuilder } from './DbSetBuilder';
 
 PouchDB.plugin(findAdapter);
+PouchDB.plugin(memoryAdapter);
 
 abstract class PouchDbBase {
 
-    private _options?: PouchDB.Configuration.DatabaseConfiguration;
-    private _name?: string;
+    protected readonly _dbOptions?: PouchDB.Configuration.DatabaseConfiguration;
+    private readonly _dbName?: string;
 
     constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
-        this._options = options;
-        this._name = name;
+        this._dbOptions = options;
+        this._dbName = name;
+    }
+
+    protected createDb() {
+        return new PouchDB(this._dbName, this._dbOptions);
     }
 
     protected async doWork<T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose: boolean = true) {
-        const db = new PouchDB(this._name, this._options);
+        const db = this.createDb();
         const result = await action(db);
 
         if (shouldClose) {
@@ -85,6 +93,7 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
      * @param ids 
      */
     protected async get(...ids: string[]) {
+
         if (ids.length === 0) {
             return [];
         }
@@ -97,6 +106,7 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
             if ('error' in result) {
                 throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`)
             }
+
             return result.ok as IDbRecordBase;
         });
     }
@@ -119,7 +129,6 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
             return result.docs as IDbRecordBase[];
         } catch (e) {
-            console.log(e);
             return [] as IDbRecordBase[];
         }
     }
@@ -127,9 +136,11 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
 export class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
 
+    static PROXY_MARKER: string = '__isProxy';
+
     protected _removals: IDbRecordBase[] = [];
     protected _additions: IDbRecordBase[] = [];
-    protected _attachments: IDbRecordBase[] = [];
+    protected _attachments: AdvancedDictionary<IDbRecordBase> = new AdvancedDictionary<IDbRecordBase>("_id");
 
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
@@ -140,7 +151,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         "entity-updated": []
     }
 
-    private _dbSets: IDbSetBase<string>[] = [];
+    private _dbSets: { [key: string]: IDbSetBase<string> } = {} as { [key: string]: IDbSetBase<string> };
 
     constructor(name?: string, options?: DataContextOptions) {
         const { ...pouchDb } = options ?? {};
@@ -152,7 +163,20 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     async getAllDocs() {
-        return this.getAllData();
+        const all = await this.getAllData();
+
+        return all.map(w => {
+
+            const dbSet = this._dbSets[w.DocumentType] as (IDbSet<any, any, any> | undefined);
+
+            if (dbSet) {
+                const info = dbSet.info();
+
+                return this._makeTrackable(w, info.Defaults.retrieve)
+            }
+
+            return this._makeTrackable(w, {})
+        });
     }
 
     /**
@@ -160,6 +184,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @returns void
      */
     async optimize() {
+
         // once this index is created any read's will rebuild the index 
         // automatically.  The first read may be slow once new data is created
         await this.doWork(async w => {
@@ -195,12 +220,23 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    private addDbSet(dbset: IDbSetBase<string>) {
+
+        const info = (dbset as IDbSet<any, any, any>).info();
+
+        if (this._dbSets[info.DocumentType] != null) {
+            throw new Error(`Can only have one DbSet per document type in a context, please create a new context instead`)
+        }
+
+        this._dbSets[info.DocumentType] = dbset;
+    }
+
     /**
      * Used by the context api
      * @param data 
      */
     private _detach(data: IDbRecordBase[]) {
-        this._attachments = this._attachments.filter(w => data.some(x => x._id === w._id) === false);
+        this._attachments.remove(...data);
     }
 
     /**
@@ -208,20 +244,16 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @param data 
      */
     private _sendData(data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) {
-        if (shouldThrowOnDuplicate) {
-            const duplicate = this._attachments.find(w => data.some(x => x._id === w._id));
+        if (shouldThrowOnDuplicate && data.length > 0) {
+
+            const [duplicate] = this._attachments.get(...data)
 
             if (duplicate) {
                 throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
             }
         }
 
-        this._setAttachments(data);
-    }
-
-    private _setAttachments(data: IDbRecordBase[]) {
-        // do not filter duplicates in case devs return multiple instances of the same entity
-        this._attachments = [...this._attachments, ...data];
+        this._attachments.push(...data)
     }
 
     /**
@@ -241,16 +273,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         this._removals = [];
         this._removeById = [];
 
-        for (let removal of removals) {
-            const index = this._attachments.findIndex(w => w._id === removal._id);
-
-            if (index !== -1) {
-                this._attachments.splice(index, 1)
-            }
-        }
+        this._attachments.remove(...removals);
 
         // move additions to attachments so we can track changes
-        this._setAttachments(add);
+        this._attachments.push(...add);
     }
 
     /**
@@ -284,7 +310,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
-    private _makeTrackable<T extends Object>(entity: T): T {
+    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
@@ -306,14 +332,23 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 indexableEntity[key] = value;
 
                 return true;
+            },
+            get: (target, property, receiver) => {
+
+                if (property === DataContext.PROXY_MARKER) {
+                    return true;
+                }
+
+                return Reflect.get(target, property, receiver);
             }
         }
 
-        return new Proxy(entity, proxyHandler) as any
+        return new Proxy({ ...defaults, ...entity }, proxyHandler) as T
     }
 
     private _getPendingChanges() {
         const { add, remove, removeById } = this._getTrackedData();
+
         const updated = this._attachments.filter(w => {
 
             const indexableEntity = w as IIndexableEntity;
@@ -355,11 +390,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
-    private _makePristine(entity: IDbRecordBase) {
-        const indexableEntity = entity as IIndexableEntity;
+    private _makePristine(...entities: IDbRecordBase[]) {
 
-        // make pristine again
-        delete indexableEntity[PRISTINE_ENTITY_KEY];
+        for (let i = 0; i < entities.length; i++) {
+            const indexableEntity = entities[i] as IIndexableEntity;
+
+            // make pristine again
+            delete indexableEntity[PRISTINE_ENTITY_KEY];
+        }
     }
 
     private async _getModifications() {
@@ -369,7 +407,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         return {
             add,
-            remove: [...remove, ...extraRemovals].map(w => ({ ...w, _deleted: true })),
+            remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
             updated
         }
     }
@@ -382,12 +420,12 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             const modifications = [...add, ...remove, ...updated];
 
             // remove pristine entity before we send to bulk docs
-            modifications.forEach(w => this._makePristine(w))
+            this._makePristine(...modifications)
 
             const modificationResult = await this.bulkDocs(modifications);
 
-            for (let modification of modifications) {
-
+            for (let i = 0; i < modifications.length; i++) {
+                const modification = modifications[i];
                 const found = modificationResult.successes[modification._id];
 
                 // update the rev in case we edit the record again
@@ -414,10 +452,25 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, ...idKeys);
+    /**
+     * Starts the dbset fluent API.  Only required function call is create(), all others are optional
+     * @param documentType Document Type for the entity
+     * @returns DbSetBuilder
+     */
+    protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
+        return new DbSetBuilder<TDocumentType, TEntity>(this.addDbSet.bind(this), { documentType, context: this });
+    }
 
-        this._dbSets.push(dbSet);
+    /**
+     * Create a DbSet
+     * @param documentType Document Type for the entity
+     * @param idKeys IdKeys for tyhe entity
+     * @deprecated Use {@link dbset} instead.
+     */
+    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, {} as any, ...idKeys);
+
+        this.addDbSet(dbSet)
 
         return dbSet;
     }
@@ -436,6 +489,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     async empty() {
+
         for (let dbset of this) {
             await dbset.empty();
         }
@@ -447,9 +501,74 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         await this.doWork(w => w.destroy(), false)
     }
 
+    async purge(purgeType: "memory" | "disk" = "memory") {
+
+        return await this.doWork(async source => {
+
+            const options: PouchDB.Configuration.DatabaseConfiguration = {};
+
+            if (purgeType === 'memory') {
+                options.adapter = purgeType;
+            }
+
+            const dbInfo = await source.info();
+
+            const temp = new PouchDB('__pdb-ef_purge', options);
+            const replicationResult = await source.replicate.to(temp, {
+                filter: doc => {
+                    if (doc._deleted === true) {
+                        return false
+                    }
+
+                    return doc;
+                }
+            });
+
+            if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
+                try {
+                    await temp.destroy();
+                } catch { } // swallow any potential destroy error
+                throw new Error(`Could not purge deleted documents.  Reason: ${replicationResult.errors.join('\r\n')}`)
+            }
+
+            // destroy the source database
+            await source.destroy();
+            let closeDestination = true;
+
+            return await this.doWork(async destination => {
+                try {
+                    const replicationResult = await temp.replicate.to(destination);
+
+                    if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
+                        try {
+                            closeDestination = false;
+                            await destination.destroy();
+                        } catch { } // swallow any potential destroy error
+                        throw new Error(`Could not purge deleted documents.  Reason: ${replicationResult.errors.join('\r\n')}`)
+                    }
+
+                    return {
+                        doc_count: replicationResult.docs_written,
+                        loss_count: Math.abs(dbInfo.doc_count - replicationResult.docs_written)
+                    } as IPurgeResponse;
+                } catch (e) {
+
+                }
+            }, closeDestination)
+        }, false);
+    }
+
+    static asUntracked(...entities: IDbRecordBase[]) {
+        return entities.map(w => ({ ...w }));
+    }
+
+    static isProxy(entities: IDbRecordBase) {
+        return (entities as IIndexableEntity)[DataContext.PROXY_MARKER] === true;
+    }
+
     [Symbol.iterator]() {
         let index = -1;
-        const data = this._dbSets;
+        const data = Object.keys(this._dbSets).map(w => this._dbSets[w]);
 
         return {
             next: () => ({ value: data[++index], done: !(index in data) })

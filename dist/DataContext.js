@@ -27,15 +27,22 @@ exports.DataContext = void 0;
 const pouchdb_1 = __importDefault(require("pouchdb"));
 const DbSet_1 = require("./DbSet");
 const pouchdb_find_1 = __importDefault(require("pouchdb-find"));
+const pouchdb_adapter_memory_1 = __importDefault(require("pouchdb-adapter-memory"));
+const AdvancedDictionary_1 = require("./AdvancedDictionary");
+const DbSetBuilder_1 = require("./DbSetBuilder");
 pouchdb_1.default.plugin(pouchdb_find_1.default);
+pouchdb_1.default.plugin(pouchdb_adapter_memory_1.default);
 class PouchDbBase {
     constructor(name, options) {
-        this._options = options;
-        this._name = name;
+        this._dbOptions = options;
+        this._dbName = name;
+    }
+    createDb() {
+        return new pouchdb_1.default(this._dbName, this._dbOptions);
     }
     doWork(action, shouldClose = true) {
         return __awaiter(this, void 0, void 0, function* () {
-            const db = new pouchdb_1.default(this._name, this._options);
+            const db = this.createDb();
             const result = yield action(db);
             if (shouldClose) {
                 yield db.close();
@@ -119,7 +126,6 @@ class PouchDbInteractionBase extends PouchDbBase {
                 return result.docs;
             }
             catch (e) {
-                console.log(e);
                 return [];
             }
         });
@@ -131,19 +137,27 @@ class DataContext extends PouchDbInteractionBase {
         super(name, pouchDb);
         this._removals = [];
         this._additions = [];
-        this._attachments = [];
+        this._attachments = new AdvancedDictionary_1.AdvancedDictionary("_id");
         this._removeById = [];
         this._events = {
             "entity-created": [],
             "entity-removed": [],
             "entity-updated": []
         };
-        this._dbSets = [];
+        this._dbSets = {};
         this._configuration = {};
     }
     getAllDocs() {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.getAllData();
+            const all = yield this.getAllData();
+            return all.map(w => {
+                const dbSet = this._dbSets[w.DocumentType];
+                if (dbSet) {
+                    const info = dbSet.info();
+                    return this._makeTrackable(w, info.Defaults.retrieve);
+                }
+                return this._makeTrackable(w, {});
+            });
         });
     }
     /**
@@ -183,29 +197,32 @@ class DataContext extends PouchDbInteractionBase {
             get: this.get.bind(this)
         };
     }
+    addDbSet(dbset) {
+        const info = dbset.info();
+        if (this._dbSets[info.DocumentType] != null) {
+            throw new Error(`Can only have one DbSet per document type in a context, please create a new context instead`);
+        }
+        this._dbSets[info.DocumentType] = dbset;
+    }
     /**
      * Used by the context api
      * @param data
      */
     _detach(data) {
-        this._attachments = this._attachments.filter(w => data.some(x => x._id === w._id) === false);
+        this._attachments.remove(...data);
     }
     /**
      * Used by the context api
      * @param data
      */
     _sendData(data, shouldThrowOnDuplicate) {
-        if (shouldThrowOnDuplicate) {
-            const duplicate = this._attachments.find(w => data.some(x => x._id === w._id));
+        if (shouldThrowOnDuplicate && data.length > 0) {
+            const [duplicate] = this._attachments.get(...data);
             if (duplicate) {
                 throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
             }
         }
-        this._setAttachments(data);
-    }
-    _setAttachments(data) {
-        // do not filter duplicates in case devs return multiple instances of the same entity
-        this._attachments = [...this._attachments, ...data];
+        this._attachments.push(...data);
     }
     /**
      * Used by the context api
@@ -222,14 +239,9 @@ class DataContext extends PouchDbInteractionBase {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
-        for (let removal of removals) {
-            const index = this._attachments.findIndex(w => w._id === removal._id);
-            if (index !== -1) {
-                this._attachments.splice(index, 1);
-            }
-        }
+        this._attachments.remove(...removals);
         // move additions to attachments so we can track changes
-        this._setAttachments(add);
+        this._attachments.push(...add);
     }
     /**
      * Provides equality comparison for Entities
@@ -255,7 +267,7 @@ class DataContext extends PouchDbInteractionBase {
             return first[w] != second[w];
         }) === false;
     }
-    _makeTrackable(entity) {
+    _makeTrackable(entity, defaults) {
         const proxyHandler = {
             set: (entity, property, value) => {
                 const indexableEntity = entity;
@@ -271,9 +283,15 @@ class DataContext extends PouchDbInteractionBase {
                 }
                 indexableEntity[key] = value;
                 return true;
+            },
+            get: (target, property, receiver) => {
+                if (property === DataContext.PROXY_MARKER) {
+                    return true;
+                }
+                return Reflect.get(target, property, receiver);
             }
         };
-        return new Proxy(entity, proxyHandler);
+        return new Proxy(Object.assign(Object.assign({}, defaults), entity), proxyHandler);
     }
     _getPendingChanges() {
         const { add, remove, removeById } = this._getTrackedData();
@@ -308,10 +326,12 @@ class DataContext extends PouchDbInteractionBase {
             changes.updated.forEach(w => this._events["entity-updated"].forEach(x => x(w)));
         }
     }
-    _makePristine(entity) {
-        const indexableEntity = entity;
-        // make pristine again
-        delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
+    _makePristine(...entities) {
+        for (let i = 0; i < entities.length; i++) {
+            const indexableEntity = entities[i];
+            // make pristine again
+            delete indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY];
+        }
     }
     _getModifications() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -319,7 +339,7 @@ class DataContext extends PouchDbInteractionBase {
             const extraRemovals = yield this.get(...removeById);
             return {
                 add,
-                remove: [...remove, ...extraRemovals].map(w => (Object.assign(Object.assign({}, w), { _deleted: true }))),
+                remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
                 updated
             };
         });
@@ -330,9 +350,10 @@ class DataContext extends PouchDbInteractionBase {
                 const { add, remove, updated } = yield this._getModifications();
                 const modifications = [...add, ...remove, ...updated];
                 // remove pristine entity before we send to bulk docs
-                modifications.forEach(w => this._makePristine(w));
+                this._makePristine(...modifications);
                 const modificationResult = yield this.bulkDocs(modifications);
-                for (let modification of modifications) {
+                for (let i = 0; i < modifications.length; i++) {
+                    const modification = modifications[i];
                     const found = modificationResult.successes[modification._id];
                     // update the rev in case we edit the record again
                     if (found && found.ok === true) {
@@ -355,9 +376,23 @@ class DataContext extends PouchDbInteractionBase {
             }
         });
     }
+    /**
+     * Starts the dbset fluent API.  Only required function call is create(), all others are optional
+     * @param documentType Document Type for the entity
+     * @returns DbSetBuilder
+     */
+    dbset(documentType) {
+        return new DbSetBuilder_1.DbSetBuilder(this.addDbSet.bind(this), { documentType, context: this });
+    }
+    /**
+     * Create a DbSet
+     * @param documentType Document Type for the entity
+     * @param idKeys IdKeys for tyhe entity
+     * @deprecated Use {@link dbset} instead.
+     */
     createDbSet(documentType, ...idKeys) {
-        const dbSet = new DbSet_1.DbSet(documentType, this, ...idKeys);
-        this._dbSets.push(dbSet);
+        const dbSet = new DbSet_1.DbSet(documentType, this, {}, ...idKeys);
+        this.addDbSet(dbSet);
         return dbSet;
     }
     query(callback) {
@@ -385,13 +420,69 @@ class DataContext extends PouchDbInteractionBase {
             yield this.doWork(w => w.destroy(), false);
         });
     }
+    purge(purgeType = "memory") {
+        return __awaiter(this, void 0, void 0, function* () {
+            return yield this.doWork((source) => __awaiter(this, void 0, void 0, function* () {
+                const options = {};
+                if (purgeType === 'memory') {
+                    options.adapter = purgeType;
+                }
+                const dbInfo = yield source.info();
+                const temp = new pouchdb_1.default('__pdb-ef_purge', options);
+                const replicationResult = yield source.replicate.to(temp, {
+                    filter: doc => {
+                        if (doc._deleted === true) {
+                            return false;
+                        }
+                        return doc;
+                    }
+                });
+                if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
+                    try {
+                        yield temp.destroy();
+                    }
+                    catch (_a) { } // swallow any potential destroy error
+                    throw new Error(`Could not purge deleted documents.  Reason: ${replicationResult.errors.join('\r\n')}`);
+                }
+                // destroy the source database
+                yield source.destroy();
+                let closeDestination = true;
+                return yield this.doWork((destination) => __awaiter(this, void 0, void 0, function* () {
+                    try {
+                        const replicationResult = yield temp.replicate.to(destination);
+                        if (replicationResult.status !== "complete" || replicationResult.doc_write_failures > 0 || replicationResult.errors.length > 0) {
+                            try {
+                                closeDestination = false;
+                                yield destination.destroy();
+                            }
+                            catch (_b) { } // swallow any potential destroy error
+                            throw new Error(`Could not purge deleted documents.  Reason: ${replicationResult.errors.join('\r\n')}`);
+                        }
+                        return {
+                            doc_count: replicationResult.docs_written,
+                            loss_count: Math.abs(dbInfo.doc_count - replicationResult.docs_written)
+                        };
+                    }
+                    catch (e) {
+                    }
+                }), closeDestination);
+            }), false);
+        });
+    }
+    static asUntracked(...entities) {
+        return entities.map(w => (Object.assign({}, w)));
+    }
+    static isProxy(entities) {
+        return entities[DataContext.PROXY_MARKER] === true;
+    }
     [Symbol.iterator]() {
         let index = -1;
-        const data = this._dbSets;
+        const data = Object.keys(this._dbSets).map(w => this._dbSets[w]);
         return {
             next: () => ({ value: data[++index], done: !(index in data) })
         };
     }
 }
 exports.DataContext = DataContext;
+DataContext.PROXY_MARKER = '__isProxy';
 //# sourceMappingURL=DataContext.js.map

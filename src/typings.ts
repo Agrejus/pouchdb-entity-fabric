@@ -1,83 +1,101 @@
 import PouchDB from 'pouchdb';
+import { AdvancedDictionary } from './AdvancedDictionary';
 
-export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> extends IDbSetBase<TDocumentType> {
+export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
 
     /**
      * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
-     * @param entities
+     * @param entities Entity or entities to add to the data context
+     * @returns Promise\<TEntity[]\>
      */
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
 
     /**
      * Remove one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
-     * @param entities
+     * @param entities Entity or entities to remove from the data context
+     * @returns Promise\<void\>
      */
     remove(...entities: TEntity[]): Promise<void>;
 
     /**
      * Remove one or more entities by id from the underlying data context, saveChanges must be called to persist these items to the store
-     * @param ids 
+     * @param ids Entity id or ids to remove from the data context
+     * @returns Promise\<void\>
      */
-
     remove(...ids: string[]): Promise<void>;
 
     /**
      * Return all items in the underlying data store for the document type
-     * @returns TEntity[]
+     * @returns Promise\<TEntity[]\>
      */
     all(): Promise<TEntity[]>;
 
     /**
      * Filter items in the underlying data store and return the results
-     * @param selector 
-     * @returns Promise<TEntity[]>
+     * @param selector Callback to filter entities matching the criteria
+     * @returns Promise\<TEntity[]\>
      */
     filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
 
     /**
      * Find first item matching the selector in the underlying data store and return the result
-     * @param selector 
-     * @returns TEntity
+     * @param selector Callback to find entity matching the criteria
+     * @returns Promise\<TEntity \| undefined\>
      */
     find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined>;
 
     /**
      * Find entity by an id or ids
-     * @param ids
-     * @returns TEntity
+     * @param ids ids of the documents to retrieve
+     * @returns Promise<\TEntity[]\>
      */
     get(...ids: string[]): Promise<TEntity[]>
 
     /**
      * Check for equality between two entities
-     * @param first
-     * @param second 
+     * @param first First entity to compare
+     * @param second Second entity to compare
      * @returns boolean
      */
     isMatch(first: TEntity, second: TEntity): boolean;
 
     /**
-     * Detaches specified array of items from the context so they can be modified and changes will not be persisted to the underlying data store
-     * @param entities 
+     * Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store
+     * @param entities Entity or entities to unlink from the data context
+     */
+    unlink(...entities: TEntity[]): void;
+
+    /**
+     * Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store
+     * @param entities Entity or entities to unlink from the data context
+     * @deprecated Use {@link unlink} instead.
      */
     detach(...entities: TEntity[]): void;
 
     /**
-     * Attach an existing entities to the underlying Data Context, saveChanges must be called to persist these items to the store
-     * @param entites 
+     * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * @param entites Entity or entities to link from the data context
      */
-    attach(...entites: TEntity[]): void;
+    link(...entites: TEntity[]): Promise<void>;
 
     /**
-     * Matches items with the same document type
-     * @param entities 
+     * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
+     * @param entites Entity or entities to link from the data context
+     * @deprecated Use {@link link} instead.
+     */
+    attach(...entites: TEntity[]): Promise<void>;
+
+
+    /**
+     * Matches items with the same document type.  Useful for retrieving all docs and calling match() to find the ones that belong in the db set
+     * @param entities Entity or entities to match on document type.
      * @returns TEntity[]
      */
-    match(entities: IDbRecordBase[]): TEntity[];
+    match(...entities: IDbRecordBase[]): TEntity[];
 
     /**
      * Find first item in the underlying data store and return the result 
-     * @returns TEntity
+     * @returns Promise\<TEntity\>
      */
     first(): Promise<TEntity>;
 
@@ -88,9 +106,21 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @returns void
      */
     on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+
+    /**
+     * Get DbSet info
+     * @returns IDbSetInfo
+     */
+    info() : IDbSetInfo<TDocumentType, TEntity>
 }
 
-export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) | void = void> = TExtraExclusions extends keyof TEntity ? Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions> : Omit<TEntity, "_id" | "_rev" | "DocumentType">;
+export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
+    DocumentType: TDocumentType,
+    IdKeys: EntityIdKeys<TDocumentType, TEntity>,
+    Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>
+}
+
+export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
 
 export type DataContextEventCallback<TDocumentType> = ({ DocumentType }: { DocumentType: TDocumentType }) => void;
 export type DataContextEvent = 'entity-created' | 'entity-removed' | 'entity-updated';
@@ -99,16 +129,31 @@ export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDb
 export type DbSetIdOnlyEventCallback = (entity: string) => void;
 export type DbSetEvent = "add" | "remove";
 
-export type KeyOf<T> = keyof T;
+export type DocumentKeySelector<T> = (entity: T) => any
+export type KeyOf<T> = keyof T | DocumentKeySelector<T>;
 export type IdKeys<T> = KeyOf<T>[];
-export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKeys<Omit<TEntity, "_id" | "_rev">>;
+export type IdKey<T> = KeyOf<T>;
+export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = EntityIdKey<TDocumentType, TEntity>[];
+export type EntityIdKey<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKey<Omit<TEntity, "_id" | "_rev" | "DocumentType">>;
+export type DeepPartial<T> = T extends object ? {
+    [P in keyof T]?: DeepPartial<T[P]>;
+} : T;
 
-export interface IIndexableEntity {
-    [key: string]: any;
+export type DbSetActionDictionaryOptional<T> = DbSetActionDictionaryRequired<T> | {  add: T } | {  retrieve: T };
+export type DbSetActionDictionaryRequired<T> =  {  add: T, retrieve: T };
+export type DbSetPickDefaultActionOptional<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = DbSetActionDictionaryOptional<DeepPartial<OmittedEntity<TEntity>>>;
+export type DbSetPickDefaultActionRequired<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = DbSetActionDictionaryRequired<DeepPartial<OmittedEntity<TEntity>>>;
+
+export interface IIndexableEntity<T extends any = any> {
+    [key: string]: T;
 }
 
 export interface IDbSetBase<TDocumentType extends string> {
 
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType(): TDocumentType;
 
     /**
@@ -131,7 +176,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
-    makeTrackable<T extends Object>(entity: T): T;
+    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T;
 }
 
 export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentType> {
@@ -154,17 +199,22 @@ export interface IBulkDocsResponse {
     error?: string;
 }
 
+export interface IPurgeResponse {
+    doc_count: number;
+    loss_count: number;
+}
+
 export interface IDataContext {
 
     /**
      * Persist changes to the underlying data store.  Returns number of documents modified
-     * @returns number
+     * @returns Promise\<number\>
      */
     saveChanges(): Promise<number>;
 
     /**
      * Get all documents in the underlying data store
-     * @returns IDbRecordBase[]
+     * @returns Promise\<IDbRecordBase[]\>
      */
     getAllDocs(): Promise<IDbRecordBase[]>;
 
@@ -176,26 +226,33 @@ export interface IDataContext {
 
     /**
      * Enable DataContext speed optimizations.  Needs to be run once per application per database.  Typically, this should be run on application start.
-     * @returns void
+     * @returns Promise\<void\>
      */
-    optimize(): Promise<void>
+    optimize(): Promise<void>;
 
     /**
      * Remove all entities from all DbSets in the data context, saveChanges must be called to persist these changes to the store
-     * @returns void
+     * @returns Promise\<void\>
      */
-    empty(): Promise<void>
+    empty(): Promise<void>;
 
     /**
      * Destroy Pouch Database
-     * @returns void
+     * @returns Promise\<void\>
      */
-     destroyDatabase(): Promise<void>
+    destroyDatabase(): Promise<void>;
+
+    /**
+     * Will purge all _deleted documents from the data
+     * @param purgeType "memory" purge will replicate to an in-memory db, then back to the original db.  "disk" will replicate to a new db on the device and then back to the original db.  There is less chance for data loss with "disk" vs "memory" if the app were to be closed or crash during replication.
+     * @returns Promise\<IPurgeResponse\>
+     */
+    purge(purgeType: "memory" | "disk"): Promise<IPurgeResponse>
 }
 
 export interface ITrackedData {
     add: IDbRecordBase[];
     remove: IDbRecordBase[];
-    attach: IDbRecordBase[];
+    attach: AdvancedDictionary<IDbRecordBase>;
     removeById: string[]
 }

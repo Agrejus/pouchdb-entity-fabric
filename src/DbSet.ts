@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IdKeys, IIndexableEntity, OmittedEntity } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -11,12 +11,22 @@ interface IPrivateContext<TDocumentType extends string> extends IDataContext {
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
 
+    /**
+     * Get the IdKeys for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get IdKeys() { return this._idKeys }
+
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType() { return this._documentType }
 
-    private _idKeys: IdKeys<TEntity>;
+    private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
+    private _idKeys: EntityIdKeys<TDocumentType, TEntity>;
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
@@ -31,11 +41,28 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      * @param context Will be 'this' from the data context
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
-    constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
+    constructor(documentType: TDocumentType, context: IDataContext, defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
         this._documentType = documentType;
         this._context = context as IPrivateContext<TDocumentType>;
         this._idKeys = idKeys;
+        this._defaults = defaults;
+
         this._api = this._context._getApi();
+
+        const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
+
+        // Allow spread operator to work on the class for extending it
+        for(let property of properties) {
+            (this as any)[property] = (this as any)[property]
+        }
+    }
+
+    info() {
+        return {
+            DocumentType: this._documentType,
+            IdKeys: this._idKeys,
+            Defaults: this._defaults
+        } as IDbSetInfo<TDocumentType, TEntity>
     }
 
     async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
@@ -48,27 +75,27 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             if (indexableEntity["_rev"] !== undefined) {
                 throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
-    
+
             const addItem: IDbRecord<TDocumentType> = entity as any;
             (addItem as any).DocumentType = this._documentType;
             const id = this._getKeyFromEntity(entity as any);
-    
+
             if (id != undefined) {
                 const ids = add.map(w => w._id);
-    
+
                 if (ids.includes(id)) {
                     throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
                 }
-    
+
                 (addItem as any)._id = id;
-            } 
-    
+            }
+
             this._events["add"].forEach(w => w(entity as any));
-    
-            const trackableEntity = this._api.makeTrackable(addItem) as TEntity;
-    
+
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add) as TEntity;
+
             add.push(trackableEntity);
-    
+
             return trackableEntity;
         })
     }
@@ -78,18 +105,19 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         if (this._idKeys.length === 0) {
             return uuidv4();
         }
+        const indexableEntity = entity as IIndexableEntity
 
-        const keyData = Object.keys(entity).filter((w: any) => this._idKeys.includes(w)).map(w => {
-
-            const value = (entity as any)[w];
-
-            if (value instanceof Date) {
-                return value.toISOString();
+        const keyData = this._idKeys.map(w => {
+            if (typeof w === "string") {
+                return indexableEntity[w];
             }
 
-            return value
-        })
-        return [this.DocumentType, ...keyData].join("/");
+            const selector: DocumentKeySelector<TEntity> = w as any;
+
+            return String(selector(entity));
+        });
+
+        return [this._documentType, ...keyData].join("/");
     }
 
     isMatch(first: TEntity, second: TEntity) {
@@ -148,13 +176,13 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     private async _all() {
         const data = await this._api.getAllData(this._documentType)
-        return data.map(w => this._api.makeTrackable(w) as TEntity);
+        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve) as TEntity);
     }
 
     async all() {
         const result = await this._all();
 
-        this._api.send(result, false)
+        this._api.send(result, false);
 
         return result;
     }
@@ -169,11 +197,11 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
-    match(items: IDbRecordBase[]) {
-        return items.filter(w => w.DocumentType === this.DocumentType) as TEntity[]
+    match(...items: IDbRecordBase[]) {
+        return items.filter(w => w.DocumentType === this._documentType) as TEntity[]
     }
 
-    async get(...ids:string[]) {
+    async get(...ids: string[]) {
         const entities = await this._api.get(...ids);
 
         if (entities.length > 0) {
@@ -196,9 +224,13 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     detach(...entities: TEntity[]) {
+        this.unlink(...entities);
+    }
+
+    unlink(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
-        
+
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n')
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
@@ -207,17 +239,34 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._detachItems(entities)
     }
 
-    attach(...entities: TEntity[]) {
+    async link(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
-        
+
         if (validationFailures.length > 0) {
             const errors = validationFailures.map(w => w.error).join('\r\n')
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
         }
 
-        entities.forEach(w => this._api.makeTrackable(w));
+        // Find the existing _rev just in case it's not in sync
+        const found = await this._api.get(...entities.map(w => w._id));
+
+        if (found.length != entities.length) {
+            throw new Error(`Error linking entities, document not found`)
+        }
+
+        const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
+
+        entities.forEach(w => {
+            this._api.makeTrackable(w, this._defaults.add);
+            (w as any)._rev = foundDictionary[w._id]
+        });
+
         this._api.send(entities, true)
+    }
+
+    async attach(...entities: TEntity[]) {
+        await this.link(...entities);
     }
 
     async first() {

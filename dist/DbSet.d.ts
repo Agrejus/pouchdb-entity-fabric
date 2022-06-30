@@ -1,11 +1,20 @@
-import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IdKeys, OmittedEntity } from './typings';
+import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, DbSetPickDefaultActionRequired, IDbSetInfo } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) | void = void> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-    get IdKeys(): IdKeys<TEntity>;
+export declare class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+    /**
+     * Get the IdKeys for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
+    get IdKeys(): EntityIdKeys<TDocumentType, TEntity>;
+    /**
+     * Get the Document Type for the DbSet
+     * @deprecated Use {@link info()} instead.
+     */
     get DocumentType(): TDocumentType;
+    private _defaults;
     private _idKeys;
     private _documentType;
     private _context;
@@ -17,7 +26,8 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
      * @param context Will be 'this' from the data context
      * @param idKeys Property(ies) that make up the primary key of the entity
      */
-    constructor(documentType: TDocumentType, context: IDataContext, ...idKeys: EntityIdKeys<TDocumentType, TEntity>);
+    constructor(documentType: TDocumentType, context: IDataContext, defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>, ...idKeys: EntityIdKeys<TDocumentType, TEntity>);
+    info(): IDbSetInfo<TDocumentType, TEntity>;
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
     private _getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;
@@ -30,11 +40,13 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     private _all;
     all(): Promise<TEntity[]>;
     filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
-    match(items: IDbRecordBase[]): TEntity[];
+    match(...items: IDbRecordBase[]): TEntity[];
     get(...ids: string[]): Promise<TEntity[]>;
     find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>;
     detach(...entities: TEntity[]): void;
-    attach(...entities: TEntity[]): void;
+    unlink(...entities: TEntity[]): void;
+    link(...entities: TEntity[]): Promise<void>;
+    attach(...entities: TEntity[]): Promise<void>;
     first(): Promise<TEntity>;
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;

@@ -3,15 +3,26 @@ import { IDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
+import { v4 as uuidv4 } from 'uuid';
 
-describe('getting started - data context', () => {
+describe('dbset - deprecated', () => {
 
     PouchDB.plugin(memoryAdapter);
+
+    const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
+    const dbFactory = <T extends typeof PouchDbDataContext>(Context: T, dbname?: string) => {
+        const name = dbname ?? `${uuidv4()}-db`;
+        const result = new Context(name);
+        dbs[name] = result;
+        return result;
+    }
 
     enum DocumentTypes {
         Notes = "Notes",
         Contacts = "Contacts",
-        Books = "Books"
+        Books = "Books",
+        Cars = "Cars",
+        Preference = "Preference"
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -29,16 +40,28 @@ describe('getting started - data context', () => {
 
     interface IBook extends IDbRecord<DocumentTypes> {
         author: string;
-        publishDate?: Date;
+        publishDate?:  Date;
         rejectedCount: number;
         status: "pending" | "approved" | "rejected";
+    }
+
+    interface ICar extends IDbRecord<DocumentTypes> {
+        make: string;
+        model: string;
+        year: number;
+        manufactureDate: Date;
+    }
+
+    interface IPreference extends IDbRecord<DocumentTypes> {
+        isSomePropertyOn: boolean;
+        isOtherPropertyOn: boolean;
     }
 
 
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
-        constructor() {
-            super('test-db', { adapter: 'memory' });
+        constructor(name: string) {
+            super(name);
         }
 
         async empty() {
@@ -51,25 +74,27 @@ describe('getting started - data context', () => {
 
         notes = this.createDbSet<INote>(DocumentTypes.Notes);
         contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
-        books = this.createDbSet<IBook, "status">(DocumentTypes.Books);
+        books = this.createDbSet<IBook, "status" | "rejectedCount">(DocumentTypes.Books);
+        cars = this.createDbSet<ICar>(DocumentTypes.Cars, w => w.manufactureDate.toISOString(), w => w.make, "model");
+        preference = this.createDbSet<IPreference>(DocumentTypes.Preference, _ => "static")
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
-        constructor() {
-            super();
+        constructor(name: string) {
+            super(name);
             this.books.on("add", entity => {
                 entity.status = "pending";
             })
         }
     }
 
-    beforeEach(async () => {
-        const context = new PouchDbDataContext();
-        await context.empty();
-    });
+    afterAll(async () => {
+        const dbNames = Object.keys(dbs)
+        await Promise.all(dbNames.map(w => dbs[w].destroyDatabase()));
+    })
 
-    test('should add entity and return reference', async () => {
-        const context = new PouchDbDataContext();
+    it('should add entity and return reference', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -87,8 +112,81 @@ describe('getting started - data context', () => {
         expect(contact.address).toBe("1234 Test St");
     });
 
-    test('should add entity, save, and set _rev', async () => {
-        const context = new PouchDbDataContext();
+    it('should only allow one single entity per dbset', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [preference] = await context.preference.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        expect(preference.DocumentType).toBe(DocumentTypes.Preference);
+        expect(preference._id).toBe(`${DocumentTypes.Preference}/static`);
+        expect(preference._rev).not.toBeDefined();
+
+        expect(preference.isOtherPropertyOn).toBe(true);
+        expect(preference.isSomePropertyOn).toBe(false);
+    });
+
+    it('should only allow one single entity per dbset and update one entity', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [preference] = await context.preference.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        expect(preference.DocumentType).toBe(DocumentTypes.Preference);
+        expect(preference._id).toBe(`${DocumentTypes.Preference}/static`);
+        expect(preference._rev).not.toBeDefined();
+
+        expect(preference.isOtherPropertyOn).toBe(true);
+        expect(preference.isSomePropertyOn).toBe(false);
+
+        await context.saveChanges();
+
+        const [preference2] = await context.preference.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        await context.saveChanges();
+
+        const preferences = await context.preference.all();
+
+        expect(preferences.length).toBe(1)
+    });
+
+    it('should update an entity with previous rev', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(DefaultPropertiesDataContext, dbname);
+        const [newBook] = await context.books.add({
+            author: "James",
+            publishDate: new Date()
+        });
+
+        await context.saveChanges();
+
+        expect(newBook._rev).toBeDefined();
+
+        const book = await context.books.first();
+
+        context.books.unlink(book);
+
+        const secondBook = await context.books.first();
+        secondBook.author = "DeMeuse"
+        await context.saveChanges();
+
+        const secondaryContext = dbFactory(DefaultPropertiesDataContext, dbname);
+        await secondaryContext.books.link(book);
+
+        book.author = "James DeMeuse";
+        await secondaryContext.saveChanges();
+
+        expect(book._rev.startsWith("3")).toBe(true)
+    });
+
+    it('should add entity, save, and set _rev', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -108,8 +206,8 @@ describe('getting started - data context', () => {
         expect(contact.address).toBe("1234 Test St");
     });
 
-    test('should add entity, save, and generate an id', async () => {
-        const context = new PouchDbDataContext();
+    it('should add entity, save, and generate an id', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [note] = await context.notes.add({
             contents: "Some Note",
             createdDate: new Date(),
@@ -127,11 +225,30 @@ describe('getting started - data context', () => {
         expect(note.userId).toBe("jdemeuse");
     });
 
-    test('should add entity, exlude a property and set the default on the add event', async () => {
-        const context = new DefaultPropertiesDataContext();
+    it('should add entity and create id from selector', async () => {
+        const now = new Date();
+        const context = dbFactory(PouchDbDataContext);
+        const [car] = await context.cars.add({
+            make: "Chevrolet",
+            manufactureDate: now,
+            model: "Silverado",
+            year: 2021
+        });
+
+        expect(car.DocumentType).toBe(DocumentTypes.Cars);
+        expect(car._id).toBe(`${DocumentTypes.Cars}/${now.toISOString()}/Chevrolet/Silverado`);
+        expect(car._rev).not.toBeDefined();
+
+        expect(car.make).toBe("Chevrolet");
+        expect(car.model).toBe("Silverado");
+        expect(car.year).toBe(2021);
+        expect(car.manufactureDate).toBe(now);
+    });
+
+    it('should add entity, exlude a property and set the default on the add event', async () => {
+        const context = dbFactory(DefaultPropertiesDataContext);
         const [book] = await context.books.add({
             author: "James DeMeuse",
-            rejectedCount: 0,
             publishDate: new Date()
         });
 
@@ -143,12 +260,11 @@ describe('getting started - data context', () => {
 
         expect(book.author).toBe("James DeMeuse");
         expect(book.publishDate).toBeDefined();
-        expect(book.rejectedCount).toBe(0);
         expect(book.status).toBe("pending");
     });
 
-    test('should remove one entity by reference', async () => {
-        const context = new PouchDbDataContext();
+    it('should remove one entity by reference', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -167,8 +283,8 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove one entity by id', async () => {
-        const context = new PouchDbDataContext();
+    it('should remove one entity by id', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -187,8 +303,8 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove many entities by reference', async () => {
-        const context = new PouchDbDataContext();
+    it('should remove many entities by reference', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -216,9 +332,9 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove many entities by id', async () => {
+    it('should remove many entities by id', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -247,8 +363,8 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should remove correct entity', async () => {
-        const context = new PouchDbDataContext();
+    it('should remove correct entity', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [one, _] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -273,8 +389,8 @@ describe('getting started - data context', () => {
         expect(all[0]._id).toBe("Contacts/John/Doe");
     });
 
-    test('should get first entity', async () => {
-        const context = new PouchDbDataContext();
+    it('should get first entity', async () => {
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -297,8 +413,8 @@ describe('getting started - data context', () => {
         expect(first.address).toBe("1234 Test St");
     });
 
-    test('should match entity', async () => {
-        const context = new PouchDbDataContext();
+    it('should match entity', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [one] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -318,8 +434,8 @@ describe('getting started - data context', () => {
         expect(doesMatch).toBe(true);
     });
 
-    test('should not match entity', async () => {
-        const context = new PouchDbDataContext();
+    it('should not match entity', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [_, one] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -339,8 +455,8 @@ describe('getting started - data context', () => {
         expect(doesMatch).toBe(false);
     });
 
-    test('should empty entities from dbset', async () => {
-        const context = new PouchDbDataContext();
+    it('should empty entities from dbset', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const generated: IContact[] = [];
 
         for (let i = 0; i < 20; i++) {
@@ -368,8 +484,8 @@ describe('getting started - data context', () => {
         expect(all.length).toBe(0);
     });
 
-    test('should filter entities', async () => {
-        const context = new PouchDbDataContext();
+    it('should filter entities', async () => {
+        const context = dbFactory(PouchDbDataContext);
         const [first] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -392,8 +508,8 @@ describe('getting started - data context', () => {
         expect(doesMatch).toBe(true);
     });
 
-    test('should match correct entities from base documents', async () => {
-        const context = new PouchDbDataContext();
+    it('should match correct entities from base documents', async () => {
+        const context = dbFactory(PouchDbDataContext);
 
 
         for (let i = 0; i < 20; i++) {
@@ -405,8 +521,7 @@ describe('getting started - data context', () => {
             });
 
             await context.books.add({
-                author: faker.name.firstName(),
-                rejectedCount: 1
+                author: faker.name.firstName()
             });
 
             await context.notes.add({
@@ -420,13 +535,13 @@ describe('getting started - data context', () => {
 
         const allDocs = await context.getAllDocs();
 
-        const contacts = context.contacts.match(allDocs);
+        const contacts = context.contacts.match(...allDocs);
 
         expect(contacts.length).toBe(20);
     });
 
-    test('should find correct entity', async () => {
-        const context = new PouchDbDataContext();
+    it('should find correct entity', async () => {
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -443,11 +558,17 @@ describe('getting started - data context', () => {
 
         const filtered = await context.contacts.find(w => w.firstName === "John");
 
+        expect(filtered).toBeDefined();
+
+        if (filtered == null) {
+            return
+        }
+
         expect(filtered._id).toBe("Contacts/John/Doe");
     });
 
-    test('should find no entity', async () => {
-        const context = new PouchDbDataContext();
+    it('should find no entity', async () => {
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -469,7 +590,7 @@ describe('getting started - data context', () => {
 
     it('should detach entities from context reference after adding', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -479,7 +600,7 @@ describe('getting started - data context', () => {
 
         await context.saveChanges();
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -488,12 +609,18 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
+        expect(updated).toBeDefined();
+
+        if (updated == null) {
+            return;
+        }
+
         expect(updated.firstName).toBe("James");
     });
 
     it('should detach entities from context reference after adding and getting from find', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -505,7 +632,13 @@ describe('getting started - data context', () => {
 
         const contact = await context.contacts.find(w => w.firstName === "James");
 
-        context.contacts.detach(contact);
+        expect(contact).toBeDefined();
+
+        if (contact == null) {
+            return;
+        }
+
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -514,12 +647,18 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
+        expect(updated).toBeDefined();
+
+        if (updated == null) {
+            return;
+        }
+
         expect(updated.firstName).toBe("James");
     });
 
     it('should detach entities from context reference after adding and getting from first', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -531,7 +670,7 @@ describe('getting started - data context', () => {
 
         const contact = await context.contacts.first();
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -540,12 +679,12 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
-        expect(updated.firstName).toBe("James");
+        expect(updated?.firstName).toBe("James");
     });
 
     it('should detach entities from context reference after adding and getting from filter', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -557,7 +696,7 @@ describe('getting started - data context', () => {
 
         const [contact] = await context.contacts.filter(w => w.firstName === "James");
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -566,12 +705,12 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
-        expect(updated.firstName).toBe("James");
+        expect(updated?.firstName).toBe("James");
     });
 
     it('should detach one entity from context reference after retrieving from list', async () => {
 
-        const context = new PouchDbDataContext();
+        const context = dbFactory(PouchDbDataContext);
 
         for (let i = 0; i < 20; i++) {
             await context.contacts.add({
@@ -582,8 +721,7 @@ describe('getting started - data context', () => {
             });
 
             await context.books.add({
-                author: faker.name.firstName(),
-                rejectedCount: 1
+                author: faker.name.firstName()
             });
 
             await context.notes.add({
@@ -597,7 +735,7 @@ describe('getting started - data context', () => {
 
         const [one, two] = await context.contacts.all();
 
-        context.contacts.detach(one);
+        context.contacts.unlink(one);
 
         one.firstName = "Value One";
         two.firstName = "Value Two"
@@ -616,7 +754,8 @@ describe('getting started - data context', () => {
 
     it('should attach one entity', async () => {
 
-        const context = new PouchDbDataContext();
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -628,7 +767,7 @@ describe('getting started - data context', () => {
 
         const [contact] = await context.contacts.filter(w => w.firstName === "James");
 
-        context.contacts.detach(contact);
+        context.contacts.unlink(contact);
 
         contact.firstName = "Test";
 
@@ -637,14 +776,14 @@ describe('getting started - data context', () => {
 
         const updated = await context.contacts.find(w => w.firstName === "James");
 
-        expect(updated.firstName).toBe("James");
+        expect(updated?.firstName).toBe("James");
 
         contact.firstName = "James";
 
-        const secondContext = new PouchDbDataContext();
+        const secondContext = dbFactory(PouchDbDataContext, dbname);
 
         // attaching re-enables entity tracking for properties changed
-        secondContext.contacts.attach(contact);
+        await secondContext.contacts.link(contact);
 
         contact.firstName = "Test";
 
@@ -658,7 +797,8 @@ describe('getting started - data context', () => {
 
     it('should attach many entities', async () => {
 
-        const context = new PouchDbDataContext();
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
         await context.contacts.add({
             firstName: "James",
             lastName: "DeMeuse",
@@ -673,17 +813,18 @@ describe('getting started - data context', () => {
 
         await context.saveChanges();
 
-        const [one, two] = await context.contacts.all();
+        const otherContext = dbFactory(PouchDbDataContext, dbname);
+        const [one, two] = await otherContext.contacts.all();
 
-        context.contacts.detach(one, two);
+        otherContext.contacts.unlink(one, two);
 
         one.firstName = "Test";
         two.firstName = "Test";
 
-        expect(context.hasPendingChanges()).toBe(false);
-        await context.saveChanges();
+        expect(otherContext.hasPendingChanges()).toBe(false);
+        await otherContext.saveChanges();
 
-        const [updatedOne, updatedTwo] = await context.contacts.all();
+        const [updatedOne, updatedTwo] = await otherContext.contacts.all();
 
         expect(updatedOne.firstName).toBe("James");
         expect(updatedTwo.firstName).toBe("John");
@@ -691,10 +832,10 @@ describe('getting started - data context', () => {
         one.firstName = "James";
         two.firstName = "John";
 
-        const secondContext = new PouchDbDataContext();
+        const secondContext = dbFactory(PouchDbDataContext, dbname);
 
         // attaching re-enables entity tracking for properties changed
-        secondContext.contacts.attach(one, two);
+        await secondContext.contacts.link(one, two);
 
         one.firstName = "Test";
         two.firstName = "Test";
@@ -708,4 +849,7 @@ describe('getting started - data context', () => {
     });
 
     // test new get method
+    it('items', async () => {
+        
+    })
 });
