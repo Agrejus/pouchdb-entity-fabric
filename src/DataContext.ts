@@ -167,10 +167,15 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         return all.map(w => {
 
-            const dbSet = this._dbSets[w.DocumentType] as IDbSet<any, any, any>;
-            const info = dbSet.info();
+            const dbSet = this._dbSets[w.DocumentType] as (IDbSet<any, any, any> | undefined);
 
-            return this._makeTrackable(w, info.Defaults.retrieve)
+            if (dbSet) {
+                const info = dbSet.info();
+
+                return this._makeTrackable(w, info.Defaults.retrieve)
+            }
+
+            return this._makeTrackable(w, {})
         });
     }
 

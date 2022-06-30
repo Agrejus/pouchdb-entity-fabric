@@ -152,8 +152,11 @@ class DataContext extends PouchDbInteractionBase {
             const all = yield this.getAllData();
             return all.map(w => {
                 const dbSet = this._dbSets[w.DocumentType];
-                const info = dbSet.info();
-                return this._makeTrackable(w, info.Defaults.retrieve);
+                if (dbSet) {
+                    const info = dbSet.info();
+                    return this._makeTrackable(w, info.Defaults.retrieve);
+                }
+                return this._makeTrackable(w, {});
             });
         });
     }
