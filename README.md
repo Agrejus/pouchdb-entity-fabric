@@ -337,7 +337,7 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 ## Advanced Concepts
 PouchDb Entity Fabric has many different advanced options for dev's to fit an scenario.  
 
-### Data Puring
+### Data Purging
 When documents are removed from pouchdb, they are still kept in the database, only they have a `_deleted` property on them marking them as deleted.  When fetching data, they will not show, but will still take up valuable space.  To combat this, there is a purge method modeled after this [post](https://github.com/pouchdb/pouchdb/issues/802).  Purging the database will remove all deleted documents and keep the original data.
 
 ```typescript
@@ -418,7 +418,7 @@ const [item] = await context.myFirstDbSet.add({
 ```
 
 #### DbSet Fluent API - Defaults
-Defaults are handy with exclusions becuase the value will be the same every time we add an entity or retroactively adding properties that are not nullable.  There are two defaults, `add` and `retrieve`.  `add` defaults will be set when `add()` is called on the dbset. `retrieve` defaults will be set when retrieving data from the dbset using one of `all()`, `filter()`, `find()`, `get()`, `first()`, `getAllDocs()`.  
+Defaults are handy with exclusions because the value will be the same every time we add an entity or retroactively adding properties that are not nullable.  There are two defaults, `add` and `retrieve`.  `add` defaults will be set when `add()` is called on the dbset. `retrieve` defaults will be set when retrieving data from the dbset using one of `all()`, `filter()`, `find()`, `get()`, `first()`, `getAllDocs()`.  
 
 ```typescript
 import { DataContext } from 'pouchdb-entity-fabric';
@@ -653,13 +653,13 @@ export { transferHandlers, wrap, expose };
 - `getAllDocs()` will now return tracked entities
 - Added `asUntracked()` to `DataContext<>`
 - Added `isProxy()` to `DataContext<>`
-- Improved persistance performance for removing entities:
+- Improved persistance performance for removing entities by id:
 
 |                          |      v1.2.0      | v1.3.0   |
 | ------------------------ | ---------------- | -------- |
-| `remove` - 1 Entity | ~10ms            | ~10ms    |
-| `remove` - 50 Entities | ~850ms        | ~115ms   |
-| `remove` - 2000 Entities | N/A         | ~30000ms | 
+| `saveChanges` removing by id - 1 Entity | ~20ms            | ~10ms    |
+| `saveChanges` removing by id - 50 Entities | ~50ms        | ~30ms   |
+| `saveChanges` removing by id - 2000 Entities | ~8200ms         | ~2000ms | 
 
         
     
