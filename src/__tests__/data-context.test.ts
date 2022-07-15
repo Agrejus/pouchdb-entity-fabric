@@ -1,5 +1,5 @@
 import { DataContext } from "../DataContext";
-import { IDbRecord } from "../typings";
+import { IDbRecord, IDbSet } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { v4 as uuidv4 } from 'uuid';
@@ -46,7 +46,6 @@ describe('data context', () => {
         status: "pending" | "approved" | "rejected";
     }
 
-
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
         constructor(name: string) {
@@ -67,7 +66,18 @@ describe('data context', () => {
 
         extendedNotes = this.dbset<INote>(DocumentTypes.ExtendedNotes).create(w => ({ ...w, extendedFn: () => true }));
         extendedContacts = this.dbset<IContact>(DocumentTypes.ExtendedContacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, extendedFn: () => true }));
-        extendedBooks = this.dbset<IBook>(DocumentTypes.ExtendedBooks).exclude("status").create(w => ({ ...w, extendedFn: () => true }));
+        extendedBooks = this.dbset<IBook>(DocumentTypes.ExtendedBooks).exclude("status").create((Instance, args) => {
+            return new class extends Instance {
+
+                constructor() {
+                    super(args);
+                }
+
+                async cool() {
+                    return await super.all();
+                }
+            }
+        });
     }
 
     class CreateDbOverrideContext extends PouchDbDataContext {

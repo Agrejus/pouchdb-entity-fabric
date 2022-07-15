@@ -111,13 +111,20 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Get DbSet info
      * @returns IDbSetInfo
      */
-    info() : IDbSetInfo<TDocumentType, TEntity>
+    info(): IDbSetInfo<TDocumentType, TEntity>
 }
 
 export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
     DocumentType: TDocumentType,
     IdKeys: EntityIdKeys<TDocumentType, TEntity>,
     Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>
+}
+
+export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
+    documentType: TDocumentType,
+    context: IDataContext,
+    defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>,
+    idKeys: EntityIdKeys<TDocumentType, TEntity>
 }
 
 export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -139,8 +146,8 @@ export type DeepPartial<T> = T extends object ? {
     [P in keyof T]?: DeepPartial<T[P]>;
 } : T;
 
-export type DbSetActionDictionaryOptional<T> = DbSetActionDictionaryRequired<T> | {  add: T } | {  retrieve: T };
-export type DbSetActionDictionaryRequired<T> =  {  add: T, retrieve: T };
+export type DbSetActionDictionaryOptional<T> = DbSetActionDictionaryRequired<T> | { add: T } | { retrieve: T };
+export type DbSetActionDictionaryRequired<T> = { add: T, retrieve: T };
 export type DbSetPickDefaultActionOptional<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = DbSetActionDictionaryOptional<DeepPartial<OmittedEntity<TEntity>>>;
 export type DbSetPickDefaultActionRequired<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = DbSetActionDictionaryRequired<DeepPartial<OmittedEntity<TEntity>>>;
 
@@ -160,6 +167,10 @@ export interface IDbSetBase<TDocumentType extends string> {
      * Remove all entities from the underlying data context, saveChanges must be called to persist these changes to the store
      */
     empty(): Promise<void>;
+}
+
+export interface IDbSetRoot {
+
 }
 
 export type DatabaseConfigurationAdditionalConfiguration = {

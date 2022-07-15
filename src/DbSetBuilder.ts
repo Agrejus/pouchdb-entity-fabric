@@ -1,5 +1,5 @@
 import { DbSet } from "./DbSet";
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, OmittedEntity } from "./typings";
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, IDbSetProps, OmittedEntity } from "./typings";
 
 interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> {
     context: IDataContext;
@@ -8,6 +8,7 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     defaults?: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     exclusions?: (keyof TEntity)[];
     events?: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
+    readonly: boolean;
 }
 
 export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> {
@@ -18,16 +19,18 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     private _exclusions: (keyof TEntity)[];
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
+    private _readonly: boolean = false;
     private _onCreate: (dbset: IDbSetBase<string>) => void;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions>) {
 
-        const { context, documentType, idKeys, defaults, exclusions, events } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly } = params;
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys ?? [];
         this._defaults = defaults ?? { add: {} as any, retrieve: {} as any };
         this._exclusions = exclusions ?? [];
+        this._readonly = readonly;
         this._events = events ?? {
             "add": [],
             "remove": []
@@ -36,17 +39,25 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         this._onCreate = onCreate;
     }
 
-    private _buildParams<T extends (keyof TEntity) = never>() {
+	private _buildParams<T extends (keyof TEntity) = never>() {
         return {
             context: this._context,
             documentType: this._documentType,
             defaults: this._defaults,
             events: this._events,
             exclusions: this._exclusions,
-            idKeys: this._idKeys
+            idKeys: this._idKeys,
+            readonly: this._readonly
         } as IDbSetBuilderParams<TDocumentType, TEntity, T>
     }
 
+    /**
+     * Entities returned from this dbset will be readonly and cannot be changed.  Entities can be added, removed, but not updated.
+     * @returns DbSetBuilder
+     */
+    readonly() {
+        return new DbSetBuilder<TDocumentType, Readonly<TEntity>, TExtraExclusions>(this._onCreate, this._buildParams());
+    }
     /**
      * Fluent API for building the documents key.  Key will be built in the order
      * keys are added
@@ -136,11 +147,14 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
      * @param extend Can be used to add functionality to the DbSet
      * @returns new DbSet
      */
-    create<TExtension extends {}>(extend: (dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions>) => IDbSet<TDocumentType, TEntity, TExtraExclusions> & TExtension = w => w as IDbSet<TDocumentType, TEntity, TExtraExclusions> & TExtension) {
+    create<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: DbSetCreator<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TExtension = w => (w as any) as TExtension) {
 
-        const dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions> = new DbSet<TDocumentType, TEntity, TExtraExclusions>(this._documentType, this._context, this._defaults, ...this._idKeys);
-
-        const result = extend(dbset);
+        const result = extend(DbSet as any, {
+            context: this._context, 
+            defaults: this._defaults,
+            documentType: this._documentType,
+            idKeys: this._idKeys
+        });
 
         this._onCreate(result);
 
@@ -157,6 +171,8 @@ interface IIdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDo
      */
     add(key: EntityIdKey<TDocumentType, TEntity>): IIdBuilder<TDocumentType, TEntity>
 }
+
+type DbSetCreator<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> = new (props: IDbSetProps<TDocumentType, TEntity>) => DbSet<TDocumentType, TEntity, TExtraExclusions>;
 
 class IdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> implements IIdBuilder<TDocumentType, TEntity> {
 

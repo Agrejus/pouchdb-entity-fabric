@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -37,15 +37,13 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     /**
      * Constructor
-     * @param documentType Type of Document this DbSet accepts
-     * @param context Will be 'this' from the data context
-     * @param idKeys Property(ies) that make up the primary key of the entity
+     * @param props Properties for the constructor
      */
-    constructor(documentType: TDocumentType, context: IDataContext, defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
-        this._documentType = documentType;
-        this._context = context as IPrivateContext<TDocumentType>;
-        this._idKeys = idKeys;
-        this._defaults = defaults;
+    constructor(props: IDbSetProps<TDocumentType, TEntity>) {
+        this._documentType = props.documentType;
+        this._context = props.context as IPrivateContext<TDocumentType>;
+        this._idKeys = props.idKeys;
+        this._defaults = props.defaults;
 
         this._api = this._context._getApi();
 
