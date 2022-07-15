@@ -60,8 +60,6 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
         await this.saveChanges();
     }
 
-    books = this.createDbSet<IBook, "status" | "rejectedCount">(DocumentTypes.Books);
-
     contacts = this.dbset<IContact>(DocumentTypes.Contacts)
         .defaults({ syncStatus: "pending", syncRetryCount: 0, retroFit: "default" })
         .exclude("syncStatus", "syncRetryCount")
@@ -81,15 +79,6 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
         .create();
 }
 
-class DefaultPropertiesDataContext extends PouchDbDataContext {
-    constructor() {
-        super();
-        this.books.on("add", entity => {
-            entity.status = "pending";
-        })
-    }
-}
-
 export const run = async () => {
     try {
 
@@ -103,6 +92,8 @@ export const run = async () => {
             lastName: "last name",
             phone: "phone"
         });
+
+        first.address = "";
 
         debugger;
 

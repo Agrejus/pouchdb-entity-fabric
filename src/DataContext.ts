@@ -1,5 +1,5 @@
 import PouchDB from 'pouchdb';
-import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
+import { PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
@@ -107,14 +107,14 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
                 throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`)
             }
 
-            return result.ok as IDbRecordBase;
+            return Object.seal(result.ok) as IDbRecordBase;
         });
     }
 
     /**
      * Gets all data from the data store
      */
-    protected async getAllData(documentType?: TDocumentType) {
+    protected async getAllData(readonly: boolean, documentType?: TDocumentType) {
 
         try {
             const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
@@ -163,7 +163,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     async getAllDocs() {
-        const all = await this.getAllData();
+        const all = await this.getAllData(false);
 
         return all.map(w => {
 
@@ -172,10 +172,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             if (dbSet) {
                 const info = dbSet.info();
 
-                return this._makeTrackable(w, info.Defaults.retrieve)
+                return this._makeTrackable(w, info.Defaults.retrieve, false)
             }
 
-            return this._makeTrackable(w, {})
+            return w
         });
     }
 
@@ -310,7 +310,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
-    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T {
+    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
@@ -343,7 +343,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        return new Proxy({ ...defaults, ...entity }, proxyHandler) as T
+        const result = readonly ? Object.freeze({ ...defaults, ...entity }) : Object.seal({ ...defaults, ...entity });
+
+        return new Proxy(result, proxyHandler) as T
     }
 
     private _getPendingChanges() {
@@ -458,21 +460,11 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @returns DbSetBuilder
      */
     protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
-        return new DbSetBuilder<TDocumentType, TEntity>(this.addDbSet.bind(this), { documentType, context: this });
-    }
-
-    /**
-     * Create a DbSet
-     * @param documentType Document Type for the entity
-     * @param idKeys IdKeys for tyhe entity
-     * @deprecated Use {@link dbset} instead.
-     */
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, {} as any, ...idKeys);
-
-        this.addDbSet(dbSet)
-
-        return dbSet;
+        return new DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity>>(this.addDbSet.bind(this), {
+            documentType,
+            context: this,
+            readonly: false
+        });
     }
 
     async query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>) {

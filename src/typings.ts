@@ -124,7 +124,8 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     documentType: TDocumentType,
     context: IDataContext,
     defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>,
-    idKeys: EntityIdKeys<TDocumentType, TEntity>
+    idKeys: EntityIdKeys<TDocumentType, TEntity>;
+    readonly: boolean;
 }
 
 export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -187,7 +188,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
-    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T;
+    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean): T;
 }
 
 export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentType> {
@@ -267,3 +268,5 @@ export interface ITrackedData {
     attach: AdvancedDictionary<IDbRecordBase>;
     removeById: string[]
 }
+
+export type DeepReadOnly<T> = { readonly [key in keyof T]: DeepReadOnly<T[key]> };
