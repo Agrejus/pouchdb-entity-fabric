@@ -60,22 +60,13 @@ describe('data context', () => {
             await this.saveChanges();
         }
 
+        notes = this.dbset<INote>(DocumentTypes.Notes).create();
+        contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
+        books = this.dbset<IBook>(DocumentTypes.Books).exclude("status").create();
+
         extendedNotes = this.dbset<INote>(DocumentTypes.ExtendedNotes).create(w => ({ ...w, extendedFn: () => true }));
         extendedContacts = this.dbset<IContact>(DocumentTypes.ExtendedContacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, extendedFn: () => true }));
-        extendedBooks = this.dbset<IBook>(DocumentTypes.ExtendedBooks).exclude("status", "publishDate").extend((Instance, args) => {
-            return new class extends Instance {
-
-                constructor() {
-                    super(args);
-                }
-
-                async cool() {
-                    return await super.all();
-                }
-            }
-        }).create();
-
-        extendedBookss = this.dbset<IBook>(DocumentTypes.ExtendedBooks).create().add({  });
+        extendedBooks = this.dbset<IBook>(DocumentTypes.ExtendedBooks).exclude("status").create(w => ({ ...w, extendedFn: () => true }));
     }
 
     class CreateDbOverrideContext extends PouchDbDataContext {
@@ -1423,5 +1414,71 @@ describe('data context', () => {
         expect(context.dbsetTest.add).toBeDefined();
         expect(context.dbsetTest.newFunction).toBeDefined();
         expect(context.dbsetTest.newFunction()).toBe("this works");
+    });
+
+    it('should create an optimization index', async () => {
+
+        const context = dbFactory(PouchDbDataContext);
+
+        const notFound = await context.$indexes.find(w => w.name === "autogen_document-type-index");
+
+        expect(notFound).not.toBeDefined();
+
+        await context.optimize();
+
+        const found = await context.$indexes.find(w => w.name === "autogen_document-type-index");
+
+        expect(found).toBeDefined();
+    });
+
+    it('should create an index', async () => {
+
+        const context = dbFactory(PouchDbDataContext);
+
+        await context.$indexes.create(w => w.name("test").fields(x => x.add("DocumentType")));
+
+        const found = await context.$indexes.find(w => w.name === "test");
+
+        expect(found).toBeDefined();
+    });
+
+    it('should filter for an index', async () => {
+
+        const context = dbFactory(PouchDbDataContext);
+
+        await context.$indexes.create(w => w.name("test").fields(x => x.add("DocumentType")));
+
+        const found = await context.$indexes.filter(w => w.name === "test");
+
+        expect(found.length).toBe(1);
+    });
+
+    it('should get all indexes', async () => {
+
+        const context = dbFactory(PouchDbDataContext);
+
+        await context.$indexes.create(w => w.name("test").fields(x => x.add("DocumentType")));
+
+        const found = await context.$indexes.all();
+
+        expect(found.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should remove an index', async () => {
+
+        const context = dbFactory(PouchDbDataContext);
+
+        await context.$indexes.create(w => w.name("test").fields(x => x.add("DocumentType")));
+
+        const found = await context.$indexes.find(w => w.name === "test");
+
+        await context.$indexes.remove({
+            ddoc: found?.ddoc ?? "",
+            name: found?.name ?? ""
+        })
+
+        const afterRemove = await context.$indexes.find(w => w.name === "test");
+
+        expect(afterRemove).not.toBeDefined();
     });
 });

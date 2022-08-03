@@ -32,12 +32,15 @@ describe('dbset - fluent api', () => {
         Notes = "Notes",
         Contacts = "Contacts",
         OverrideContacts = "OverrideContacts",
+        OverrideContactsV2 = "OverrideContactsV2",
         Books = "Books",
         BooksWithDefaults = "BooksWithDefaults",
+        BooksWithDefaultsV2 = "BooksWithDefaultsV2",
         BooksWithNoDefaults = "BooksWithNoDefaults",
         BooksWithTwoDefaults = "BooksWithTwoDefaults",
         Cars = "Cars",
-        Preference = "Preference"
+        Preference = "Preference",
+        ReadonlyPreference = "ReadonlyPreference"
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -84,9 +87,28 @@ describe('dbset - fluent api', () => {
         books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
         cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
         preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
+        readonlyPreference = this.dbset<IPreference>(DocumentTypes.ReadonlyPreference).keys(w => w.add(_ => "static")).readonly().create();
 
         overrideContacts = this.dbset<IContact>(DocumentTypes.OverrideContacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, otherFirst: w.first }));
+        overrideContactsV2 = this.dbset<IContact>(DocumentTypes.OverrideContactsV2).keys(w => w.add("firstName").add("lastName")).extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+        
+                otherFirst() {
+                    return super.first();
+                }
+            }
+        }).create();
         booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
+        booksWithDefaultsV2 = this.dbset<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+            }
+        }).defaults({ status: "pending", rejectedCount: 0 }).create();
         booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
         booksNoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithNoDefaults).exclude("status", "rejectedCount").create();
     }
@@ -98,6 +120,13 @@ describe('dbset - fluent api', () => {
         }
 
         booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").create();
+        booksWithDefaultsV2 = this.dbset<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+            }
+        }).defaults({ status: "pending", rejectedCount: 0 }).create();
     }
 
 
@@ -896,6 +925,22 @@ describe('dbset - fluent api', () => {
         expect(first).toBeDefined();
     });
 
+    it('extended dbset should call base methods with no issues - v2', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        await context.overrideContactsV2.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const first = await context.overrideContactsV2.otherFirst();
+
+        expect(first).toBeDefined();
+    });
+
     it('dbset should set defaults on add', async () => {
         const context = dbFactory(PouchDbDataContext);
         const date = new Date();
@@ -908,6 +953,23 @@ describe('dbset - fluent api', () => {
         expect(book.rejectedCount).toBe(0);
         expect(book.author).toBe("james");
         expect(book.DocumentType).toBe(DocumentTypes.BooksWithDefaults);
+        expect(book.publishDate).toBe(date);
+        expect(book._id).toBeDefined();
+        expect(book._rev).not.toBeDefined();
+    });
+
+    it('dbset should set defaults on add - v2', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const date = new Date();
+        const [book] = await context.booksWithDefaultsV2.add({
+            author: "james",
+            publishDate: date
+        });
+
+        expect(book.status).toBe("pending");
+        expect(book.rejectedCount).toBe(0);
+        expect(book.author).toBe("james");
+        expect(book.DocumentType).toBe(DocumentTypes.BooksWithDefaultsV2);
         expect(book.publishDate).toBe(date);
         expect(book._id).toBeDefined();
         expect(book._rev).not.toBeDefined();
@@ -929,6 +991,27 @@ describe('dbset - fluent api', () => {
         expect(book.rejectedCount).toBe(0);
         expect(book.author).toBe("james");
         expect(book.DocumentType).toBe(DocumentTypes.BooksWithDefaults);
+        expect(book.publishDate).toBe(date.toISOString());
+        expect(book._id).toBeDefined();
+        expect(book._rev).toBeDefined();
+    });
+
+    it('dbset should set defaults after fetch - v2', async () => {
+        const [missingContext, context] = createDbContexts(name => [new BooksWithOneDefaultContext(name), new PouchDbDataContext(name)]);
+        const date = new Date();
+        await missingContext.booksWithDefaultsV2.add({
+            author: "james",
+            publishDate: date
+        });
+
+        await missingContext.saveChanges();
+
+        const book = await context.booksWithDefaultsV2.first();
+
+        expect(book.status).toBe("pending");
+        expect(book.rejectedCount).toBe(0);
+        expect(book.author).toBe("james");
+        expect(book.DocumentType).toBe(DocumentTypes.BooksWithDefaultsV2);
         expect(book.publishDate).toBe(date.toISOString());
         expect(book._id).toBeDefined();
         expect(book._rev).toBeDefined();

@@ -120,6 +120,8 @@ export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRec
     Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>
 }
 
+export type Work = <T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose?: boolean) => Promise<T>
+
 export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
     documentType: TDocumentType,
     context: IDataContext,
@@ -191,13 +193,13 @@ export interface IDbSetApi<TDocumentType extends string> {
     makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean): T;
 }
 
-export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentType> {
+export interface IDbRecord<TDocumentType extends string> extends IDbAdditionRecord<TDocumentType> {
     readonly _id: string;
     readonly _rev: string;
 }
 
-export interface IDbAdditionRecord<T> {
-    readonly DocumentType: T;
+export interface IDbAdditionRecord<TDocumentType extends string> {
+    readonly DocumentType: TDocumentType;
 }
 
 export interface IDbRecordBase extends IDbRecord<any> {

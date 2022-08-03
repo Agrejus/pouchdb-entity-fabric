@@ -69,7 +69,7 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
                 .add(w => w.phone.toLocaleLowerCase()))
         .create();
 
-    contactsRetro = this.dbset<IContact>(DocumentTypes.Contacts)
+    contactsRetro = this.dbset<IContact>(DocumentTypes.Cars)
         .defaults({ add: { syncStatus: "pending", syncRetryCount: 0, retroFit: "default" } })
         .exclude("syncStatus", "syncRetryCount", "retroFit")
         .keys(w =>
@@ -81,8 +81,6 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
 
 export const run = async () => {
     try {
-
-        debugger;
         const context = new PouchDbDataContext();
 
         // create a new contact
@@ -93,6 +91,8 @@ export const run = async () => {
             phone: "phone"
         });
 
+        const x = await context.$indexes.create(w => w.fields(x => x.add("Test").add('_id')).name)
+        debugger;
         first.address = "";
 
         debugger;

@@ -2,9 +2,10 @@ import PouchDB from 'pouchdb';
 import { PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder } from './DbSetBuilder';
+import { IndexApi, IIndexApi } from './IndexApi';
 
 PouchDB.plugin(findAdapter);
 PouchDB.plugin(memoryAdapter);
@@ -145,6 +146,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
 
+    $indexes: IIndexApi;
+
     private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = {
         "entity-created": [],
         "entity-removed": [],
@@ -160,6 +163,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         this._configuration = {
 
         };
+
+        this.$indexes = new IndexApi(this.doWork.bind(this));
     }
 
     async getAllDocs() {
@@ -187,17 +192,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         // once this index is created any read's will rebuild the index 
         // automatically.  The first read may be slow once new data is created
-        await this.doWork(async w => {
-
-            await w.createIndex({
-                index: {
-                    fields: ["DocumentType"],
-                    name: 'autogen_document-type-index',
-                    ddoc: "autogen_document-type-index"
-                },
-            });
-
-        });
+        await this.$indexes.create(w =>
+            w.name("autogen_document-type-index")
+                .designDocumentName("autogen_document-type-index")
+                .fields(x => x.add("DocumentType")));
     }
 
     /**
@@ -343,7 +341,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        const result = readonly ? Object.freeze({ ...defaults, ...entity }) : Object.seal({ ...defaults, ...entity });
+        const result = readonly ? Object.freeze({ ...defaults, ...entity }) : { ...defaults, ...entity };
 
         return new Proxy(result, proxyHandler) as T
     }

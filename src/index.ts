@@ -16,5 +16,6 @@ export {
     IBulkDocsResponse,
     IDbSetBase,
     IdKeys,
-    EntityIdKeys
+    EntityIdKeys,
+    DataContextOptions
 } from './typings';

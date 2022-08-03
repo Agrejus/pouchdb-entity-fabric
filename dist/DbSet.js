@@ -19,19 +19,18 @@ exports.PRISTINE_ENTITY_KEY = "__pristine_entity__";
 class DbSet {
     /**
      * Constructor
-     * @param documentType Type of Document this DbSet accepts
-     * @param context Will be 'this' from the data context
-     * @param idKeys Property(ies) that make up the primary key of the entity
+     * @param props Properties for the constructor
      */
-    constructor(documentType, context, defaults, ...idKeys) {
+    constructor(props) {
         this._events = {
             "add": [],
             "remove": []
         };
-        this._documentType = documentType;
-        this._context = context;
-        this._idKeys = idKeys;
-        this._defaults = defaults;
+        this._documentType = props.documentType;
+        this._context = props.context;
+        this._idKeys = props.idKeys;
+        this._defaults = props.defaults;
+        this._isReadonly = props.readonly;
         this._api = this._context._getApi();
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
         // Allow spread operator to work on the class for extending it
@@ -76,7 +75,7 @@ class DbSet {
                     addItem._id = id;
                 }
                 this._events["add"].forEach(w => w(entity));
-                const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add);
+                const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly);
                 add.push(trackableEntity);
                 return trackableEntity;
             });
@@ -144,7 +143,7 @@ class DbSet {
     _all() {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._api.getAllData(this._documentType);
-            return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve));
+            return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly));
         });
     }
     all() {
@@ -168,10 +167,11 @@ class DbSet {
     get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
             const entities = yield this._api.get(...ids);
-            if (entities.length > 0) {
-                this._api.send(entities, false);
+            const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly));
+            if (result.length > 0) {
+                this._api.send(result, false);
             }
-            return entities;
+            return result;
         });
     }
     find(selector) {
@@ -209,7 +209,7 @@ class DbSet {
             }
             const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
             entities.forEach(w => {
-                this._api.makeTrackable(w, this._defaults.add);
+                this._api.makeTrackable(w, this._defaults.add, this._isReadonly);
                 w._rev = foundDictionary[w._id];
             });
             this._api.send(entities, true);

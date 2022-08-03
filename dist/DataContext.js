@@ -30,6 +30,7 @@ const pouchdb_find_1 = __importDefault(require("pouchdb-find"));
 const pouchdb_adapter_memory_1 = __importDefault(require("pouchdb-adapter-memory"));
 const AdvancedDictionary_1 = require("./AdvancedDictionary");
 const DbSetBuilder_1 = require("./DbSetBuilder");
+const IndexApi_1 = require("./IndexApi");
 pouchdb_1.default.plugin(pouchdb_find_1.default);
 pouchdb_1.default.plugin(pouchdb_adapter_memory_1.default);
 class PouchDbBase {
@@ -106,14 +107,14 @@ class PouchDbInteractionBase extends PouchDbBase {
                 if ('error' in result) {
                     throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`);
                 }
-                return result.ok;
+                return Object.seal(result.ok);
             });
         });
     }
     /**
      * Gets all data from the data store
      */
-    getAllData(documentType) {
+    getAllData(readonly, documentType) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const findOptions = {
@@ -146,17 +147,18 @@ class DataContext extends PouchDbInteractionBase {
         };
         this._dbSets = {};
         this._configuration = {};
+        this.$indexes = new IndexApi_1.IndexApi(this.doWork.bind(this));
     }
     getAllDocs() {
         return __awaiter(this, void 0, void 0, function* () {
-            const all = yield this.getAllData();
+            const all = yield this.getAllData(false);
             return all.map(w => {
                 const dbSet = this._dbSets[w.DocumentType];
                 if (dbSet) {
                     const info = dbSet.info();
-                    return this._makeTrackable(w, info.Defaults.retrieve);
+                    return this._makeTrackable(w, info.Defaults.retrieve, false);
                 }
-                return this._makeTrackable(w, {});
+                return w;
             });
         });
     }
@@ -267,7 +269,7 @@ class DataContext extends PouchDbInteractionBase {
             return first[w] != second[w];
         }) === false;
     }
-    _makeTrackable(entity, defaults) {
+    _makeTrackable(entity, defaults, readonly) {
         const proxyHandler = {
             set: (entity, property, value) => {
                 const indexableEntity = entity;
@@ -291,7 +293,8 @@ class DataContext extends PouchDbInteractionBase {
                 return Reflect.get(target, property, receiver);
             }
         };
-        return new Proxy(Object.assign(Object.assign({}, defaults), entity), proxyHandler);
+        const result = readonly ? Object.freeze(Object.assign(Object.assign({}, defaults), entity)) : Object.assign(Object.assign({}, defaults), entity);
+        return new Proxy(result, proxyHandler);
     }
     _getPendingChanges() {
         const { add, remove, removeById } = this._getTrackedData();
@@ -382,18 +385,11 @@ class DataContext extends PouchDbInteractionBase {
      * @returns DbSetBuilder
      */
     dbset(documentType) {
-        return new DbSetBuilder_1.DbSetBuilder(this.addDbSet.bind(this), { documentType, context: this });
-    }
-    /**
-     * Create a DbSet
-     * @param documentType Document Type for the entity
-     * @param idKeys IdKeys for tyhe entity
-     * @deprecated Use {@link dbset} instead.
-     */
-    createDbSet(documentType, ...idKeys) {
-        const dbSet = new DbSet_1.DbSet(documentType, this, {}, ...idKeys);
-        this.addDbSet(dbSet);
-        return dbSet;
+        return new DbSetBuilder_1.DbSetBuilder(this.addDbSet.bind(this), {
+            documentType,
+            context: this,
+            readonly: false
+        });
     }
     query(callback) {
         return __awaiter(this, void 0, void 0, function* () {
