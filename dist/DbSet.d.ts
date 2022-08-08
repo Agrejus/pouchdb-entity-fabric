@@ -1,4 +1,4 @@
-import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, DbSetPickDefaultActionRequired, IDbSetInfo } from './typings';
+import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, IDbSetInfo, IDbSetProps } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -19,14 +19,13 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     private _documentType;
     private _context;
     private _api;
+    private _isReadonly;
     private _events;
     /**
      * Constructor
-     * @param documentType Type of Document this DbSet accepts
-     * @param context Will be 'this' from the data context
-     * @param idKeys Property(ies) that make up the primary key of the entity
+     * @param props Properties for the constructor
      */
-    constructor(documentType: TDocumentType, context: IDataContext, defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>, ...idKeys: EntityIdKeys<TDocumentType, TEntity>);
+    constructor(props: IDbSetProps<TDocumentType, TEntity>);
     info(): IDbSetInfo<TDocumentType, TEntity>;
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
     private _getKeyFromEntity;

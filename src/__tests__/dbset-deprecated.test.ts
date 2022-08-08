@@ -72,11 +72,11 @@ describe('dbset - deprecated', () => {
             await this.saveChanges();
         }
 
-        notes = this.createDbSet<INote>(DocumentTypes.Notes);
-        contacts = this.createDbSet<IContact>(DocumentTypes.Contacts, "firstName", "lastName");
-        books = this.createDbSet<IBook, "status" | "rejectedCount">(DocumentTypes.Books);
-        cars = this.createDbSet<ICar>(DocumentTypes.Cars, w => w.manufactureDate.toISOString(), w => w.make, "model");
-        preference = this.createDbSet<IPreference>(DocumentTypes.Preference, _ => "static")
+        notes = this.dbset<INote>(DocumentTypes.Notes).create();
+        contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
+        books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
+        cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create();
+        preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add( _ => "static")).create();
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
@@ -94,6 +94,7 @@ describe('dbset - deprecated', () => {
     })
 
     it('should add entity and return reference', async () => {
+        debugger;
         const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",

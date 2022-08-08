@@ -1,4 +1,7 @@
+/// <reference types="pouchdb-find" />
 /// <reference types="pouchdb-core" />
+/// <reference types="pouchdb-mapreduce" />
+/// <reference types="pouchdb-replication" />
 import { AdvancedDictionary } from './AdvancedDictionary';
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
     /**
@@ -100,6 +103,14 @@ export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRec
     IdKeys: EntityIdKeys<TDocumentType, TEntity>;
     Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
 }
+export declare type Work = <T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose?: boolean) => Promise<T>;
+export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
+    documentType: TDocumentType;
+    context: IDataContext;
+    defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
+    idKeys: EntityIdKeys<TDocumentType, TEntity>;
+    readonly: boolean;
+}
 export declare type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
 export declare type DataContextEventCallback<TDocumentType> = ({ DocumentType }: {
     DocumentType: TDocumentType;
@@ -142,6 +153,8 @@ export interface IDbSetBase<TDocumentType extends string> {
      */
     empty(): Promise<void>;
 }
+export interface IDbSetRoot {
+}
 export declare type DatabaseConfigurationAdditionalConfiguration = {};
 export declare type DataContextOptions = PouchDB.Configuration.DatabaseConfiguration & DatabaseConfigurationAdditionalConfiguration;
 export declare type EntitySelector<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity, index?: number, array?: TEntity[]) => boolean;
@@ -151,14 +164,14 @@ export interface IDbSetApi<TDocumentType extends string> {
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
-    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T;
+    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean): T;
 }
-export interface IDbRecord<TDocumentType> extends IDbAdditionRecord<TDocumentType> {
+export interface IDbRecord<TDocumentType extends string> extends IDbAdditionRecord<TDocumentType> {
     readonly _id: string;
     readonly _rev: string;
 }
-export interface IDbAdditionRecord<T> {
-    readonly DocumentType: T;
+export interface IDbAdditionRecord<TDocumentType extends string> {
+    readonly DocumentType: TDocumentType;
 }
 export interface IDbRecordBase extends IDbRecord<any> {
 }
@@ -216,3 +229,6 @@ export interface ITrackedData {
     attach: AdvancedDictionary<IDbRecordBase>;
     removeById: string[];
 }
+export declare type DeepReadOnly<T> = {
+    readonly [key in keyof T]: DeepReadOnly<T[key]>;
+};

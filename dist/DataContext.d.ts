@@ -2,9 +2,10 @@
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
-import { DataContextEvent, DataContextEventCallback, DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPurgeResponse } from './typings';
+import { DataContextEvent, DataContextEventCallback, DataContextOptions, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPurgeResponse } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder } from './DbSetBuilder';
+import { IIndexApi } from './IndexApi';
 declare abstract class PouchDbBase {
     protected readonly _dbOptions?: PouchDB.Configuration.DatabaseConfiguration;
     private readonly _dbName?;
@@ -45,6 +46,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     protected _attachments: AdvancedDictionary<IDbRecordBase>;
     protected _removeById: string[];
     private _configuration;
+    $indexes: IIndexApi;
     private _events;
     private _dbSets;
     constructor(name?: string, options?: DataContextOptions);
@@ -63,7 +65,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns IData
      */
     private _getApi;
-    private addDbSet;
+    private _addDbSet;
     /**
      * Used by the context api
      * @param data
@@ -97,14 +99,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @param documentType Document Type for the entity
      * @returns DbSetBuilder
      */
-    protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType): DbSetBuilder<TDocumentType, TEntity, never>;
-    /**
-     * Create a DbSet
-     * @param documentType Document Type for the entity
-     * @param idKeys IdKeys for tyhe entity
-     * @deprecated Use {@link dbset} instead.
-     */
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType): DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity, never>>;
     query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
     hasPendingChanges(): boolean;
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>): void;

@@ -4,12 +4,16 @@ exports.DbSetBuilder = void 0;
 const DbSet_1 = require("./DbSet");
 class DbSetBuilder {
     constructor(onCreate, params) {
-        const { context, documentType, idKeys, defaults, exclusions, events } = params;
+        this._readonly = false;
+        this._defaultExtend = (Instance, a) => new Instance(a);
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend } = params;
+        this._extend = extend !== null && extend !== void 0 ? extend : this._defaultExtend;
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys !== null && idKeys !== void 0 ? idKeys : [];
         this._defaults = defaults !== null && defaults !== void 0 ? defaults : { add: {}, retrieve: {} };
         this._exclusions = exclusions !== null && exclusions !== void 0 ? exclusions : [];
+        this._readonly = readonly;
         this._events = events !== null && events !== void 0 ? events : {
             "add": [],
             "remove": []
@@ -23,8 +27,17 @@ class DbSetBuilder {
             defaults: this._defaults,
             events: this._events,
             exclusions: this._exclusions,
-            idKeys: this._idKeys
+            idKeys: this._idKeys,
+            readonly: this._readonly,
+            extend: this._extend
         };
+    }
+    /**
+     * Makes all entities returned from the underlying database readonly.  Entities cannot be updates, only adding or removing is available.
+     * @returns DbSetBuilder
+     */
+    readonly() {
+        return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
      * Fluent API for building the documents key.  Key will be built in the order
@@ -65,14 +78,31 @@ class DbSetBuilder {
         this._events[event].push(callback);
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
-    /**
-     * Must call to fully create the DbSet.  Can use the extend callback to add functionality to the DbSet
-     * @param extend Can be used to add functionality to the DbSet
-     * @returns new DbSet
-     */
-    create(extend = w => w) {
-        const dbset = new DbSet_1.DbSet(this._documentType, this._context, this._defaults, ...this._idKeys);
-        const result = extend(dbset);
+    extend(extend) {
+        this._extend = extend;
+        return new DbSetBuilder(this._onCreate, this._buildParams());
+    }
+    create(extend) {
+        let result;
+        if (extend) {
+            const dbset = new DbSet_1.DbSet({
+                context: this._context,
+                defaults: this._defaults,
+                documentType: this._documentType,
+                idKeys: this._idKeys,
+                readonly: this._readonly
+            });
+            result = extend(dbset);
+        }
+        else {
+            result = this._extend(DbSet_1.DbSet, {
+                context: this._context,
+                defaults: this._defaults,
+                documentType: this._documentType,
+                idKeys: this._idKeys,
+                readonly: this._readonly
+            });
+        }
         this._onCreate(result);
         return result;
     }

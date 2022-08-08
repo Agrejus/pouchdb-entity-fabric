@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -30,6 +30,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     private _documentType: TDocumentType;
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
+    private _isReadonly: boolean;
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = {
         "add": [],
         "remove": []
@@ -37,15 +38,14 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     /**
      * Constructor
-     * @param documentType Type of Document this DbSet accepts
-     * @param context Will be 'this' from the data context
-     * @param idKeys Property(ies) that make up the primary key of the entity
+     * @param props Properties for the constructor
      */
-    constructor(documentType: TDocumentType, context: IDataContext, defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>, ...idKeys: EntityIdKeys<TDocumentType, TEntity>) {
-        this._documentType = documentType;
-        this._context = context as IPrivateContext<TDocumentType>;
-        this._idKeys = idKeys;
-        this._defaults = defaults;
+    constructor(props: IDbSetProps<TDocumentType, TEntity>) {
+        this._documentType = props.documentType;
+        this._context = props.context as IPrivateContext<TDocumentType>;
+        this._idKeys = props.idKeys;
+        this._defaults = props.defaults;
+        this._isReadonly = props.readonly;
 
         this._api = this._context._getApi();
 
@@ -92,7 +92,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
             this._events["add"].forEach(w => w(entity as any));
 
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add) as TEntity;
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly) as TEntity;
 
             add.push(trackableEntity);
 
@@ -176,7 +176,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     private async _all() {
         const data = await this._api.getAllData(this._documentType)
-        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve) as TEntity);
+        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly) as TEntity);
     }
 
     async all() {
@@ -203,12 +203,13 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     async get(...ids: string[]) {
         const entities = await this._api.get(...ids);
+        const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly) as TEntity);
 
-        if (entities.length > 0) {
-            this._api.send(entities, false)
+        if (result.length > 0) {
+            this._api.send(result, false)
         }
 
-        return entities as TEntity[];
+        return result;
     }
 
     async find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined> {
@@ -258,7 +259,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
 
         entities.forEach(w => {
-            this._api.makeTrackable(w, this._defaults.add);
+            this._api.makeTrackable(w, this._defaults.add, this._isReadonly);
             (w as any)._rev = foundDictionary[w._id]
         });
 

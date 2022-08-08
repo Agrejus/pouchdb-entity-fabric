@@ -476,21 +476,46 @@ interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
 }
 
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
-    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create(w => {
-        return {
-            ...w,
-            someNewMethod: () => {
-                return true
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).extend((Instance, props) => {
+        return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+        
+                someNewMethod() {
+                    throw new Error('Implement me')
+                }
             }
-        }
-    });
+    }).create();
 }
 
 const context = new PouchDbDataContext();
 
 const value = context.myFirstDbSet.someNewMethod();
+```
 
-// value will be true
+#### DbSet Fluent API - Readonly DbSet
+Dev's can also mark a dbset as readonly, only allowing dev's to add/remove from the dbset.  Updates are not allowed
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+    dateProperty: Date
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).readonly().create();
+}
+
+const context = new PouchDbDataContext();
+
 ```
 
 ## Linking/Unlinking Entities
@@ -549,6 +574,97 @@ const context = new PouchDbDataContext();
 const all = await context.getAllDocs();
 const myFirstDocuments = await context.myFirstDbSet.match(...all);
 const mySecondDocuments = await context.mySecondDbSet.match(...all);
+
+```
+
+## DataContext Index Fluent API 
+The data context now has a fluent api for dealing with indexes in PouchDB.  This makes it easier to create, find, and remove indexes.
+
+### Creating an index
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument",
+    MySecondDocument = "MySecondDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+interface IMySecondEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
+}
+
+const context = new PouchDbDataContext();
+await context.$indexes.create(w => w.name("some-name").fields(x => x.add("myProperty")));
+
+```
+
+### Finding an index
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument",
+    MySecondDocument = "MySecondDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+interface IMySecondEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
+}
+
+const context = new PouchDbDataContext();
+const found = await context.$indexes.find(w => w.name === "some-name");
+const filtered = await context.$indexes.filter(w => w.name === "some-name");
+
+```
+
+### Removing an index
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument",
+    MySecondDocument = "MySecondDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+interface IMySecondEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
+}
+
+const context = new PouchDbDataContext();
+await context.$indexes.remove({
+    name: "some-name",
+    ddoc: "some-ddoc"
+});
 
 ```
 
@@ -641,27 +757,12 @@ export { transferHandlers, wrap, expose };
 
 
 ## Changes
-### 1.2.0 -> 1.3.0 
-- Renamed `attach()` to `link()` on `DbSet<>`
-- Renamed `detach()` to `unlink()` on `DbSet<>`
-- Deprecated `attach()` on `DbSet<>`
-- Deprecated `detach()` on `DbSet<>`
-- Deprecated `createDbSet()` on `DataContext<>`
-- Added `DbSetBuilder<>`.  Called inside of `DataContext<>` using `this.dbset()`
-- Added `purge()` on `DataContext<>`
-- Added `protected createDb()` on `DataContext<>`
-- `getAllDocs()` will now return tracked entities
-- Added `asUntracked()` to `DataContext<>`
-- Added `isProxy()` to `DataContext<>`
-- Improved persistance performance for removing entities by id:
+### 1.3.0 -> 1.4.0 
+- Removed `createDbSet` as it was deprecated, please use `dbset` fluent api
+- Added ability to mark a dbset as readonly, this means entities can only be added or removed, updates are not possible
+- The `extend` parameter on the `create()` method for the dbset fluent api has been deprecated, please use `.extend()` instead
+- Created a fluent api for indexes (`$indexes`) property on the data context for manipulating indexes
+- Minor internal changes to `DataContext`
+- Minor bug fixes
 
-|                          |      v1.2.0      | v1.3.0   |
-| ------------------------ | ---------------- | -------- |
-| `saveChanges` removing by id - 1 Entity | ~20ms            | ~10ms    |
-| `saveChanges` removing by id - 50 Entities | ~50ms        | ~30ms   |
-| `saveChanges` removing by id - 2000 Entities | ~8200ms         | ~2000ms | 
-
-        
-    
-    
 

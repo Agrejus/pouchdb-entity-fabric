@@ -1,10 +1,11 @@
 import PouchDB from 'pouchdb';
-import { DbSet, PRISTINE_ENTITY_KEY } from "./DbSet";
+import { PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, EntityIdKeys, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder } from './DbSetBuilder';
+import { IndexApi, IIndexApi } from './IndexApi';
 
 PouchDB.plugin(findAdapter);
 PouchDB.plugin(memoryAdapter);
@@ -145,6 +146,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
 
+    $indexes: IIndexApi;
+
     private _events: { [key in DataContextEvent]: DataContextEventCallback<TDocumentType>[] } = {
         "entity-created": [],
         "entity-removed": [],
@@ -160,9 +163,12 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         this._configuration = {
 
         };
+
+        this.$indexes = new IndexApi(this.doWork.bind(this));
     }
 
     async getAllDocs() {
+
         const all = await this.getAllData();
 
         return all.map(w => {
@@ -172,10 +178,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             if (dbSet) {
                 const info = dbSet.info();
 
-                return this._makeTrackable(w, info.Defaults.retrieve)
+                return this._makeTrackable(w, info.Defaults.retrieve, false)
             }
 
-            return this._makeTrackable(w, {})
+            return w
         });
     }
 
@@ -187,17 +193,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         // once this index is created any read's will rebuild the index 
         // automatically.  The first read may be slow once new data is created
-        await this.doWork(async w => {
-
-            await w.createIndex({
-                index: {
-                    fields: ["DocumentType"],
-                    name: 'autogen_document-type-index',
-                    ddoc: "autogen_document-type-index"
-                },
-            });
-
-        });
+        await this.$indexes.create(w =>
+            w.name("autogen_document-type-index")
+                .designDocumentName("autogen_document-type-index")
+                .fields(x => x.add("DocumentType")));
     }
 
     /**
@@ -220,7 +219,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
-    private addDbSet(dbset: IDbSetBase<string>) {
+    private _addDbSet(dbset: IDbSetBase<string>) {
 
         const info = (dbset as IDbSet<any, any, any>).info();
 
@@ -310,7 +309,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
-    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>): T {
+    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
@@ -343,7 +342,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        return new Proxy({ ...defaults, ...entity }, proxyHandler) as T
+        const result = readonly ? Object.freeze({ ...defaults, ...entity }) : { ...defaults, ...entity };
+
+        return new Proxy(result, proxyHandler) as T
     }
 
     private _getPendingChanges() {
@@ -458,21 +459,11 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @returns DbSetBuilder
      */
     protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
-        return new DbSetBuilder<TDocumentType, TEntity>(this.addDbSet.bind(this), { documentType, context: this });
-    }
-
-    /**
-     * Create a DbSet
-     * @param documentType Document Type for the entity
-     * @param idKeys IdKeys for tyhe entity
-     * @deprecated Use {@link dbset} instead.
-     */
-    protected createDbSet<TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never>(documentType: TDocumentType, ...idKeys: EntityIdKeys<TDocumentType, TEntity>): IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-        const dbSet = new DbSet<TDocumentType, TEntity, TExtraExclusions>(documentType, this, {} as any, ...idKeys);
-
-        this.addDbSet(dbSet)
-
-        return dbSet;
+        return new DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity>>(this._addDbSet.bind(this), {
+            documentType,
+            context: this,
+            readonly: false
+        });
     }
 
     async query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>) {
