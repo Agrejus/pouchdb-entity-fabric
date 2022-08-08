@@ -60,7 +60,7 @@ export declare class DbSetBuilder<TDocumentType extends string, TEntity extends 
      * @param exclusions Property Exclusions
      * @returns DbSetBuilder
      */
-    exclude<T extends (keyof OmittedEntity<TEntity>)>(...exclusions: T[]): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions | T, IDbSet<TDocumentType, TEntity, TExtraExclusions | T>>;
+    exclude<T extends (keyof OmittedEntity<TEntity>)>(...exclusions: (keyof OmittedEntity<TEntity>)[]): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions | T, IDbSet<TDocumentType, TEntity, TExtraExclusions | T>>;
     /**
      * Add an event listener to the DbSet
      * @param event

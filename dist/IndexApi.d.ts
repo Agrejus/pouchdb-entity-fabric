@@ -17,16 +17,11 @@ export declare class IndexApi implements IIndexApi {
     remove(index: PouchDB.Find.DeleteIndexOptions): Promise<PouchDB.Find.DeleteIndexResponse<{}>>;
 }
 interface IIndexFactory {
-    fields(creator: (factory: KeyFactory) => void): IIndexFactory;
+    fields(creator: (factory: IKeyFactory) => void): IIndexFactory;
     designDocumentName(name: string): IIndexFactory;
     name(name: string): IIndexFactory;
 }
 interface IKeyFactory {
     add(name: string): IKeyFactory;
-}
-declare class KeyFactory implements IKeyFactory {
-    private readonly _fields;
-    get Fields(): string[];
-    add(name: string): this;
 }
 export {};

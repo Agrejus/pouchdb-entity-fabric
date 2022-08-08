@@ -107,14 +107,14 @@ class PouchDbInteractionBase extends PouchDbBase {
                 if ('error' in result) {
                     throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`);
                 }
-                return Object.seal(result.ok);
+                return result.ok;
             });
         });
     }
     /**
      * Gets all data from the data store
      */
-    getAllData(readonly, documentType) {
+    getAllData(documentType) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const findOptions = {
@@ -151,7 +151,7 @@ class DataContext extends PouchDbInteractionBase {
     }
     getAllDocs() {
         return __awaiter(this, void 0, void 0, function* () {
-            const all = yield this.getAllData(false);
+            const all = yield this.getAllData();
             return all.map(w => {
                 const dbSet = this._dbSets[w.DocumentType];
                 if (dbSet) {
@@ -170,15 +170,9 @@ class DataContext extends PouchDbInteractionBase {
         return __awaiter(this, void 0, void 0, function* () {
             // once this index is created any read's will rebuild the index 
             // automatically.  The first read may be slow once new data is created
-            yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () {
-                yield w.createIndex({
-                    index: {
-                        fields: ["DocumentType"],
-                        name: 'autogen_document-type-index',
-                        ddoc: "autogen_document-type-index"
-                    },
-                });
-            }));
+            yield this.$indexes.create(w => w.name("autogen_document-type-index")
+                .designDocumentName("autogen_document-type-index")
+                .fields(x => x.add("DocumentType")));
         });
     }
     /**
@@ -199,7 +193,7 @@ class DataContext extends PouchDbInteractionBase {
             get: this.get.bind(this)
         };
     }
-    addDbSet(dbset) {
+    _addDbSet(dbset) {
         const info = dbset.info();
         if (this._dbSets[info.DocumentType] != null) {
             throw new Error(`Can only have one DbSet per document type in a context, please create a new context instead`);
@@ -385,7 +379,7 @@ class DataContext extends PouchDbInteractionBase {
      * @returns DbSetBuilder
      */
     dbset(documentType) {
-        return new DbSetBuilder_1.DbSetBuilder(this.addDbSet.bind(this), {
+        return new DbSetBuilder_1.DbSetBuilder(this._addDbSet.bind(this), {
             documentType,
             context: this,
             readonly: false

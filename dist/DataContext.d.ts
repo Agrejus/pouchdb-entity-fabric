@@ -37,7 +37,7 @@ declare abstract class PouchDbInteractionBase<TDocumentType extends string> exte
     /**
      * Gets all data from the data store
      */
-    protected getAllData(readonly: boolean, documentType?: TDocumentType): Promise<IDbRecordBase[]>;
+    protected getAllData(documentType?: TDocumentType): Promise<IDbRecordBase[]>;
 }
 export declare class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
     static PROXY_MARKER: string;
@@ -47,7 +47,6 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     protected _removeById: string[];
     private _configuration;
     $indexes: IIndexApi;
-    $views: number;
     private _events;
     private _dbSets;
     constructor(name?: string, options?: DataContextOptions);
@@ -66,7 +65,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns IData
      */
     private _getApi;
-    private addDbSet;
+    private _addDbSet;
     /**
      * Used by the context api
      * @param data
