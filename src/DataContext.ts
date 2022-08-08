@@ -108,14 +108,14 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
                 throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`)
             }
 
-            return Object.seal(result.ok) as IDbRecordBase;
+            return result.ok as IDbRecordBase;
         });
     }
 
     /**
      * Gets all data from the data store
      */
-    protected async getAllData(readonly: boolean, documentType?: TDocumentType) {
+    protected async getAllData(documentType?: TDocumentType) {
 
         try {
             const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
@@ -168,7 +168,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     async getAllDocs() {
-        const all = await this.getAllData(false);
+
+        const all = await this.getAllData();
 
         return all.map(w => {
 
@@ -218,7 +219,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
-    private addDbSet(dbset: IDbSetBase<string>) {
+    private _addDbSet(dbset: IDbSetBase<string>) {
 
         const info = (dbset as IDbSet<any, any, any>).info();
 
@@ -458,7 +459,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @returns DbSetBuilder
      */
     protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
-        return new DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity>>(this.addDbSet.bind(this), {
+        return new DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity>>(this._addDbSet.bind(this), {
             documentType,
             context: this,
             readonly: false

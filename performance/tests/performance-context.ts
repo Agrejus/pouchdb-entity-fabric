@@ -246,7 +246,8 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'createDbSet',
             'DataContext',
             'constructor',
-            'PerformanceDbDataContext'
+            'PerformanceDbDataContext',
+            'dbset'
         ]
 
         overrideWithPerformance(this, propertiesToIgnore, ['add', 'remove'], false, DataContext.prototype, PerformanceDbDataContext.prototype);
@@ -269,7 +270,8 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'DbSet',
             'constructor',
             'IdKeys',
-            'DocumentType'
+            'DocumentType',
+            'info'
         ];
 
         overrideWithPerformance(dbSet, propertiesToIgnore, [], true, DbSet.prototype);
