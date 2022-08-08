@@ -762,5 +762,7 @@ export { transferHandlers, wrap, expose };
 - Added ability to mark a dbset as readonly, this means entities can only be added or removed, updates are not possible
 - The `extend` parameter on the `create()` method for the dbset fluent api has been deprecated, please use `.extend()` instead
 - Created a fluent api for indexes (`$indexes`) property on the data context for manipulating indexes
+- Minor internal changes to `DataContext`
+- Minor bug fixes
 
 
