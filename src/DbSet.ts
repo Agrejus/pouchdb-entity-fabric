@@ -1,6 +1,7 @@
 import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
+import { DataContext } from './DataContext';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -63,6 +64,23 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             IdKeys: this._idKeys,
             Defaults: this._defaults
         } as IDbSetInfo<TDocumentType, TEntity>
+    }
+
+    instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
+        return entities.map(entity => {
+
+            const addItem: IDbRecord<TDocumentType> = entity as any;
+            (addItem as any).DocumentType = this._documentType;
+            const id = this._getKeyFromEntity(entity as any);
+
+            if (id != undefined) {
+                (addItem as any)._id = id;
+            }
+
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly) as TEntity;
+
+            return {...trackableEntity}
+        });
     }
 
     async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {

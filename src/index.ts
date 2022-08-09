@@ -1,5 +1,6 @@
 export { DataContext } from './DataContext';
 export { DbSet } from './DbSet';
+export { DbSetExtender } from './DbSetBuilder';
 export { 
     IDataContext, 
     IDbAdditionRecord, 

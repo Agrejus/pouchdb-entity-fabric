@@ -7,6 +7,11 @@ npm install pouchdb-entity-fabric
 
 PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouchdb.com/) and makes creating repeatable processes in PouchDB easier.  Often times using PouchDB, a repository layer needs to be created and adding new document types requires a new repository.  PouchDB Entity Fabric removes the need for these repository layers all together.  Let's get to the code:
 
+## Changes
+### 1.4.0 -> 1.4.1 
+- Fixed `.add()` on `DbSet` where intellisense types were not showing after using `.exclude()`
+- Added `.instance()` to `DbSet`
+
 ## Installation
 ```
 npm install pouchdb-entity-fabric
@@ -684,6 +689,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | Method | Description |
 | ----- | --- |
 | `add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>` | Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
+| `instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[]` | Create one or more entities and do not add it to the underlying data context.  This is useful for creating entities and passing them to other functions. Call add to add the entity to a context for persistance |
 | `isMatch(first: TEntity, second: TEntity): boolean` | Check for equality between two entities |
 | `remove(...ids: string[]): Promise<void>` | Remove one or more entities by id from the underlying data context, saveChanges must be called to persist these items to the store |
 | `remove(...entities: TEntity[]): Promise<void>` | Remove one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
@@ -754,15 +760,5 @@ transferHandlers.set("EVENT", proxyTransferhandler);
 
 export { transferHandlers, wrap, expose };
 ```
-
-
-## Changes
-### 1.3.0 -> 1.4.0 
-- Removed `createDbSet` as it was deprecated, please use `dbset` fluent api
-- Added ability to mark a dbset as readonly, this means entities can only be added or removed, updates are not possible
-- The `extend` parameter on the `create()` method for the dbset fluent api has been deprecated, please use `.extend()` instead
-- Created a fluent api for indexes (`$indexes`) property on the data context for manipulating indexes
-- Minor internal changes to `DataContext`
-- Minor bug fixes
 
 

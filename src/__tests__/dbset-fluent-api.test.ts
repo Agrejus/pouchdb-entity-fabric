@@ -95,7 +95,7 @@ describe('dbset - fluent api', () => {
                 constructor() {
                     super(props)
                 }
-        
+
                 otherFirst() {
                     return super.first();
                 }
@@ -1150,5 +1150,36 @@ describe('dbset - fluent api', () => {
         expect(addedBook.publishDate).toBe(date);
         expect(addedBook._id).toBeDefined();
         expect(addedBook._rev).not.toBeDefined();
+    });
+
+
+    it('should create an instance and link - same as adding', async () => {
+        const dbname = uuidv4();
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const [contact] = context.contacts.instance({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        expect(context.hasPendingChanges()).toBe(false);
+
+        const count = await context.saveChanges();
+
+        expect(count).toBe(0)
+
+        await context.contacts.add(contact)
+
+        expect(context.hasPendingChanges()).toBe(true);
+        
+        const afterLinkCount = await context.saveChanges();
+
+        expect(afterLinkCount).toBe(1);
+
+        const found = context.contacts.first();
+
+        expect(found).toBeDefined();
     });
 });
