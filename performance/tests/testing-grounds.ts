@@ -45,6 +45,10 @@ interface IPreference extends IDbRecord<DocumentTypes> {
     isOtherPropertyOn: boolean;
 }
 
+interface IBaseEntity extends IDbRecord<DocumentTypes> {
+    syncStatus: "pending" | "approved" | "rejected";
+    syncRetryCount: 0;
+}
 
 class PouchDbDataContext extends DataContext<DocumentTypes> {
 
@@ -58,6 +62,12 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
         }
 
         await this.saveChanges();
+    }
+
+    private _base<T extends IBaseEntity>(documentType: DocumentTypes) {
+        const x = this.dbset<T>(documentType);
+        x.defaults({ syncRetryCount: 0 })
+        return x
     }
 
     contacts = this.dbset<IContact>(DocumentTypes.Contacts)

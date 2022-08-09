@@ -757,7 +757,7 @@ export { transferHandlers, wrap, expose };
 
 
 ## Changes
-### 1.3.0 -> 1.4.0 
+### 1.4.0 -> 1.4.1 
 - Removed `createDbSet` as it was deprecated, please use `dbset` fluent api
 - Added ability to mark a dbset as readonly, this means entities can only be added or removed, updates are not possible
 - The `extend` parameter on the `create()` method for the dbset fluent api has been deprecated, please use `.extend()` instead

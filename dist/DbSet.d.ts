@@ -27,6 +27,7 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
      */
     constructor(props: IDbSetProps<TDocumentType, TEntity>);
     info(): IDbSetInfo<TDocumentType, TEntity>;
+    instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[];
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
     private _getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;

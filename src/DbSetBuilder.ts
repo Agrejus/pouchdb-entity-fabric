@@ -24,7 +24,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _extend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
     private _onCreate: (dbset: IDbSetBase<string>) => void;
 
-    private _defaultExtend : (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
+    private _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
 
@@ -130,7 +130,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
      * @param exclusions Property Exclusions
      * @returns DbSetBuilder
      */
-    exclude<T extends (keyof OmittedEntity<TEntity>)>(...exclusions: (keyof OmittedEntity<TEntity>)[]) {
+    exclude<T extends (keyof OmittedEntity<TEntity>)>(...exclusions: T[]) {
         this._exclusions.push(...exclusions);
         return new DbSetBuilder<TDocumentType, TEntity, T | TExtraExclusions, IDbSet<TDocumentType, TEntity, T | TExtraExclusions>>(this._onCreate, this._buildParams<T | TExtraExclusions>());
     }
@@ -170,7 +170,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     create<TExtension extends {}>(extend?: (dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions>) => IDbSet<TDocumentType, TEntity, TExtraExclusions> & TExtension): TResult {
 
         let result: TResult;
- 
+
         if (extend) {
             const dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions> = new DbSet<TDocumentType, TEntity, TExtraExclusions>({
                 context: this._context,
@@ -207,7 +207,7 @@ interface IIdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDo
     add(key: EntityIdKey<TDocumentType, TEntity>): IIdBuilder<TDocumentType, TEntity>
 }
 
-type DbSetExtender<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> = new (props: IDbSetProps<TDocumentType, TEntity>) => DbSet<TDocumentType, TEntity, TExtraExclusions>;
+export type DbSetExtender<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> = new (props: IDbSetProps<TDocumentType, TEntity>) => DbSet<TDocumentType, TEntity, TExtraExclusions>;
 
 class IdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> implements IIdBuilder<TDocumentType, TEntity> {
 

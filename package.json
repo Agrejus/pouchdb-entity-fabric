@@ -1,6 +1,6 @@
 {
   "name": "pouchdb-entity-fabric",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "PouchDB abstraction layer modeled after .net's Entity Framework",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

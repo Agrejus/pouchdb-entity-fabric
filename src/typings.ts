@@ -11,6 +11,14 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
 
     /**
+     * Create one or more entities and do not add it to the underlying data context.  This is useful for creating entities and passing them to other functions.
+     * Call {@link add} to add the entity to a context for persistance
+     * @param entities Entity or entities to create
+     * @returns TEntity[]
+     */
+     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[];
+
+    /**
      * Remove one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
      * @param entities Entity or entities to remove from the data context
      * @returns Promise\<void\>
@@ -170,10 +178,6 @@ export interface IDbSetBase<TDocumentType extends string> {
      * Remove all entities from the underlying data context, saveChanges must be called to persist these changes to the store
      */
     empty(): Promise<void>;
-}
-
-export interface IDbSetRoot {
-
 }
 
 export type DatabaseConfigurationAdditionalConfiguration = {

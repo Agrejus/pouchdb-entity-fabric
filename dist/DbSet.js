@@ -55,6 +55,18 @@ class DbSet {
             Defaults: this._defaults
         };
     }
+    instance(...entities) {
+        return entities.map(entity => {
+            const addItem = entity;
+            addItem.DocumentType = this._documentType;
+            const id = this._getKeyFromEntity(entity);
+            if (id != undefined) {
+                addItem._id = id;
+            }
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly);
+            return Object.assign({}, trackableEntity);
+        });
+    }
     add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = this._api.getTrackedData();
