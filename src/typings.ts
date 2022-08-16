@@ -272,7 +272,7 @@ export interface IDataContext {
 
     /**
      * Will list changes that will be persisted.  Changes are add, remove, update.  NOTE:  This is a copy of the changes, changes made will not be persisted
-     * @returns Promise\<IExplainedChanges\>
+     * @returns Promise\<IPreviewChanges\>
      */
     previewChanges(): Promise<IPreviewChanges>
 }

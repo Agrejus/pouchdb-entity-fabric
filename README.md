@@ -302,6 +302,12 @@ interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
     myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
 }
+
+// _____ OR ______ //
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).keys(w => w.auto()).create();
+}
 ```
 
 #### Manual Id Generation
@@ -345,6 +351,28 @@ interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
 
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
     myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).keys(w => w.add("propertyOne").add("propertyTwo").add(w => w.dateProperty.toISOString())).create();
+}
+```
+
+#### Single Entity Db Set
+Sometimes we only want a dbset to have only one entity and never any more.  This is very useful for things like configurations.
+
+In the below example, we are marking the keys as none.  The resulting id will be `MyFirstDocument`.
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).keys(w => w.none()).create();
 }
 ```
 
@@ -710,7 +738,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity \| undefined>` | Find an entity for the underlying document type |
 | `unlink(...entities: TEntity[]): void` | Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store |
 | `link(...entites: TEntity[]): Promise<void>` | Link an existing entitiy or entities to the underlying Data Context from another Data Context, saveChanges must be called to persist these items to the store |
-| `first(): Promise<TEntity>` | Get first item in the DbSet |  
+| `first(): Promise<TEntity | undefined>` | Get first item in the DbSet |  
 | `on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void` | Called when an item is queued for creation in the underlying data context |
 | `on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> \| DbSetIdOnlyEventCallback): void` | Called when an item is queued for removal in the underlying data context |
 | `nfo(): IDbSetInfo<TDocumentType, TEntity>` | Get DbSet info |
@@ -728,6 +756,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `destroyDatabase(): Promise<void>` | Destroy Pouch Database |
 | `optimize(): Promise<void>` | Add optimizations to increase performance of PouchDB |
 | `protected createDb():PouchDB.Database<{}> ` | Can override and create a new instance of PouchDB |
+| `previewChanges(): Promise<IPreviewChanges>` | Will list changes that will be persisted.  Changes are add, remove, update.  NOTE:  This is a copy of the changes, changes made will not be persisted |
 
 ## Issues
 
