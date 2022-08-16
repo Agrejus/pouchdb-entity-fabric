@@ -1,9 +1,10 @@
 import { DataContext } from "../DataContext";
-import { IDbRecord } from "../typings";
+import { IDbRecord, IDbRecordBase, IDbSet } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
 import { v4 as uuidv4 } from 'uuid';
+import { DbSetBuilder } from "../DbSetBuilder";
 
 describe('dbset - fluent api', () => {
 
@@ -34,12 +35,15 @@ describe('dbset - fluent api', () => {
         OverrideContacts = "OverrideContacts",
         OverrideContactsV2 = "OverrideContactsV2",
         Books = "Books",
+        BooksNoKey = "BooksNoKey",
+        BooksV3 = "BooksV3",
         BooksWithDefaults = "BooksWithDefaults",
         BooksWithDefaultsV2 = "BooksWithDefaultsV2",
         BooksWithNoDefaults = "BooksWithNoDefaults",
         BooksWithTwoDefaults = "BooksWithTwoDefaults",
         Cars = "Cars",
         Preference = "Preference",
+        PreferenceV2 = "PreferenceV2",
         ReadonlyPreference = "ReadonlyPreference"
     }
 
@@ -75,6 +79,22 @@ describe('dbset - fluent api', () => {
         isOtherPropertyOn: boolean;
     }
 
+    interface ISyncDocument<TDocumentType extends string> extends IDbRecord<TDocumentType> {
+        SyncStatus: "Pending" | "Failed" | "Succeeded";
+        SyncRetryCount: number
+    }
+
+    interface ISetStatus {
+        failed: number;
+        pending: number;
+        succeeded: number;
+    }
+
+    interface IBookV3 extends ISyncDocument<DocumentTypes> {
+        author: string;
+        publishDate?: Date;
+        rejectedCount: number;
+    }
 
     class PouchDbDataContext extends DataContext<DocumentTypes> {
 
@@ -82,11 +102,47 @@ describe('dbset - fluent api', () => {
             super(name);
         }
 
+        private _setupSyncDbSet<T extends ISyncDocument<DocumentTypes>>(documentType: DocumentTypes) {
+
+            const dbset = (this.dbset<ISyncDocument<DocumentTypes>>(documentType)
+                .defaults({ SyncStatus: "Pending", SyncRetryCount: 0 })
+                .exclude("SyncStatus", "SyncRetryCount") as any) as DbSetBuilder<DocumentTypes, T, "SyncStatus" | "SyncRetryCount", IDbSet<DocumentTypes, T, "SyncStatus" | "SyncRetryCount">>;
+
+            return dbset.extend((Instance, props) => {
+                return new class extends Instance {
+                    constructor() {
+                        super(props);
+                        this.toStatus = this.toStatus;
+                    }
+
+                    async toStatus(docs?: IDbRecordBase[]) {
+
+                        let items: any[] = [];
+
+                        if (docs != null) {
+                            items = super.match(...docs);
+                        } else {
+                            items = await super.all();
+                        }
+
+                        return {
+                            failed: items.filter(w => w.SyncStatus === "Failed").length,
+                            pending: items.filter(w => w.SyncStatus === "Pending").length,
+                            succeeded: items.filter(w => w.SyncStatus === "Succeeded").length
+                        } as ISetStatus
+                    }
+                }
+            });
+        }
+
+        books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
+        booksNoKey = this.dbset<IBook>(DocumentTypes.BooksNoKey).exclude("status", "rejectedCount").keys(w => w.none()).create();
         notes = this.dbset<INote>(DocumentTypes.Notes).create();
         contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
-        books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
+        booksV3 = this._setupSyncDbSet<IBookV3>(DocumentTypes.BooksV3).create();
         cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
         preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
+        preferencev2 = this.dbset<IPreference>(DocumentTypes.PreferenceV2).keys(w => w.add(() => "")).create();
         readonlyPreference = this.dbset<IPreference>(DocumentTypes.ReadonlyPreference).keys(w => w.add(_ => "static")).readonly().create();
 
         overrideContacts = this.dbset<IContact>(DocumentTypes.OverrideContacts).keys(w => w.add("firstName").add("lastName")).create(w => ({ ...w, otherFirst: w.first }));
@@ -101,6 +157,7 @@ describe('dbset - fluent api', () => {
                 }
             }
         }).create();
+
         booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
         booksWithDefaultsV2 = this.dbset<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
             return new class extends Instance {
@@ -172,6 +229,12 @@ describe('dbset - fluent api', () => {
         expect(contact.address).toBe("1234 Test St");
     });
 
+    it('supplying no keys should default to auto', async () => {
+        const context = dbFactory(PouchDbDataContext);
+      
+        expect(context.books.info().KeyType).toBe("auto")
+    });
+
     it('should only allow one single entity per dbset', async () => {
         const context = dbFactory(PouchDbDataContext);
         const [preference] = await context.preference.add({
@@ -185,6 +248,59 @@ describe('dbset - fluent api', () => {
 
         expect(preference.isOtherPropertyOn).toBe(true);
         expect(preference.isSomePropertyOn).toBe(false);
+    });
+
+    it('should empty and add when only single document allowed', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        await context.preference.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        await context.saveChanges();
+
+        await context.preference.empty();
+        await context.preference.add({
+            isOtherPropertyOn: false,
+            isSomePropertyOn: false
+        });
+
+        await context.saveChanges();
+
+        const items = await context.preference.all();
+
+        expect(items.length).toBe(1);
+        const [item] = items;
+        expect(item?.isOtherPropertyOn).toBe(false);
+        expect(item?.isSomePropertyOn).toBe(false);
+    });
+
+    it('should only allow one single entity per dbset - no key', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [preference] = await context.preferencev2.add({
+            isOtherPropertyOn: true,
+            isSomePropertyOn: false
+        });
+
+        expect(preference.DocumentType).toBe(DocumentTypes.PreferenceV2);
+        expect(preference._id).toBe(`${DocumentTypes.PreferenceV2}/`);
+        expect(preference._rev).not.toBeDefined();
+
+        expect(preference.isOtherPropertyOn).toBe(true);
+        expect(preference.isSomePropertyOn).toBe(false);
+    });
+
+    it('should only allow one single entity per dbset using none from fluent builder', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [book] = await context.booksNoKey.add({
+            author: "me"
+        });
+
+        expect(book.DocumentType).toBe(DocumentTypes.BooksNoKey);
+        expect(book._id).toBe(DocumentTypes.BooksNoKey);
+        expect(book._rev).not.toBeDefined();
+
+        expect(book.author).toBe("me");
     });
 
     it('should only allow one single entity per dbset and update one entity', async () => {
@@ -278,7 +394,8 @@ describe('dbset - fluent api', () => {
         await context.saveChanges();
 
         expect(note.DocumentType).toBe(DocumentTypes.Notes);
-        expect(note._id).toBeDefined();
+
+        expect(note._id).toMatch(/^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/)
         expect(note._rev).toBeDefined();
 
         expect(note.contents).toBe("Some Note");
@@ -1173,7 +1290,7 @@ describe('dbset - fluent api', () => {
         await context.contacts.add(contact)
 
         expect(context.hasPendingChanges()).toBe(true);
-        
+
         const afterLinkCount = await context.saveChanges();
 
         expect(afterLinkCount).toBe(1);
@@ -1181,5 +1298,26 @@ describe('dbset - fluent api', () => {
         const found = context.contacts.first();
 
         expect(found).toBeDefined();
+    });
+
+    it('booksv3 - should add entity, exlude a property and set the default on the add event', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [book] = await context.booksV3.add({
+            author: "me",
+            rejectedCount: 1,
+            publishDate: new Date()
+        });
+
+        expect(book.SyncRetryCount).toBe(0);
+        expect(book.SyncStatus).toBe("Pending");
+
+        await context.saveChanges();
+
+        expect(book.DocumentType).toBe(DocumentTypes.BooksV3);
+        expect(book._id).toBeDefined();
+        expect(book._rev).toBeDefined();
+
+        expect(book.author).toBe("me");
+        expect(book.publishDate).toBeDefined();
     });
 });

@@ -1,5 +1,6 @@
 import PouchDB from 'pouchdb';
 import { AdvancedDictionary } from './AdvancedDictionary';
+import { DbSetKeyType } from './DbSetBuilder';
 
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
 
@@ -105,7 +106,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Find first item in the underlying data store and return the result 
      * @returns Promise\<TEntity\>
      */
-    first(): Promise<TEntity>;
+    first(): Promise<TEntity | undefined>;
 
     /**
      * Attach callback event to the DbSet
@@ -125,7 +126,8 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
 export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
     DocumentType: TDocumentType,
     IdKeys: EntityIdKeys<TDocumentType, TEntity>,
-    Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>
+    Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>,
+    KeyType: DbSetKeyType;
 }
 
 export type Work = <T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose?: boolean) => Promise<T>
@@ -136,6 +138,7 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>,
     idKeys: EntityIdKeys<TDocumentType, TEntity>;
     readonly: boolean;
+    keyType: DbSetKeyType;
 }
 
 export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -266,6 +269,12 @@ export interface IDataContext {
      * @returns Promise\<IPurgeResponse\>
      */
     purge(purgeType: "memory" | "disk"): Promise<IPurgeResponse>
+
+    /**
+     * Will list changes that will be persisted.  Changes are add, remove, update.  NOTE:  This is a copy of the changes, changes made will not be persisted
+     * @returns Promise\<IExplainedChanges\>
+     */
+    previewChanges(): Promise<IPreviewChanges>
 }
 
 export interface ITrackedData {
@@ -276,3 +285,10 @@ export interface ITrackedData {
 }
 
 export type DeepReadOnly<T> = { readonly [key in keyof T]: DeepReadOnly<T[key]> };
+
+export type IRemovalRecord = IDbRecordBase & { _deleted: boolean };
+export interface IPreviewChanges { 
+    add: IDbRecordBase[];
+    remove: IRemovalRecord[];
+    update: IDbRecordBase[];
+}

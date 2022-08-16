@@ -1,7 +1,7 @@
 import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
-import { DataContext } from './DataContext';
+import { DbSetKeyType } from './DbSetBuilder';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -32,6 +32,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
     private _isReadonly: boolean;
+    private _keyType: DbSetKeyType;
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = {
         "add": [],
         "remove": []
@@ -47,6 +48,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._idKeys = props.idKeys;
         this._defaults = props.defaults;
         this._isReadonly = props.readonly;
+        this._keyType = props.keyType;
 
         this._api = this._context._getApi();
 
@@ -62,7 +64,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return {
             DocumentType: this._documentType,
             IdKeys: this._idKeys,
-            Defaults: this._defaults
+            Defaults: this._defaults,
+            KeyType: this._keyType
         } as IDbSetInfo<TDocumentType, TEntity>
     }
 
@@ -120,9 +123,15 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     private _getKeyFromEntity(entity: TEntity) {
 
-        if (this._idKeys.length === 0) {
+        if (this._keyType === 'auto') {
             return uuidv4();
         }
+
+        if (this._keyType === 'none') {
+            return this._documentType;
+        }
+
+        // user defined key
         const indexableEntity = entity as IIndexableEntity
 
         const keyData = this._idKeys.map(w => {
@@ -296,7 +305,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             this._api.send([result], false)
         }
 
-        return result;
+        return result as TEntity | undefined;
     }
 
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;

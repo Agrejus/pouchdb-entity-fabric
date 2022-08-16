@@ -10,6 +10,7 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     events?: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
     readonly: boolean;
     extend?: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult
+    keyType?: DbSetKeyType;
 }
 
 export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
@@ -17,6 +18,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _context: IDataContext;
     private _documentType: TDocumentType;
     private _idKeys: EntityIdKeys<TDocumentType, TEntity>;
+    private _keyType: DbSetKeyType;
     private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     private _exclusions: (keyof TEntity)[];
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
@@ -28,7 +30,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
 
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType } = params;
         this._extend = extend ?? this._defaultExtend;
         this._documentType = documentType;
         this._context = context;
@@ -36,6 +38,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         this._defaults = defaults ?? { add: {} as any, retrieve: {} as any };
         this._exclusions = exclusions ?? [];
         this._readonly = readonly;
+        this._keyType = keyType ?? "auto";
         this._events = events ?? {
             "add": [],
             "remove": []
@@ -53,7 +56,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             exclusions: this._exclusions,
             idKeys: this._idKeys,
             readonly: this._readonly,
-            extend: this._extend
+            extend: this._extend,
+            keyType: this._keyType
         } as IDbSetBuilderParams<TDocumentType, TEntity, T, any>
     }
 
@@ -70,12 +74,13 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
      * @param builder Fluent API
      * @returns DbSetBuilder
      */
-    keys(builder: (b: IIdBuilder<TDocumentType, TEntity>) => IIdBuilder<TDocumentType, TEntity>) {
+    keys(builder: (b: IIdBuilderBase<TDocumentType, TEntity>) => (IChainIdBuilder<TDocumentType, TEntity> | ITerminateIdBuilder<TDocumentType, TEntity>)) {
         const idBuilder = new IdBuilder<TDocumentType, TEntity>();
 
         builder(idBuilder);
 
         this._idKeys.push(...idBuilder.Ids);
+        this._keyType = idBuilder.KeyType;
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
@@ -177,7 +182,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 defaults: this._defaults,
                 documentType: this._documentType,
                 idKeys: this._idKeys,
-                readonly: this._readonly
+                readonly: this._readonly,
+                keyType: this._keyType
             });
             result = extend(dbset) as any
         } else {
@@ -186,7 +192,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 defaults: this._defaults,
                 documentType: this._documentType,
                 idKeys: this._idKeys,
-                readonly: this._readonly
+                readonly: this._readonly,
+                keyType: this._keyType
             });
         }
 
@@ -197,28 +204,62 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
 }
 
 
-interface IIdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
+interface ITerminateIdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
 
+}
+
+interface IChainIdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
     /**
      * Used to build a key for the entity.  Key will be built in the order
      * the keys or selectors are added
      * @param key Key or property selector
      */
-    add(key: EntityIdKey<TDocumentType, TEntity>): IIdBuilder<TDocumentType, TEntity>
+     add(key: EntityIdKey<TDocumentType, TEntity>): IChainIdBuilder<TDocumentType, TEntity>;
+}
+
+interface IIdBuilderBase<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> extends IChainIdBuilder<TDocumentType, TEntity> {
+
+    /**
+     * No keys, will only allow one single instance or record for the document type
+     */
+    none(): ITerminateIdBuilder<TDocumentType, TEntity>;
+
+    /**
+     * Key will be automatically generated
+     */
+    auto(): ITerminateIdBuilder<TDocumentType, TEntity>;
 }
 
 export type DbSetExtender<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> = new (props: IDbSetProps<TDocumentType, TEntity>) => DbSet<TDocumentType, TEntity, TExtraExclusions>;
 
-class IdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> implements IIdBuilder<TDocumentType, TEntity> {
+export type DbSetKeyType = "auto" | "none" | "user-defined";
+
+class IdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> implements IIdBuilderBase<TDocumentType, TEntity> {
 
     private _ids: EntityIdKeys<TDocumentType, TEntity> = [];
+    private _keyType: DbSetKeyType = "auto"
 
     get Ids() {
         return this._ids;
     }
 
+    get KeyType() {
+        return this._keyType;
+    }
+
     add(key: EntityIdKey<TDocumentType, TEntity>) {
+        this._keyType = "user-defined";
         this._ids.push(key);
         return this;
+    }
+
+    none() {
+        this._keyType = "none";
+        return this as ITerminateIdBuilder<TDocumentType, TEntity>
+    }
+
+    auto() {
+        this._keyType = "auto";
+        return this as ITerminateIdBuilder<TDocumentType, TEntity>
     }
 }

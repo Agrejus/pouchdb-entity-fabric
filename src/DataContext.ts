@@ -2,7 +2,7 @@ import PouchDB from 'pouchdb';
 import { PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder } from './DbSetBuilder';
 import { IndexApi, IIndexApi } from './IndexApi';
@@ -376,6 +376,17 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    async previewChanges(): Promise<IPreviewChanges> {
+        const { add, remove, updated } = await this._getModifications();
+        const clone = JSON.stringify({
+            add: add.map(w => ({...w})),
+            remove: remove.map(w => ({...w})),
+            update: updated.map(w => ({...w}))
+        });
+
+        return JSON.parse(clone)
+    }
+
     private _tryCallEvents(changes: { remove: IDbRecordBase[], add: IDbRecordBase[], updated: IDbRecordBase[] }) {
 
         if (this._events["entity-removed"].length > 0 && changes.remove.length > 0) {
@@ -418,7 +429,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
             const { add, remove, updated } = await this._getModifications();
 
-            const modifications = [...add, ...remove, ...updated];
+            // Process removals first, so we can remove items first and then add.  Just
+            // in case are are trying to remove and add the same Id
+            const modifications = [...remove, ...add, ...updated];
 
             // remove pristine entity before we send to bulk docs
             this._makePristine(...modifications)
