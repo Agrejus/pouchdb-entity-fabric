@@ -11,8 +11,8 @@ PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouch
 ### 1.4.1 -> 1.4.2 
 - Added `.previewChanges()` to `DataContext`
 - Changed processing order of changes
-    - Old: Adds, Removals, Updates
-    - New: Removals, Adds, Updates
+    - **Old**: Adds, Removals, Updates
+    - **New**: Removals, Adds, Updates
     - Will now remove entities first, this will help with single instance dbset's when users want to remove and add.  `saveChanges()` will only need to be called once now in this case instead of between the removal and add
 - Changed `DbSet` key building in the fluent API.  Options are now:
     - `add()` to start a chaining operation to build the Id
