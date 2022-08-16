@@ -8,9 +8,18 @@ npm install pouchdb-entity-fabric
 PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouchdb.com/) and makes creating repeatable processes in PouchDB easier.  Often times using PouchDB, a repository layer needs to be created and adding new document types requires a new repository.  PouchDB Entity Fabric removes the need for these repository layers all together.  Let's get to the code:
 
 ## Changes
-### 1.4.0 -> 1.4.1 
-- Fixed `.add()` on `DbSet` where intellisense types were not showing after using `.exclude()`
-- Added `.instance()` to `DbSet`
+### 1.4.1 -> 1.4.2 
+- Added `.previewChanges()` to `DataContext`
+- Changed processing order of changes
+    - Old: Adds, Removals, Updates
+    - New: Removals, Adds, Updates
+    - Will now remove entities first, this will help with single instance dbset's when users want to remove and add.  `saveChanges()` will only need to be called once now in this case instead of between the removal and add
+- Changed `DbSet` key building in the fluent API.  Options are now:
+    - `add()` to start a chaining operation to build the Id
+    - `none()` tell the dbset that the key should be the document type.  This will only allow a max of one entity in the dbset
+    - `auto()` automatically generate a key for the dbset.  This is currently the default when `keys()` is not supplied to the fluent API.
+- Exported `DeepPartial`
+- Changed `first()` on `DbSet` to return `Entity | undefined` instead of `Entity`
 
 ## Installation
 ```
