@@ -8,9 +8,21 @@ npm install pouchdb-entity-fabric
 PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouchdb.com/) and makes creating repeatable processes in PouchDB easier.  Often times using PouchDB, a repository layer needs to be created and adding new document types requires a new repository.  PouchDB Entity Fabric removes the need for these repository layers all together.  Let's get to the code:
 
 ## Changes
-### 1.4.0 -> 1.4.1 
-- Fixed `.add()` on `DbSet` where intellisense types were not showing after using `.exclude()`
-- Added `.instance()` to `DbSet`
+### 1.4.1 -> 1.4.2 
+- Added `.previewChanges()` to `DataContext`
+- Changed processing order of changes
+    - **Old**: Adds, Removals, Updates
+    - **New**: Removals, Adds, Updates
+    - Will now remove entities first, this will help with single instance dbset's when users want to remove and add.  `saveChanges()` will only need to be called once now in this case instead of between the removal and add
+- Changed `DbSet` key building in the fluent API.  Options are now:
+    - `add()` to start a chaining operation to build the Id
+    - `none()` tell the dbset that the key should be the document type.  This will only allow a max of one entity in the dbset
+    - `auto()` automatically generate a key for the dbset.  This is currently the default when `keys()` is not supplied to the fluent API.
+- Exported `DeepPartial`
+- Changed `first()` on `DbSet` to return `Entity | undefined` instead of `Entity`
+- Fixed bug with `DbSet` fluent API when trying to use `.on()`, events were not being called
+- Added `.map()` to `DbSet` fluent API
+- Changed `.link()` to return the linked entities, please use the returned entities now
 
 ## Installation
 ```
@@ -293,6 +305,12 @@ interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
     myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
 }
+
+// _____ OR ______ //
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).keys(w => w.auto()).create();
+}
 ```
 
 #### Manual Id Generation
@@ -336,6 +354,28 @@ interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
 
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
     myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).keys(w => w.add("propertyOne").add("propertyTwo").add(w => w.dateProperty.toISOString())).create();
+}
+```
+
+#### Single Entity Db Set
+Sometimes we only want a dbset to have only one entity and never any more.  This is very useful for things like configurations.
+
+In the below example, we are marking the keys as none.  The resulting id will be `MyFirstDocument`.
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).keys(w => w.none()).create();
 }
 ```
 
@@ -523,6 +563,40 @@ const context = new PouchDbDataContext();
 
 ```
 
+#### DbSet Fluent API - Mapping Data (Dates)
+Mapping data returned from PouchDB can be very useful, especially for dates.  When a date is returned from PouchDB, it is a string even though it was sent in as a type of Date.  To turn the string back to a date, we can instruct the DbSet to map back to a date.  If a date is being mapped, the map function will show the parameter as a string not a date.
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+    dateProperty: Date
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).map({ property: "dateProperty", map: w => new Date(w) }).create();
+}
+
+const context = new PouchDbDataContext();
+
+const [item] = await context.myFirstDbSet.add({
+    propertyOne: "some value",
+    propertyTwo: "some value"
+});
+
+await context.saveChanges();
+
+const found = await context.myFirstDbSet.first();
+
+// found.dateProperty will now be a date
+```
+
 ## Linking/Unlinking Entities
 Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.  When an entity is linked, the dbset will automatically grab the latest _rev in the database for the document and set it on the linked entity.
 
@@ -701,7 +775,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity \| undefined>` | Find an entity for the underlying document type |
 | `unlink(...entities: TEntity[]): void` | Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store |
 | `link(...entites: TEntity[]): Promise<void>` | Link an existing entitiy or entities to the underlying Data Context from another Data Context, saveChanges must be called to persist these items to the store |
-| `first(): Promise<TEntity>` | Get first item in the DbSet |  
+| `first(): Promise<TEntity | undefined>` | Get first item in the DbSet |  
 | `on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void` | Called when an item is queued for creation in the underlying data context |
 | `on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> \| DbSetIdOnlyEventCallback): void` | Called when an item is queued for removal in the underlying data context |
 | `nfo(): IDbSetInfo<TDocumentType, TEntity>` | Get DbSet info |
@@ -719,6 +793,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `destroyDatabase(): Promise<void>` | Destroy Pouch Database |
 | `optimize(): Promise<void>` | Add optimizations to increase performance of PouchDB |
 | `protected createDb():PouchDB.Database<{}> ` | Can override and create a new instance of PouchDB |
+| `previewChanges(): Promise<IPreviewChanges>` | Will list changes that will be persisted.  Changes are add, remove, update.  NOTE:  This is a copy of the changes, changes made will not be persisted |
 
 ## Issues
 

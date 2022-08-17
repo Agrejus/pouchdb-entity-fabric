@@ -1,7 +1,7 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps, DbSetAsyncEvent, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
-import { DataContext } from './DataContext';
+import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
@@ -32,9 +32,16 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     private _context: IPrivateContext<TDocumentType>;
     private _api: IDbSetApi<TDocumentType>;
     private _isReadonly: boolean;
+    private _keyType: DbSetKeyType;
+    private _map: PropertyMap<TDocumentType, TEntity, any>[];
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = {
         "add": [],
         "remove": []
+    }
+
+    private _asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] } = {
+        "add-invoked": [],
+        "remove-invoked": []
     }
 
     /**
@@ -47,23 +54,32 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._idKeys = props.idKeys;
         this._defaults = props.defaults;
         this._isReadonly = props.readonly;
+        this._keyType = props.keyType;
+        this._events = props.events;
+        this._asyncEvents = props.asyncEvents;
+        this._map = props.map;
 
         this._api = this._context._getApi();
 
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
 
-        // Allow spread operator to work on the class for extending it
+        // Allow spread operator to work on the class for extending it - Deprecated
         for(let property of properties) {
             (this as any)[property] = (this as any)[property]
         }
     }
 
     info() {
-        return {
+        const info: IDbSetInfo<TDocumentType, TEntity> = {
             DocumentType: this._documentType,
             IdKeys: this._idKeys,
-            Defaults: this._defaults
-        } as IDbSetInfo<TDocumentType, TEntity>
+            Defaults: this._defaults,
+            KeyType: this._keyType,
+            Readonly: this._isReadonly,
+            Map: this._map
+        }
+
+        return info;
     }
 
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
@@ -77,7 +93,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
                 (addItem as any)._id = id;
             }
 
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly) as TEntity;
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map) as TEntity;
 
             return {...trackableEntity}
         });
@@ -87,7 +103,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const data = this._api.getTrackedData();
         const { add } = data;
 
-        return entities.map(entity => {
+        const result = entities.map(entity => {
             const indexableEntity: IIndexableEntity = entity as any;
 
             if (indexableEntity["_rev"] !== undefined) {
@@ -110,19 +126,31 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
             this._events["add"].forEach(w => w(entity as any));
 
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly) as TEntity;
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map) as TEntity;
 
             add.push(trackableEntity);
 
             return trackableEntity;
-        })
+        });
+
+        if (this._asyncEvents['add-invoked'].length > 0) {
+            await Promise.all(this._asyncEvents['add-invoked'].map(w => w(result as any)))
+        }
+
+        return result
     }
 
     private _getKeyFromEntity(entity: TEntity) {
 
-        if (this._idKeys.length === 0) {
+        if (this._keyType === 'auto') {
             return uuidv4();
         }
+
+        if (this._keyType === 'none') {
+            return this._documentType;
+        }
+
+        // user defined key
         const indexableEntity = entity as IIndexableEntity
 
         const keyData = this._idKeys.map(w => {
@@ -145,6 +173,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     async remove(...ids: string[]): Promise<void>;
     async remove(...entities: TEntity[]): Promise<void>;
     async remove(...entities: any[]) {
+
+        if (this._asyncEvents['remove-invoked'].length > 0) {
+            await Promise.all(this._asyncEvents['remove-invoked'].map(w => w(entities as any)))
+        }
 
         if (entities.some(w => typeof w === "string")) {
             await Promise.all(entities.map(w => this._removeById(w)))
@@ -193,8 +225,9 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     private async _all() {
-        const data = await this._api.getAllData(this._documentType)
-        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly) as TEntity);
+        const data = await this._api.getAllData(this._documentType);
+        // process the mappings when we make the item trackable.  We are essentially prepping the entity
+        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map) as TEntity);
     }
 
     async all() {
@@ -221,7 +254,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     async get(...ids: string[]) {
         const entities = await this._api.get(...ids);
-        const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly) as TEntity);
+        const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map) as TEntity);
 
         if (result.length > 0) {
             this._api.send(result, false)
@@ -276,12 +309,15 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
         const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
 
-        entities.forEach(w => {
-            this._api.makeTrackable(w, this._defaults.add, this._isReadonly);
-            (w as any)._rev = foundDictionary[w._id]
+        const result = entities.map(w => {
+            const entity = this._api.makeTrackable(w, this._defaults.add, this._isReadonly, this._map);
+            (entity as any)._rev = foundDictionary[w._id];
+            return entity
         });
 
-        this._api.send(entities, true)
+        this._api.send(result, true);
+
+        return result;
     }
 
     async attach(...entities: TEntity[]) {
@@ -296,12 +332,20 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             this._api.send([result], false)
         }
 
-        return result;
+        return result as TEntity | undefined;
     }
 
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
-    on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>) {
+    on(event: "remove-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync): void;
+    on(event: "add-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity>): void;
+    on(event: DbSetEvent | DbSetAsyncEvent, callback: any) {
+        
+        if (event === 'add-invoked' || event === "remove-invoked") {
+            this._asyncEvents[event].push(callback)
+            return;
+        }
+
         this._events[event].push(callback);
     }
 }

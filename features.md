@@ -1,16 +1,5 @@
-- Predicate builder
-    - Create index on the fly
-
 - strict mode
     - log missing indexes
-
-
-$indexes.
-    all()
-    find()
-    create(name:string)
-        fields(w => w.add())
-    remove(name:string)
 
 $filters.
     all()
@@ -30,9 +19,9 @@ $filters.
     }
 }
 
+single instance for dbset builder
+document the marker to id a Proxy
 
-
-explainChanges()
 
 dbSet
     readonly

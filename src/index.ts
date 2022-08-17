@@ -18,5 +18,6 @@ export {
     IDbSetBase,
     IdKeys,
     EntityIdKeys,
-    DataContextOptions
+    DataContextOptions,
+    DeepPartial
 } from './typings';

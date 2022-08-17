@@ -2,7 +2,7 @@
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
-import { DataContextEvent, DataContextEventCallback, DataContextOptions, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPurgeResponse } from './typings';
+import { DataContextEvent, DataContextEventCallback, DataContextOptions, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPreviewChanges, IPurgeResponse } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder } from './DbSetBuilder';
 import { IIndexApi } from './IndexApi';
@@ -90,7 +90,9 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private areEqual;
     private _makeTrackable;
     private _getPendingChanges;
-    private _tryCallEvents;
+    previewChanges(): Promise<IPreviewChanges>;
+    private _tryCallPostSaveEvents;
+    private _callEvents;
     private _makePristine;
     private _getModifications;
     saveChanges(): Promise<number>;
@@ -106,11 +108,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     empty(): Promise<void>;
     destroyDatabase(): Promise<void>;
     purge(purgeType?: "memory" | "disk"): Promise<IPurgeResponse>;
-    static asUntracked(...entities: IDbRecordBase[]): {
-        _id: string;
-        _rev: string;
-        DocumentType: any;
-    }[];
+    static asUntracked<T extends IDbRecordBase>(...entities: IDbRecordBase[]): T[];
     static isProxy(entities: IDbRecordBase): boolean;
     [Symbol.iterator](): {
         next: () => {

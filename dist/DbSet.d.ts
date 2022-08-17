@@ -1,4 +1,4 @@
-import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, IDbSetInfo, IDbSetProps } from './typings';
+import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, IDbSetInfo, IDbSetProps, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -20,7 +20,10 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     private _context;
     private _api;
     private _isReadonly;
+    private _keyType;
+    private _map;
     private _events;
+    private _asyncEvents;
     /**
      * Constructor
      * @param props Properties for the constructor
@@ -45,9 +48,11 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>;
     detach(...entities: TEntity[]): void;
     unlink(...entities: TEntity[]): void;
-    link(...entities: TEntity[]): Promise<void>;
+    link(...entities: TEntity[]): Promise<TEntity[]>;
     attach(...entities: TEntity[]): Promise<void>;
     first(): Promise<TEntity>;
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
+    on(event: "remove-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync): void;
+    on(event: "add-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity>): void;
 }

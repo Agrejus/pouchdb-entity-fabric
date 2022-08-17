@@ -5,8 +5,9 @@ const DbSet_1 = require("./DbSet");
 class DbSetBuilder {
     constructor(onCreate, params) {
         this._readonly = false;
+        this._map = [];
         this._defaultExtend = (Instance, a) => new Instance(a);
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map } = params;
         this._extend = extend !== null && extend !== void 0 ? extend : this._defaultExtend;
         this._documentType = documentType;
         this._context = context;
@@ -14,10 +15,16 @@ class DbSetBuilder {
         this._defaults = defaults !== null && defaults !== void 0 ? defaults : { add: {}, retrieve: {} };
         this._exclusions = exclusions !== null && exclusions !== void 0 ? exclusions : [];
         this._readonly = readonly;
+        this._keyType = keyType !== null && keyType !== void 0 ? keyType : "auto";
         this._events = events !== null && events !== void 0 ? events : {
             "add": [],
             "remove": []
         };
+        this._asyncEvents = asyncEvents !== null && asyncEvents !== void 0 ? asyncEvents : {
+            "add-invoked": [],
+            "remove-invoked": []
+        };
+        this._map = map !== null && map !== void 0 ? map : [];
         this._onCreate = onCreate;
     }
     _buildParams() {
@@ -29,7 +36,10 @@ class DbSetBuilder {
             exclusions: this._exclusions,
             idKeys: this._idKeys,
             readonly: this._readonly,
-            extend: this._extend
+            extend: this._extend,
+            keyType: this._keyType,
+            asyncEvents: this._asyncEvents,
+            map: this._map
         };
     }
     /**
@@ -49,6 +59,7 @@ class DbSetBuilder {
         const idBuilder = new IdBuilder();
         builder(idBuilder);
         this._idKeys.push(...idBuilder.Ids);
+        this._keyType = idBuilder.KeyType;
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     defaults(value) {
@@ -74,8 +85,17 @@ class DbSetBuilder {
         this._exclusions.push(...exclusions);
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
+    map(propertyMap) {
+        this._map.push(propertyMap);
+        return new DbSetBuilder(this._onCreate, this._buildParams());
+    }
     on(event, callback) {
-        this._events[event].push(callback);
+        if (event === 'add-invoked' || event === "remove-invoked") {
+            this._asyncEvents[event].push(callback);
+        }
+        else {
+            this._events[event].push(callback);
+        }
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     extend(extend) {
@@ -90,7 +110,11 @@ class DbSetBuilder {
                 defaults: this._defaults,
                 documentType: this._documentType,
                 idKeys: this._idKeys,
-                readonly: this._readonly
+                readonly: this._readonly,
+                keyType: this._keyType,
+                asyncEvents: this._asyncEvents,
+                events: this._events,
+                map: this._map
             });
             result = extend(dbset);
         }
@@ -100,7 +124,11 @@ class DbSetBuilder {
                 defaults: this._defaults,
                 documentType: this._documentType,
                 idKeys: this._idKeys,
-                readonly: this._readonly
+                readonly: this._readonly,
+                keyType: this._keyType,
+                asyncEvents: this._asyncEvents,
+                events: this._events,
+                map: this._map
             });
         }
         this._onCreate(result);
@@ -111,12 +139,25 @@ exports.DbSetBuilder = DbSetBuilder;
 class IdBuilder {
     constructor() {
         this._ids = [];
+        this._keyType = "auto";
     }
     get Ids() {
         return this._ids;
     }
+    get KeyType() {
+        return this._keyType;
+    }
     add(key) {
+        this._keyType = "user-defined";
         this._ids.push(key);
+        return this;
+    }
+    none() {
+        this._keyType = "none";
+        return this;
+    }
+    auto() {
+        this._keyType = "auto";
         return this;
     }
 }
