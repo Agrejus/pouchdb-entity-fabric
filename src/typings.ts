@@ -109,12 +109,32 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     first(): Promise<TEntity | undefined>;
 
     /**
-     * Attach callback event to the DbSet
-     * @param event
+     * Called once per entity added
+     * @param event 
      * @param callback 
-     * @returns void
      */
-    on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+    on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
+
+    /**
+     * Called once per entity removed
+     * @param event 
+     * @param callback 
+     */
+    on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
+
+    /**
+     * Called once per remove operation invocation
+     * @param event 
+     * @param callback 
+     */
+    on(event: "remove-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync): void;
+
+    /**
+     * Called once per add operation invocation
+     * @param event 
+     * @param callback 
+     */
+    on(event: "add-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity>): void;
 
     /**
      * Get DbSet info
