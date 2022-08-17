@@ -9,7 +9,7 @@ describe('dbset - deprecated', () => {
 
     PouchDB.plugin(memoryAdapter);
 
-    const dbs: { [key:string]: DataContext<DocumentTypes> } = {}
+    const dbs: { [key: string]: DataContext<DocumentTypes> } = {}
     const dbFactory = <T extends typeof PouchDbDataContext>(Context: T, dbname?: string) => {
         const name = dbname ?? `${uuidv4()}-db`;
         const result = new Context(name);
@@ -40,7 +40,7 @@ describe('dbset - deprecated', () => {
 
     interface IBook extends IDbRecord<DocumentTypes> {
         author: string;
-        publishDate?:  Date;
+        publishDate?: Date;
         rejectedCount: number;
         status: "pending" | "approved" | "rejected";
     }
@@ -76,7 +76,7 @@ describe('dbset - deprecated', () => {
         contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
         books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
         cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create();
-        preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add( _ => "static")).create();
+        preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
     }
 
     class DefaultPropertiesDataContext extends PouchDbDataContext {
@@ -94,7 +94,7 @@ describe('dbset - deprecated', () => {
     })
 
     it('should add entity and return reference', async () => {
-        debugger;
+
         const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
             firstName: "James",
@@ -171,19 +171,30 @@ describe('dbset - deprecated', () => {
 
         const book = await context.books.first();
 
+        if (!book) {
+            expect(true).toBe(false);
+            return;
+        }
+
         context.books.unlink(book);
 
         const secondBook = await context.books.first();
+
+        if (!secondBook) {
+            expect(true).toBe(false);
+            return;
+        }
+
         secondBook.author = "DeMeuse"
         await context.saveChanges();
 
         const secondaryContext = dbFactory(DefaultPropertiesDataContext, dbname);
-        await secondaryContext.books.link(book);
+        const [linkedBook] = await secondaryContext.books.link(book);
 
-        book.author = "James DeMeuse";
+        linkedBook.author = "James DeMeuse";
         await secondaryContext.saveChanges();
 
-        expect(book._rev.startsWith("3")).toBe(true)
+        expect(linkedBook._rev.startsWith("3")).toBe(true)
     });
 
     it('should add entity, save, and set _rev', async () => {
@@ -784,9 +795,9 @@ describe('dbset - deprecated', () => {
         const secondContext = dbFactory(PouchDbDataContext, dbname);
 
         // attaching re-enables entity tracking for properties changed
-        await secondContext.contacts.link(contact);
+        const [linkedContact] = await secondContext.contacts.link(contact);
 
-        contact.firstName = "Test";
+        linkedContact.firstName = "Test";
 
         expect(secondContext.hasPendingChanges()).toBe(true);
         await secondContext.saveChanges();
@@ -836,10 +847,10 @@ describe('dbset - deprecated', () => {
         const secondContext = dbFactory(PouchDbDataContext, dbname);
 
         // attaching re-enables entity tracking for properties changed
-        await secondContext.contacts.link(one, two);
+        const [linkedOne, linkedTwo] = await secondContext.contacts.link(one, two);
 
-        one.firstName = "Test";
-        two.firstName = "Test";
+        linkedOne.firstName = "Test";
+        linkedTwo.firstName = "Test";
 
         expect(secondContext.hasPendingChanges()).toBe(true);
         await secondContext.saveChanges();
@@ -851,6 +862,6 @@ describe('dbset - deprecated', () => {
 
     // test new get method
     it('items', async () => {
-        
+
     })
 });

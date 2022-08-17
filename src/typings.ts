@@ -1,6 +1,6 @@
 import PouchDB from 'pouchdb';
 import { AdvancedDictionary } from './AdvancedDictionary';
-import { DbSetKeyType } from './DbSetBuilder';
+import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
 
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
 
@@ -17,7 +17,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @param entities Entity or entities to create
      * @returns TEntity[]
      */
-     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[];
+    instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[];
 
     /**
      * Remove one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
@@ -85,7 +85,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
      * @param entites Entity or entities to link from the data context
      */
-    link(...entites: TEntity[]): Promise<void>;
+    link(...entites: TEntity[]): Promise<TEntity[]>;
 
     /**
      * Link an existing entitiy or entities to the underlying Data Context, saveChanges must be called to persist these items to the store
@@ -128,6 +128,8 @@ export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRec
     IdKeys: EntityIdKeys<TDocumentType, TEntity>,
     Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>,
     KeyType: DbSetKeyType;
+    Map: PropertyMap<TDocumentType, TEntity, any>[];
+    Readonly: boolean;
 }
 
 export type Work = <T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose?: boolean) => Promise<T>
@@ -139,6 +141,9 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     idKeys: EntityIdKeys<TDocumentType, TEntity>;
     readonly: boolean;
     keyType: DbSetKeyType;
+    events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
+    asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
+    map: PropertyMap<TDocumentType, TEntity, any>[]
 }
 
 export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -148,7 +153,12 @@ export type DataContextEvent = 'entity-created' | 'entity-removed' | 'entity-upd
 
 export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity) => void;
 export type DbSetIdOnlyEventCallback = (entity: string) => void;
+
+export type DbSetEventCallbackAsync<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entities: TEntity[]) => Promise<void>;
+export type DbSetIdOnlyEventCallbackAsync = (entities: string[]) => Promise<void>;
+
 export type DbSetEvent = "add" | "remove";
+export type DbSetAsyncEvent = "add-invoked" | "remove-invoked";
 
 export type DocumentKeySelector<T> = (entity: T) => any
 export type KeyOf<T> = keyof T | DocumentKeySelector<T>;
@@ -197,7 +207,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
-    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean): T;
+    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T;
 }
 
 export interface IDbRecord<TDocumentType extends string> extends IDbAdditionRecord<TDocumentType> {
@@ -287,7 +297,7 @@ export interface ITrackedData {
 export type DeepReadOnly<T> = { readonly [key in keyof T]: DeepReadOnly<T[key]> };
 
 export type IRemovalRecord = IDbRecordBase & { _deleted: boolean };
-export interface IPreviewChanges { 
+export interface IPreviewChanges {
     add: IDbRecordBase[];
     remove: IRemovalRecord[];
     update: IDbRecordBase[];

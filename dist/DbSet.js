@@ -26,14 +26,22 @@ class DbSet {
             "add": [],
             "remove": []
         };
+        this._asyncEvents = {
+            "add-invoked": [],
+            "remove-invoked": []
+        };
         this._documentType = props.documentType;
         this._context = props.context;
         this._idKeys = props.idKeys;
         this._defaults = props.defaults;
         this._isReadonly = props.readonly;
+        this._keyType = props.keyType;
+        this._events = props.events;
+        this._asyncEvents = props.asyncEvents;
+        this._map = props.map;
         this._api = this._context._getApi();
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
-        // Allow spread operator to work on the class for extending it
+        // Allow spread operator to work on the class for extending it - Deprecated
         for (let property of properties) {
             this[property] = this[property];
         }
@@ -49,11 +57,15 @@ class DbSet {
      */
     get DocumentType() { return this._documentType; }
     info() {
-        return {
+        const info = {
             DocumentType: this._documentType,
             IdKeys: this._idKeys,
-            Defaults: this._defaults
+            Defaults: this._defaults,
+            KeyType: this._keyType,
+            Readonly: this._isReadonly,
+            Map: this._map
         };
+        return info;
     }
     instance(...entities) {
         return entities.map(entity => {
@@ -63,7 +75,7 @@ class DbSet {
             if (id != undefined) {
                 addItem._id = id;
             }
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly);
+            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map);
             return Object.assign({}, trackableEntity);
         });
     }
@@ -71,7 +83,7 @@ class DbSet {
         return __awaiter(this, void 0, void 0, function* () {
             const data = this._api.getTrackedData();
             const { add } = data;
-            return entities.map(entity => {
+            const result = entities.map(entity => {
                 const indexableEntity = entity;
                 if (indexableEntity["_rev"] !== undefined) {
                     throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity');
@@ -87,16 +99,24 @@ class DbSet {
                     addItem._id = id;
                 }
                 this._events["add"].forEach(w => w(entity));
-                const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly);
+                const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map);
                 add.push(trackableEntity);
                 return trackableEntity;
             });
+            if (this._asyncEvents['add-invoked'].length > 0) {
+                yield Promise.all(this._asyncEvents['add-invoked'].map(w => w(result)));
+            }
+            return result;
         });
     }
     _getKeyFromEntity(entity) {
-        if (this._idKeys.length === 0) {
+        if (this._keyType === 'auto') {
             return (0, uuid_1.v4)();
         }
+        if (this._keyType === 'none') {
+            return this._documentType;
+        }
+        // user defined key
         const indexableEntity = entity;
         const keyData = this._idKeys.map(w => {
             if (typeof w === "string") {
@@ -112,6 +132,9 @@ class DbSet {
     }
     remove(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
+            if (this._asyncEvents['remove-invoked'].length > 0) {
+                yield Promise.all(this._asyncEvents['remove-invoked'].map(w => w(entities)));
+            }
             if (entities.some(w => typeof w === "string")) {
                 yield Promise.all(entities.map(w => this._removeById(w)));
                 return;
@@ -155,7 +178,8 @@ class DbSet {
     _all() {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._api.getAllData(this._documentType);
-            return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly));
+            // process the mappings when we make the item trackable.  We are essentially prepping the entity
+            return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map));
         });
     }
     all() {
@@ -179,7 +203,7 @@ class DbSet {
     get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
             const entities = yield this._api.get(...ids);
-            const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly));
+            const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map));
             if (result.length > 0) {
                 this._api.send(result, false);
             }
@@ -220,11 +244,13 @@ class DbSet {
                 throw new Error(`Error linking entities, document not found`);
             }
             const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
-            entities.forEach(w => {
-                this._api.makeTrackable(w, this._defaults.add, this._isReadonly);
-                w._rev = foundDictionary[w._id];
+            const result = entities.map(w => {
+                const entity = this._api.makeTrackable(w, this._defaults.add, this._isReadonly, this._map);
+                entity._rev = foundDictionary[w._id];
+                return entity;
             });
-            this._api.send(entities, true);
+            this._api.send(result, true);
+            return result;
         });
     }
     attach(...entities) {
@@ -243,6 +269,10 @@ class DbSet {
         });
     }
     on(event, callback) {
+        if (event === 'add-invoked' || event === "remove-invoked") {
+            this._asyncEvents[event].push(callback);
+            return;
+        }
         this._events[event].push(callback);
     }
 }

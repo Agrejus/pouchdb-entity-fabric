@@ -156,7 +156,7 @@ class DataContext extends PouchDbInteractionBase {
                 const dbSet = this._dbSets[w.DocumentType];
                 if (dbSet) {
                     const info = dbSet.info();
-                    return this._makeTrackable(w, info.Defaults.retrieve, false);
+                    return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Map);
                 }
                 return w;
             });
@@ -263,7 +263,7 @@ class DataContext extends PouchDbInteractionBase {
             return first[w] != second[w];
         }) === false;
     }
-    _makeTrackable(entity, defaults, readonly) {
+    _makeTrackable(entity, defaults, readonly, maps) {
         const proxyHandler = {
             set: (entity, property, value) => {
                 const indexableEntity = entity;
@@ -287,7 +287,16 @@ class DataContext extends PouchDbInteractionBase {
                 return Reflect.get(target, property, receiver);
             }
         };
-        const result = readonly ? Object.freeze(Object.assign(Object.assign({}, defaults), entity)) : Object.assign(Object.assign({}, defaults), entity);
+        const mergedInstance = Object.assign(Object.assign({}, defaults), entity);
+        let mappedInstance = {};
+        if (maps.length > 0) {
+            mappedInstance = maps.reduce((a, v) => {
+                const preTransformValue = mergedInstance[v.property];
+                return Object.assign(Object.assign({}, a), { [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) });
+            }, {});
+        }
+        const instance = Object.assign(Object.assign({}, mergedInstance), mappedInstance);
+        const result = readonly ? Object.freeze(instance) : instance;
         return new Proxy(result, proxyHandler);
     }
     _getPendingChanges() {
@@ -312,15 +321,27 @@ class DataContext extends PouchDbInteractionBase {
             updated
         };
     }
-    _tryCallEvents(changes) {
-        if (this._events["entity-removed"].length > 0 && changes.remove.length > 0) {
-            changes.remove.forEach(w => this._events["entity-removed"].forEach(x => x(w)));
-        }
-        if (this._events["entity-created"].length > 0 && changes.add.length > 0) {
-            changes.add.forEach(w => this._events["entity-created"].forEach(x => x(w)));
-        }
-        if (this._events["entity-updated"].length > 0 && changes.updated.length > 0) {
-            changes.updated.forEach(w => this._events["entity-updated"].forEach(x => x(w)));
+    previewChanges() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { add, remove, updated } = yield this._getModifications();
+            const clone = JSON.stringify({
+                add: add.map(w => (Object.assign({}, w))),
+                remove: remove.map(w => (Object.assign({}, w))),
+                update: updated.map(w => (Object.assign({}, w)))
+            });
+            return JSON.parse(clone);
+        });
+    }
+    _tryCallPostSaveEvents(changes) {
+        this._callEvents(changes.remove, "entity-removed");
+        this._callEvents(changes.add, "entity-created");
+        this._callEvents(changes.updated, "entity-updated");
+    }
+    _callEvents(data, entityEvent) {
+        if (data.length > 0) {
+            if (this._events[entityEvent].length > 0) {
+                data.forEach(w => this._events[entityEvent].forEach(x => x(w)));
+            }
         }
     }
     _makePristine(...entities) {
@@ -345,7 +366,9 @@ class DataContext extends PouchDbInteractionBase {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { add, remove, updated } = yield this._getModifications();
-                const modifications = [...add, ...remove, ...updated];
+                // Process removals first, so we can remove items first and then add.  Just
+                // in case are are trying to remove and add the same Id
+                const modifications = [...remove, ...add, ...updated];
                 // remove pristine entity before we send to bulk docs
                 this._makePristine(...modifications);
                 const modificationResult = yield this.bulkDocs(modifications);
@@ -363,7 +386,7 @@ class DataContext extends PouchDbInteractionBase {
                 // removals are being grouped with updates, 
                 // need to separate out calls to events so we don't double dip
                 // on updates and removals
-                this._tryCallEvents({ remove, add, updated });
+                this._tryCallPostSaveEvents({ remove, add, updated });
                 this._reinitialize(remove, add);
                 return modificationResult.successes_count;
             }

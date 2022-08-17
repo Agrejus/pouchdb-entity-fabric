@@ -383,9 +383,9 @@ const shouldAttachSomeEntities = async () => {
 
     const secondContext = new PerformanceDbDataContext();
 
-    secondContext.test1.link(...items);
+    const linked = await secondContext.test1.link(...items);
 
-    for (let item of items) {
+    for (let item of linked) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();
@@ -406,9 +406,9 @@ const shouldAttachManyEntities = async () => {
 
     const secondContext = new PerformanceDbDataContext();
 
-    secondContext.test1.link(...items);
+    const linked = await secondContext.test1.link(...items);
 
-    for (let item of items) {
+    for (let item of linked) {
         item.test1 = faker.random.word();
         item.test2 = faker.random.word();
         item.test3 = faker.random.word();

@@ -4,7 +4,7 @@ import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
-import { DbSetBuilder } from './DbSetBuilder';
+import { DbSetBuilder, PropertyMap } from './DbSetBuilder';
 import { IndexApi, IIndexApi } from './IndexApi';
 
 PouchDB.plugin(findAdapter);
@@ -178,7 +178,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             if (dbSet) {
                 const info = dbSet.info();
 
-                return this._makeTrackable(w, info.Defaults.retrieve, false)
+                return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Map)
             }
 
             return w
@@ -309,7 +309,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
-    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean): T {
+    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
@@ -342,7 +342,18 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        const result = readonly ? Object.freeze({ ...defaults, ...entity }) : { ...defaults, ...entity };
+        const mergedInstance = { ...defaults, ...entity };
+        let mappedInstance = {};
+
+        if (maps.length > 0) {
+            mappedInstance = maps.reduce((a, v) => {
+                const preTransformValue = (mergedInstance as any)[v.property];
+                return { ...a, [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) }
+            }, {});
+        }
+
+        const instance = { ...mergedInstance, ...mappedInstance };
+        const result = readonly ? Object.freeze(instance) : instance;
 
         return new Proxy(result, proxyHandler) as T
     }
@@ -379,26 +390,28 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     async previewChanges(): Promise<IPreviewChanges> {
         const { add, remove, updated } = await this._getModifications();
         const clone = JSON.stringify({
-            add: add.map(w => ({...w})),
-            remove: remove.map(w => ({...w})),
-            update: updated.map(w => ({...w}))
+            add: add.map(w => ({ ...w })),
+            remove: remove.map(w => ({ ...w })),
+            update: updated.map(w => ({ ...w }))
         });
 
         return JSON.parse(clone)
     }
 
-    private _tryCallEvents(changes: { remove: IDbRecordBase[], add: IDbRecordBase[], updated: IDbRecordBase[] }) {
+    private _tryCallPostSaveEvents(changes: { remove: IDbRecordBase[], add: IDbRecordBase[], updated: IDbRecordBase[] }) {
 
-        if (this._events["entity-removed"].length > 0 && changes.remove.length > 0) {
-            changes.remove.forEach(w => this._events["entity-removed"].forEach(x => x(w)))
-        }
+        this._callEvents(changes.remove, "entity-removed");
+        this._callEvents(changes.add, "entity-created");
+        this._callEvents(changes.updated, "entity-updated");
 
-        if (this._events["entity-created"].length > 0 && changes.add.length > 0) {
-            changes.add.forEach(w => this._events["entity-created"].forEach(x => x(w)))
-        }
+    }
 
-        if (this._events["entity-updated"].length > 0 && changes.updated.length > 0) {
-            changes.updated.forEach(w => this._events["entity-updated"].forEach(x => x(w)))
+    private _callEvents(data: IDbRecordBase[], entityEvent: DataContextEvent) {
+        if (data.length > 0) {
+
+            if (this._events[entityEvent].length > 0) {
+                data.forEach(w => this._events[entityEvent].forEach(x => x(w)))
+            }
         }
     }
 
@@ -424,9 +437,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+
     async saveChanges() {
         try {
-
             const { add, remove, updated } = await this._getModifications();
 
             // Process removals first, so we can remove items first and then add.  Just
@@ -455,7 +468,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             // removals are being grouped with updates, 
             // need to separate out calls to events so we don't double dip
             // on updates and removals
-            this._tryCallEvents({ remove, add, updated });
+            this._tryCallPostSaveEvents({ remove, add, updated });
 
             this._reinitialize(remove, add);
 
@@ -562,8 +575,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }, false);
     }
 
-    static asUntracked(...entities: IDbRecordBase[]) {
-        return entities.map(w => ({ ...w }));
+    static asUntracked<T extends IDbRecordBase>(...entities: IDbRecordBase[]) {
+        return entities.map(w => ({ ...w } as T));
     }
 
     static isProxy(entities: IDbRecordBase) {

@@ -20,6 +20,9 @@ PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouch
     - `auto()` automatically generate a key for the dbset.  This is currently the default when `keys()` is not supplied to the fluent API.
 - Exported `DeepPartial`
 - Changed `first()` on `DbSet` to return `Entity | undefined` instead of `Entity`
+- Fixed bug with `DbSet` fluent API when trying to use `.on()`, events were not being called
+- Added `.map()` to `DbSet` fluent API
+- Changed `.link()` to return the linked entities, please use the returned entities now
 
 ## Installation
 ```
@@ -558,6 +561,40 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 
 const context = new PouchDbDataContext();
 
+```
+
+#### DbSet Fluent API - Mapping Data (Dates)
+Mapping data returned from PouchDB can be very useful, especially for dates.  When a date is returned from PouchDB, it is a string even though it was sent in as a type of Date.  To turn the string back to a date, we can instruct the DbSet to map back to a date.  If a date is being mapped, the map function will show the parameter as a string not a date.
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+    dateProperty: Date
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).map({ property: "dateProperty", map: w => new Date(w) }).create();
+}
+
+const context = new PouchDbDataContext();
+
+const [item] = await context.myFirstDbSet.add({
+    propertyOne: "some value",
+    propertyTwo: "some value"
+});
+
+await context.saveChanges();
+
+const found = await context.myFirstDbSet.first();
+
+// found.dateProperty will now be a date
 ```
 
 ## Linking/Unlinking Entities

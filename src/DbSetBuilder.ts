@@ -1,5 +1,5 @@
 import { DbSet } from "./DbSet";
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, IDbSetProps, OmittedEntity } from "./typings";
+import { DbSetAsyncEvent, DbSetEvent, DbSetEventCallback, DbSetEventCallbackAsync, DbSetIdOnlyEventCallback, DbSetIdOnlyEventCallbackAsync, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, IDbSetProps, OmittedEntity } from "./typings";
 
 interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
     context: IDataContext;
@@ -8,10 +8,16 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     defaults?: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     exclusions?: (keyof TEntity)[];
     events?: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
+    asyncEvents?: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
     readonly: boolean;
     extend?: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult
     keyType?: DbSetKeyType;
+    map?: PropertyMap<TDocumentType, TEntity, any>[];
 }
+
+type ConvertDateToString<T> = T extends Date ? string : T;
+
+export type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: (value: ConvertDateToString<TEntity[TProperty]>) => TEntity[TProperty] }
 
 export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
 
@@ -22,15 +28,17 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     private _exclusions: (keyof TEntity)[];
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
+    private _asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
     private _readonly: boolean = false;
     private _extend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
     private _onCreate: (dbset: IDbSetBase<string>) => void;
+    private _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
 
     private _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
 
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map } = params;
         this._extend = extend ?? this._defaultExtend;
         this._documentType = documentType;
         this._context = context;
@@ -43,6 +51,11 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             "add": [],
             "remove": []
         };
+        this._asyncEvents = asyncEvents ?? {
+            "add-invoked": [],
+            "remove-invoked": []
+        }
+        this._map = map ?? [];
 
         this._onCreate = onCreate;
     }
@@ -57,7 +70,9 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             idKeys: this._idKeys,
             readonly: this._readonly,
             extend: this._extend,
-            keyType: this._keyType
+            keyType: this._keyType,
+            asyncEvents: this._asyncEvents,
+            map: this._map
         } as IDbSetBuilderParams<TDocumentType, TEntity, T, any>
     }
 
@@ -140,6 +155,11 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         return new DbSetBuilder<TDocumentType, TEntity, T | TExtraExclusions, IDbSet<TDocumentType, TEntity, T | TExtraExclusions>>(this._onCreate, this._buildParams<T | TExtraExclusions>());
     }
 
+    map<T extends (keyof OmittedEntity<TEntity>)>(propertyMap: PropertyMap<TDocumentType, TEntity, T>) {
+        this._map.push(propertyMap);
+        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
+    }
+
     /**
      * Add an event listener to the DbSet
      * @param event 
@@ -148,8 +168,16 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
      */
     on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
-    on(event: DbSetEvent, callback: DbSetEventCallback<TDocumentType, TEntity>) {
-        this._events[event].push(callback);
+    on(event: "remove-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
+    on(event: "add-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
+    on(event: DbSetEvent | DbSetAsyncEvent, callback: any) {
+
+        if (event === 'add-invoked' || event === "remove-invoked") {
+            this._asyncEvents[event].push(callback)
+        } else {
+            this._events[event].push(callback);
+        }
+
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
@@ -183,7 +211,10 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 documentType: this._documentType,
                 idKeys: this._idKeys,
                 readonly: this._readonly,
-                keyType: this._keyType
+                keyType: this._keyType,
+                asyncEvents: this._asyncEvents,
+                events: this._events,
+                map: this._map
             });
             result = extend(dbset) as any
         } else {
@@ -193,7 +224,10 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 documentType: this._documentType,
                 idKeys: this._idKeys,
                 readonly: this._readonly,
-                keyType: this._keyType
+                keyType: this._keyType,
+                asyncEvents: this._asyncEvents,
+                events: this._events,
+                map: this._map
             });
         }
 
@@ -214,7 +248,7 @@ interface IChainIdBuilder<TDocumentType extends string, TEntity extends IDbRecor
      * the keys or selectors are added
      * @param key Key or property selector
      */
-     add(key: EntityIdKey<TDocumentType, TEntity>): IChainIdBuilder<TDocumentType, TEntity>;
+    add(key: EntityIdKey<TDocumentType, TEntity>): IChainIdBuilder<TDocumentType, TEntity>;
 }
 
 interface IIdBuilderBase<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> extends IChainIdBuilder<TDocumentType, TEntity> {
