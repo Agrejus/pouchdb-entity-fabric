@@ -759,6 +759,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | Method | Description |
 | ----- | --- |
 | `add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>` | Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
+| `upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>` |Add or update one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
 | `instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[]` | Create one or more entities and do not add it to the underlying data context.  This is useful for creating entities and passing them to other functions. Call add to add the entity to a context for persistance |
 | `isMatch(first: TEntity, second: TEntity): boolean` | Check for equality between two entities |
 | `remove(...ids: string[]): Promise<void>` | Remove one or more entities by id from the underlying data context, saveChanges must be called to persist these items to the store |
@@ -774,7 +775,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `first(): Promise<TEntity | undefined>` | Get first item in the DbSet |  
 | `on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void` | Called when an item is queued for creation in the underlying data context |
 | `on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> \| DbSetIdOnlyEventCallback): void` | Called when an item is queued for removal in the underlying data context |
-| `nfo(): IDbSetInfo<TDocumentType, TEntity>` | Get DbSet info |
+| `info(): IDbSetInfo<TDocumentType, TEntity>` | Get DbSet info |
 
 ### DataContext Methods
 | Method | Description |
