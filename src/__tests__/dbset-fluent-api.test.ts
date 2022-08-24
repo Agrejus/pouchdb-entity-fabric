@@ -574,6 +574,51 @@ describe('dbset - fluent api', () => {
         expect(all.length).toBe(1);
     });
 
+    it('should get correct number of entities from get', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [one, two] = await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        }, {
+            firstName: "Other",
+            lastName: "DeMeuse",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        await context.saveChanges();
+
+        const all = await context.contacts.get(one._id, two._id);
+
+        expect(all.length).toBe(2);
+    });
+
+    it('should throw when id is not found on get', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [one, two] = await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        }, {
+            firstName: "Other",
+            lastName: "DeMeuse",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        await context.saveChanges();
+
+        try {
+            await context.contacts.get("tester");
+            expect(false).toBe(true)
+        } catch (e) {
+            expect(e).toBeDefined()
+        }
+    });
+
     it('should remove one entity by reference', async () => {
         const context = dbFactory(PouchDbDataContext);
         const [contact] = await context.contacts.add({
@@ -1089,7 +1134,7 @@ describe('dbset - fluent api', () => {
 
         expect(updated?.firstName).toBe("James");
 
-        contact.firstName = "James";
+        contact.firstName = "James Changed";
 
         const secondContext = dbFactory(PouchDbDataContext, dbname);
 
@@ -1099,9 +1144,53 @@ describe('dbset - fluent api', () => {
         linkedContact.firstName = "Test";
 
         expect(secondContext.hasPendingChanges()).toBe(true);
+
         await secondContext.saveChanges();
 
         const afterAttach = await secondContext.contacts.find(w => w.firstName === "Test");
+
+        expect(afterAttach).toBeDefined();
+    });
+
+
+    it('should attach one entity and mark as changed even if we change the entity before attaching', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const [contact] = await context.contacts.filter(w => w.firstName === "James");
+
+        context.contacts.unlink(contact);
+
+        contact.firstName = "Test";
+
+        expect(context.hasPendingChanges()).toBe(false);
+        await context.saveChanges();
+
+        const updated = await context.contacts.find(w => w.firstName === "James");
+
+        expect(updated?.firstName).toBe("James");
+
+        contact.firstName = "James Changed";
+
+        const secondContext = dbFactory(PouchDbDataContext, dbname);
+
+        // attaching re-enables entity tracking for properties changed
+        await secondContext.contacts.link(contact);
+
+        expect(secondContext.hasPendingChanges()).toBe(true);
+
+        await secondContext.saveChanges();
+
+        const afterAttach = await secondContext.contacts.find(w => w.firstName === "James Changed");
 
         expect(afterAttach).toBeDefined();
     });
@@ -1140,8 +1229,8 @@ describe('dbset - fluent api', () => {
         expect(updatedOne.firstName).toBe("James");
         expect(updatedTwo.firstName).toBe("John");
 
-        one.firstName = "James";
-        two.firstName = "John";
+        one.firstName = "James Changed";
+        two.firstName = "John Changed";
 
         const secondContext = dbFactory(PouchDbDataContext, dbname);
 
@@ -1429,5 +1518,229 @@ describe('dbset - fluent api', () => {
 
         expect(book.author).toBe("me");
         expect(book.publishDate).toBeDefined();
+    });
+
+    it('should should upsert one entity', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const all = await context.contacts.all();
+
+        expect(all.length).toBe(0);
+
+        const [one] = await context.contacts.upsert({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        const [foundOne] = await context.contacts.all();
+
+        expect(foundOne).toEqual(one);
+
+        const [two] = await context.contacts.upsert({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        const [foundTwo] = await context.contacts.all();
+
+        expect(foundTwo).toEqual(two);
+
+        expect(DataContext.isProxy(one)).toBe(true);
+        expect(DataContext.isProxy(two)).toBe(true)
+    });
+
+    it('should should add and update in one transaction', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const all = await context.contacts.all();
+
+        expect(all.length).toBe(0);
+
+        const [one] = await context.contacts.upsert({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        const [foundOne] = await context.contacts.all();
+
+        expect(foundOne).toEqual(one);
+
+        const [two, three] = await context.contacts.upsert({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "222-222-2222",
+            address: "6789 Test St"
+        }, {
+            firstName: "Other",
+            lastName: "DeMeuse",
+            phone: "333-333-3333",
+            address: "0000 Test St"
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        const foundAll = await context.contacts.all();
+
+        expect(foundAll.find(w => w._id === two._id)).toEqual(two);
+        expect(foundAll.find(w => w._id === three._id)).toEqual(three);
+
+        expect(DataContext.isProxy(one)).toBe(true);
+        expect(DataContext.isProxy(two)).toBe(true);
+        expect(DataContext.isProxy(three)).toBe(true);
+    });
+
+    it('should upsert with auto generated id', async () => {
+
+        try {
+            const dbname = uuidv4()
+            const context = dbFactory(PouchDbDataContext, dbname);
+
+            const all = await context.notes.all();
+
+            expect(all.length).toBe(0);
+
+            const [one] = await context.notes.upsert({
+                contents: "some contents",
+                createdDate: new Date(),
+                userId: "some user"
+            });
+
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const [two] = await context.notes.upsert({
+                contents: "some contents",
+                createdDate: new Date(),
+                userId: "some user"
+            });
+
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const allAfterAdd = await context.notes.all();
+            expect(allAfterAdd.length).toBe(2);
+
+            const foundOne = await context.notes.find(w => w._id === one._id);
+
+            expect(foundOne).toBeDefined();
+
+            const [upsertedOne] = await context.notes.upsert({
+                _id: one._id,
+                contents: "changed contents",
+                createdDate: new Date(),
+                userId: "changed user"
+            });
+
+            expect(upsertedOne._id).toBe(one._id);
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const foundUpsertOne = await context.notes.find(w => w._id === one._id);
+
+            expect({ ...upsertedOne, createdDate: upsertedOne.createdDate.toISOString() }).toEqual({ ...foundUpsertOne });
+            expect(foundUpsertOne?.contents).toBe("changed contents");
+            expect(foundUpsertOne?.userId).toBe("changed user");
+        } catch (e) {
+            expect(e).not.toBeDefined()
+        }
+    });
+
+    it('should insert and add with auto generated id', async () => {
+
+        try {
+            const dbname = uuidv4()
+            const context = dbFactory(PouchDbDataContext, dbname);
+
+            const all = await context.notes.all();
+
+            expect(all.length).toBe(0);
+
+            const [one] = await context.notes.upsert({
+                contents: "some contents",
+                createdDate: new Date(),
+                userId: "some user"
+            });
+
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const [two] = await context.notes.upsert({
+                contents: "some contents",
+                createdDate: new Date(),
+                userId: "some user"
+            });
+
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const allAfterAdd = await context.notes.all();
+            expect(allAfterAdd.length).toBe(2);
+
+            const foundOne = await context.notes.find(w => w._id === one._id);
+
+            expect(foundOne).toBeDefined();
+
+            const [upsertedOne, upsertedTwo] = await context.notes.upsert({
+                _id: one._id,
+                contents: "changed contents",
+                createdDate: new Date(),
+                userId: "changed user"
+            }, {
+                contents: "changed contents 2",
+                createdDate: new Date(),
+                userId: "changed user 2"
+            });
+
+            
+            expect(upsertedOne._id).toBe(one._id);
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const foundUpsertOne = await context.notes.find(w => w._id === one._id);
+
+            expect({ ...upsertedOne, createdDate: upsertedOne.createdDate.toISOString() }).toEqual({ ...foundUpsertOne });
+            expect(foundUpsertOne?.contents).toBe("changed contents");
+            expect(foundUpsertOne?.userId).toBe("changed user");
+
+            const foundUpsertTwo = await context.notes.find(w => w._id === upsertedTwo._id);
+            expect(foundUpsertTwo?.contents).toBe("changed contents 2");
+            expect(foundUpsertTwo?.userId).toBe("changed user 2");
+
+            const final = await context.notes.all();
+            expect(final.length).toBe(3);
+
+        } catch (e) {
+            expect(e).not.toBeDefined()
+        }
     });
 });

@@ -64,7 +64,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
 
         // Allow spread operator to work on the class for extending it - Deprecated
-        for(let property of properties) {
+        for (let property of properties) {
             (this as any)[property] = (this as any)[property]
         }
     }
@@ -82,21 +82,24 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return info;
     }
 
+    private _processAddition(entity: OmittedEntity<TEntity, TExtraExclusions>) {
+        const addItem: IDbRecord<TDocumentType> = entity as any;
+        (addItem as any).DocumentType = this._documentType;
+        const id = this._getKeyFromEntity(entity as any);
+
+        if (id != undefined) {
+            (addItem as any)._id = id;
+        }
+
+        if (this._events["add"].length > 0) {
+            this._events["add"].forEach(w => w(entity as any));
+        }
+
+        return this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map) as TEntity;
+    }
+
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
-        return entities.map(entity => {
-
-            const addItem: IDbRecord<TDocumentType> = entity as any;
-            (addItem as any).DocumentType = this._documentType;
-            const id = this._getKeyFromEntity(entity as any);
-
-            if (id != undefined) {
-                (addItem as any)._id = id;
-            }
-
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map) as TEntity;
-
-            return {...trackableEntity}
-        });
+        return entities.map(entity => ({ ...this._processAddition(entity) }));
     }
 
     async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
@@ -110,23 +113,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
                 throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
 
-            const addItem: IDbRecord<TDocumentType> = entity as any;
-            (addItem as any).DocumentType = this._documentType;
-            const id = this._getKeyFromEntity(entity as any);
-
-            if (id != undefined) {
-                const ids = add.map(w => w._id);
-
-                if (ids.includes(id)) {
-                    throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`)
-                }
-
-                (addItem as any)._id = id;
-            }
-
-            this._events["add"].forEach(w => w(entity as any));
-
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map) as TEntity;
+            const trackableEntity = this._processAddition(entity);
 
             add.push(trackableEntity);
 
@@ -138,6 +125,33 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         }
 
         return result
+    }
+
+    async upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]) {
+        // build the id's
+        const all = await this._api.getAllData(this._documentType);
+        const allDictionary: { [key: string]: TEntity } = all.reduce((a, v) => ({ ...a, [v._id]: v }), {})
+        const result: TEntity[] = [];
+
+        for(let entity of entities as any[]) {
+            const instance = entity._id != null ? entity as TEntity : { ...this._processAddition(entity) } as TEntity;
+            const found = allDictionary[instance._id]
+
+            if (found) {
+                // update
+                const merged = this._merge(found, entity);
+                const mergedAndTrackable = this._api.makeTrackable(merged, this._defaults.add, this._isReadonly, this._map) as TEntity;
+                this._api.send([mergedAndTrackable]);
+                result.push(mergedAndTrackable)
+                continue;
+            }
+
+            const [added] = await this.add(entity);
+
+            result.push(added)
+        }
+
+        return result;
     }
 
     private _getKeyFromEntity(entity: TEntity) {
@@ -233,7 +247,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     async all() {
         const result = await this._all();
 
-        this._api.send(result, false);
+        this._api.send(result);
 
         return result;
     }
@@ -243,7 +257,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
         const result = [...data].filter(selector);
 
-        this._api.send(result, false)
+        this._api.send(result)
 
         return result;
     }
@@ -253,11 +267,11 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     async get(...ids: string[]) {
-        const entities = await this._api.get(...ids);
+        const entities = await this._api.getStrict(...ids);
         const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map) as TEntity);
 
         if (result.length > 0) {
-            this._api.send(result, false)
+            this._api.send(result)
         }
 
         return result;
@@ -269,7 +283,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const result = [...data].find(selector);
 
         if (result) {
-            this._api.send([result], false)
+            this._api.send([result])
         }
 
         return result;
@@ -291,6 +305,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._detachItems(entities)
     }
 
+    private _merge(existingEntity: TEntity, newEntity: TEntity) {
+        return { ...existingEntity, ...newEntity, [PRISTINE_ENTITY_KEY]: { ...existingEntity, ...((newEntity as IIndexableEntity)[PRISTINE_ENTITY_KEY] ?? {}) }, _rev: existingEntity._rev }
+    }
+
     async link(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
@@ -300,22 +318,13 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
         }
 
-        // Find the existing _rev just in case it's not in sync
-        const found = await this._api.get(...entities.map(w => w._id));
+        // Find the existing _rev just in case it's not in sync, will throw if an id is not found
+        const found = await this._api.getStrict(...entities.map(w => w._id));
+        const foundDictionary: { [key: string]: TEntity } = found.reduce((a, v) => ({ ...a, [v._id]: v }), {});
 
-        if (found.length != entities.length) {
-            throw new Error(`Error linking entities, document not found`)
-        }
+        const result = entities.map(w => this._api.makeTrackable(this._merge(foundDictionary[w._id], w), this._defaults.add, this._isReadonly, this._map));
 
-        const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
-
-        const result = entities.map(w => {
-            const entity = this._api.makeTrackable(w, this._defaults.add, this._isReadonly, this._map);
-            (entity as any)._rev = foundDictionary[w._id];
-            return entity
-        });
-
-        this._api.send(result, true);
+        this._api.send(result);
 
         return result;
     }
@@ -329,7 +338,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const result = data[0];
 
         if (result) {
-            this._api.send([result], false)
+            this._api.send([result])
         }
 
         return result as TEntity | undefined;
@@ -340,7 +349,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     on(event: "remove-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync): void;
     on(event: "add-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity>): void;
     on(event: DbSetEvent | DbSetAsyncEvent, callback: any) {
-        
+
         if (event === 'add-invoked' || event === "remove-invoked") {
             this._asyncEvents[event].push(callback)
             return;

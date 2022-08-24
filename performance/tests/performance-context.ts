@@ -271,7 +271,8 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'constructor',
             'IdKeys',
             'DocumentType',
-            'info'
+            'info', 
+            'instance'
         ];
 
         overrideWithPerformance(dbSet, propertiesToIgnore, [], true, DbSet.prototype);

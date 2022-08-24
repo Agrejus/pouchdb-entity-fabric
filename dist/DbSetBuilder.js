@@ -70,7 +70,7 @@ class DbSetBuilder {
             this._defaults = Object.assign(Object.assign({}, this._defaults), { retrieve: Object.assign(Object.assign({}, this._defaults.retrieve), value.retrieve) });
         }
         if (!("retrieve" in value) && !("add" in value)) {
-            this._defaults = Object.assign(Object.assign({}, this._defaults), { add: Object.assign(Object.assign({}, this._defaults.add), value), retrieve: Object.assign(Object.assign({}, this._defaults.add), value) });
+            this._defaults = Object.assign(Object.assign({}, this._defaults), { add: Object.assign(Object.assign({}, this._defaults.add), value), retrieve: Object.assign(Object.assign({}, this._defaults.retrieve), value) });
         }
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
