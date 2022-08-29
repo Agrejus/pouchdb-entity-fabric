@@ -115,6 +115,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     purge(purgeType?: "memory" | "disk"): Promise<IPurgeResponse>;
     static asUntracked<T extends IDbRecordBase>(...entities: IDbRecordBase[]): T[];
     static isProxy(entities: IDbRecordBase): boolean;
+    static merge<T extends IDbRecordBase>(to: T, from: T): void;
     [Symbol.iterator](): {
         next: () => {
             value: IDbSetBase<string>;

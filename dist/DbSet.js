@@ -101,6 +101,10 @@ class DbSet {
             return result;
         });
     }
+    _merge(from, to) {
+        var _a;
+        return Object.assign(Object.assign(Object.assign({}, from), to), { [exports.PRISTINE_ENTITY_KEY]: Object.assign(Object.assign({}, from), ((_a = to[exports.PRISTINE_ENTITY_KEY]) !== null && _a !== void 0 ? _a : {})), _rev: from._rev });
+    }
     upsert(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             // build the id's
@@ -246,10 +250,6 @@ class DbSet {
         }
         this._detachItems(entities);
     }
-    _merge(existingEntity, newEntity) {
-        var _a;
-        return Object.assign(Object.assign(Object.assign({}, existingEntity), newEntity), { [exports.PRISTINE_ENTITY_KEY]: Object.assign(Object.assign({}, existingEntity), ((_a = newEntity[exports.PRISTINE_ENTITY_KEY]) !== null && _a !== void 0 ? _a : {})), _rev: existingEntity._rev });
-    }
     link(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             const validationFailures = entities.map(w => (0, Validation_1.validateAttachedEntity)(w)).flat().filter(w => w.ok === false);
@@ -257,10 +257,10 @@ class DbSet {
                 const errors = validationFailures.map(w => w.error).join('\r\n');
                 throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
             }
-            // Find the existing _rev just in case it's not in sync, will throw if an id is not found
+            // Find the existing _rev just in case it's not in sync
             const found = yield this._api.getStrict(...entities.map(w => w._id));
-            const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v })), {});
-            const result = entities.map(w => this._api.makeTrackable(this._merge(foundDictionary[w._id], w), this._defaults.add, this._isReadonly, this._map));
+            const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
+            const result = entities.map(w => this._api.makeTrackable(Object.assign(Object.assign({}, w), { _rev: foundDictionary[w._id] }), this._defaults.add, this._isReadonly, this._map));
             this._api.send(result);
             return result;
         });

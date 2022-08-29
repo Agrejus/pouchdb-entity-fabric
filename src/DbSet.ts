@@ -127,19 +127,23 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result
     }
 
+    private _merge(from: TEntity, to: TEntity){
+        return { ...from, ...to, [PRISTINE_ENTITY_KEY]: { ...from, ...((to as IIndexableEntity)[PRISTINE_ENTITY_KEY] ?? {}) }, _rev: from._rev } as TEntity
+    }
+
     async upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]) {
         // build the id's
         const all = await this._api.getAllData(this._documentType);
         const allDictionary: { [key: string]: TEntity } = all.reduce((a, v) => ({ ...a, [v._id]: v }), {})
         const result: TEntity[] = [];
 
-        for(let entity of entities as any[]) {
+        for (let entity of entities as any[]) {
             const instance = entity._id != null ? entity as TEntity : { ...this._processAddition(entity) } as TEntity;
             const found = allDictionary[instance._id]
 
             if (found) {
                 // update
-                const merged = this._merge(found, entity);
+                const merged = this._merge(found, entity as TEntity);
                 const mergedAndTrackable = this._api.makeTrackable(merged, this._defaults.add, this._isReadonly, this._map) as TEntity;
                 this._api.send([mergedAndTrackable]);
                 result.push(mergedAndTrackable)
@@ -305,10 +309,6 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._detachItems(entities)
     }
 
-    private _merge(existingEntity: TEntity, newEntity: TEntity) {
-        return { ...existingEntity, ...newEntity, [PRISTINE_ENTITY_KEY]: { ...existingEntity, ...((newEntity as IIndexableEntity)[PRISTINE_ENTITY_KEY] ?? {}) }, _rev: existingEntity._rev }
-    }
-
     async link(...entities: TEntity[]) {
 
         const validationFailures = entities.map(w => validateAttachedEntity<TDocumentType, TEntity>(w)).flat().filter(w => w.ok === false);
@@ -318,11 +318,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`)
         }
 
-        // Find the existing _rev just in case it's not in sync, will throw if an id is not found
+        // Find the existing _rev just in case it's not in sync
         const found = await this._api.getStrict(...entities.map(w => w._id));
-        const foundDictionary: { [key: string]: TEntity } = found.reduce((a, v) => ({ ...a, [v._id]: v }), {});
-
-        const result = entities.map(w => this._api.makeTrackable(this._merge(foundDictionary[w._id], w), this._defaults.add, this._isReadonly, this._map));
+        const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
+        const result = entities.map(w => this._api.makeTrackable({ ...w, _rev: foundDictionary[w._id] }, this._defaults.add, this._isReadonly, this._map));
 
         this._api.send(result);
 

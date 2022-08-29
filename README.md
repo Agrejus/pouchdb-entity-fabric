@@ -14,7 +14,7 @@ PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouch
     - Can upsert adds and updates at the same time
     - Slower than `.add()`.  If you know the documents are going to be added, use `.add()` for much better performance, especially with large amounts of data
 - Fixed bug in the `DbSetBuilder` where the retrieve defaults were not being applied property when add and retrieve where different
-- Changed `.link()` to now change properties on the existing object.  Previously, the entity needed to be linked before making changes.  Now changes can be made and it can be linked afterwards and the changes will be marked if any
+- Fixed issue with `.link()` showing entity as changed after attaching
 
 ## Installation
 ```
@@ -593,7 +593,7 @@ const found = await context.myFirstDbSet.first();
 ```
 
 ## Linking/Unlinking Entities
-Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.  When an entity is linked, the dbset will merge any changes in with an existing document found in the database.
+Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.  When an entity is linked, the dbset will update the _rev with the newest in the database.
 
 Unlinking entities is useful to make changes to the entity that will not be persisted to the underlying data store after saveChanges() is called.
 

@@ -607,6 +607,13 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         return (entities as IIndexableEntity)[DataContext.PROXY_MARKER] === true;
     }
 
+    static merge<T extends IDbRecordBase>(to: T, from: T) {
+        for(let property in from) {
+            const value = from[property];
+            to[property] = value;
+        }
+    }
+
     [Symbol.iterator]() {
         let index = -1;
         const data = Object.keys(this._dbSets).map(w => this._dbSets[w]);

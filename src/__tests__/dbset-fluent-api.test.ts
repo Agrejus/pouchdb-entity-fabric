@@ -1152,6 +1152,33 @@ describe('dbset - fluent api', () => {
         expect(afterAttach).toBeDefined();
     });
 
+    it('should attach one entity and have no changes', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+        await context.contacts.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const [contact] = await context.contacts.filter(w => w.firstName === "James");
+
+        context.contacts.unlink(contact);
+
+        expect(context.hasPendingChanges()).toBe(false);
+        await context.saveChanges();
+
+        const secondContext = dbFactory(PouchDbDataContext, dbname);
+
+        await secondContext.contacts.link(contact);
+
+        expect(secondContext.hasPendingChanges()).toBe(false);
+    });
+
 
     it('should attach one entity and mark as changed even if we change the entity before attaching', async () => {
 

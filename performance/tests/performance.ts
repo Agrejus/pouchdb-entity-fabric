@@ -412,6 +412,29 @@ const shouldGetManyEntities = async () => {
     return context;
 }
 
+const shouldAttachOneEntity = async () => {
+    const context = new PerformanceDbDataContext();
+
+    await generateData(context, 1)
+
+    const items = await context.test1.all();
+
+    const secondContext = new PerformanceDbDataContext();
+
+    const linked = await secondContext.test1.link(...items);
+
+    for (let item of linked) {
+        item.test1 = faker.random.word();
+        item.test2 = faker.random.word();
+        item.test3 = faker.random.word();
+        item.test4 = faker.random.word();
+    }
+
+    await secondContext.saveChanges();
+
+    return secondContext;
+}
+
 const shouldAttachSomeEntities = async () => {
     const context = new PerformanceDbDataContext();
 
@@ -432,7 +455,7 @@ const shouldAttachSomeEntities = async () => {
 
     await secondContext.saveChanges();
 
-    return context;
+    return secondContext;
 }
 
 const shouldAttachManyEntities = async () => {
@@ -461,34 +484,35 @@ const shouldAttachManyEntities = async () => {
 export const run = async () => {
     try {
 
-        // await runTest(shouldAddOneEntity, "shouldAddOneEntity");
-        // await runTest(shouldAddSomeEntities, "shouldAddSomeEntities");
-        // await runTest(shouldAddManyEntities, "shouldAddManyEntities");
+        await runTest(shouldAddOneEntity, "shouldAddOneEntity");
+        await runTest(shouldAddSomeEntities, "shouldAddSomeEntities");
+        await runTest(shouldAddManyEntities, "shouldAddManyEntities");
 
-        // await runTest(shouldUpsertOneEntity, "shouldUpsertOneEntity");
-        // await runTest(shouldUpsertSomeEntities, "shouldUpsertSomeEntities");
+        await runTest(shouldUpsertOneEntity, "shouldUpsertOneEntity");
+        await runTest(shouldUpsertSomeEntities, "shouldUpsertSomeEntities");
         await runTest(shouldUpsertManyEntities, "shouldUpsertManyEntities");
 
-        // await runTest(shouldRemoveOneEntity, "shouldRemoveOneEntity");
-        // await runTest(shouldRemoveSomeEntities, "shouldRemoveSomeEntities");
-        // await runTest(shouldRemoveManyEntities, "shouldRemoveManyEntities");
+        await runTest(shouldRemoveOneEntity, "shouldRemoveOneEntity");
+        await runTest(shouldRemoveSomeEntities, "shouldRemoveSomeEntities");
+        await runTest(shouldRemoveManyEntities, "shouldRemoveManyEntities");
 
-        // await runTest(shouldRemoveOneEntityById, "shouldRemoveOneEntityById");
-        // await runTest(shouldRemoveSomeEntitiesById, "shouldRemoveSomeEntitiesById");
-        // await runTest(shouldRemoveManyEntitiesById, "shouldRemoveManyEntitiesById");
+        await runTest(shouldRemoveOneEntityById, "shouldRemoveOneEntityById");
+        await runTest(shouldRemoveSomeEntitiesById, "shouldRemoveSomeEntitiesById");
+        await runTest(shouldRemoveManyEntitiesById, "shouldRemoveManyEntitiesById");
 
-        // await runTest(shouldUpdateOneEntity, "shouldUpdateOneEntity");
-        // await runTest(shouldUpdateSomeEntities, "shouldUpdateSomeEntities");
-        // await runTest(shouldUpdateManyEntities, "shouldUpdateManyEntities");
+        await runTest(shouldUpdateOneEntity, "shouldUpdateOneEntity");
+        await runTest(shouldUpdateSomeEntities, "shouldUpdateSomeEntities");
+        await runTest(shouldUpdateManyEntities, "shouldUpdateManyEntities");
 
-        // await runTest(shouldGetAllSomeEntities, "shouldGetAllSomeEntities");
-        // await runTest(shouldGetAllManyEntities, "shouldGetAllManyEntities");
+        await runTest(shouldGetAllSomeEntities, "shouldGetAllSomeEntities");
+        await runTest(shouldGetAllManyEntities, "shouldGetAllManyEntities");
 
-        // await runTest(shouldGetSomeEntities, "shouldGetSomeEntities");
-        // await runTest(shouldGetManyEntities, "shouldGetManyEntities");
+        await runTest(shouldGetSomeEntities, "shouldGetSomeEntities");
+        await runTest(shouldGetManyEntities, "shouldGetManyEntities");
 
-        // await runTest(shouldAttachSomeEntities, "shouldAttachSomeEntities");
-        // await runTest(shouldAttachManyEntities, "shouldAttachManyEntities");
+        await runTest(shouldAttachOneEntity, "shouldAttachOneEntity");
+        await runTest(shouldAttachSomeEntities, "shouldAttachSomeEntities");
+        await runTest(shouldAttachManyEntities, "shouldAttachManyEntities");
 
         await generateDeltas();
 
