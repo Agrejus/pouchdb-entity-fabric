@@ -12,6 +12,13 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
 
     /**
+     * Add or update one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
+     * @param entities Entity or entities to add to the data context
+     * @returns Promise\<TEntity[]\>
+     */
+    upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>;
+
+    /**
      * Create one or more entities and do not add it to the underlying data context.  This is useful for creating entities and passing them to other functions.
      * Call {@link add} to add the entity to a context for persistance
      * @param entities Entity or entities to create
@@ -214,7 +221,7 @@ export interface IDbSetBase<TDocumentType extends string> {
 }
 
 export type DatabaseConfigurationAdditionalConfiguration = {
-
+    
 }
 
 export type DataContextOptions = PouchDB.Configuration.DatabaseConfiguration & DatabaseConfigurationAdditionalConfiguration
@@ -225,7 +232,8 @@ export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (documentType: TDocumentType) => Promise<IDbRecordBase[]>;
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
-    send: (data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) => void;
+    getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
+    send: (data: IDbRecordBase[]) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
     makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T;
 }

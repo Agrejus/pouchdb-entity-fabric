@@ -136,7 +136,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             this._defaults = {
                 ...this._defaults,
                 add: { ...this._defaults.add, ...value },
-                retrieve: { ...this._defaults.add, ...value },
+                retrieve: { ...this._defaults.retrieve, ...value },
             };
         }
 

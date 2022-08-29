@@ -11,7 +11,7 @@ const getDirectories = async (source: string) =>
         .filter(dirent => dirent.isDirectory())
         .map(dirent => dirent.name)
 
-const generateData = async (context: PerformanceDbDataContext, count: number) => {
+const generateData = async (context: PerformanceDbDataContext, count: number, shouldUpsert: boolean = false) => {
 
     try {
 
@@ -19,12 +19,21 @@ const generateData = async (context: PerformanceDbDataContext, count: number) =>
             const set: any = dbset
 
             for (let i = 0; i < count; i++) {
-                await set.add({
-                    test1: `${faker.random.word()}${i}`,
-                    test2: `${faker.random.word()}${i}`,
-                    test3: `${faker.random.word()}${i}`,
-                    test4: `${faker.random.word()}${i}`
-                });
+                if (shouldUpsert === false) {
+                    await set.add({
+                        test1: `${faker.random.word()}${i}`,
+                        test2: `${faker.random.word()}${i}`,
+                        test3: `${faker.random.word()}${i}`,
+                        test4: `${faker.random.word()}${i}`
+                    });
+                } else {
+                    await set.upsert({
+                        test1: `${faker.random.word()}${i}`,
+                        test2: `${faker.random.word()}${i}`,
+                        test3: `${faker.random.word()}${i}`,
+                        test4: `${faker.random.word()}${i}`
+                    });
+                }
             }
         }
 
@@ -35,7 +44,6 @@ const generateData = async (context: PerformanceDbDataContext, count: number) =>
         debugger;
         console.log(e);
     }
-
 }
 
 const generateDeltas = async () => {
@@ -144,6 +152,16 @@ const shouldAddOneEntity = async () => {
     return context;
 }
 
+const shouldUpsertOneEntity = async () => {
+    const context = new PerformanceDbDataContext();
+
+    await context.test1.upsert({ test1: faker.random.word(), test2: faker.random.word(), test3: faker.random.word(), test4: faker.random.word() });
+
+    await context.saveChanges();
+
+    return context;
+}
+
 const shouldAddSomeEntities = async () => {
     const context = new PerformanceDbDataContext();
 
@@ -154,10 +172,30 @@ const shouldAddSomeEntities = async () => {
     return context;
 }
 
+const shouldUpsertSomeEntities = async () => {
+    const context = new PerformanceDbDataContext();
+
+    await generateData(context, 50, true)
+
+    await context.saveChanges();
+
+    return context;
+}
+
 const shouldAddManyEntities = async () => {
     const context = new PerformanceDbDataContext();
 
     await generateData(context, 2000)
+
+    await context.saveChanges();
+
+    return context;
+}
+
+const shouldUpsertManyEntities = async () => {
+    const context = new PerformanceDbDataContext();
+
+    await generateData(context, 2000, true)
 
     await context.saveChanges();
 
@@ -374,6 +412,29 @@ const shouldGetManyEntities = async () => {
     return context;
 }
 
+const shouldAttachOneEntity = async () => {
+    const context = new PerformanceDbDataContext();
+
+    await generateData(context, 1)
+
+    const items = await context.test1.all();
+
+    const secondContext = new PerformanceDbDataContext();
+
+    const linked = await secondContext.test1.link(...items);
+
+    for (let item of linked) {
+        item.test1 = faker.random.word();
+        item.test2 = faker.random.word();
+        item.test3 = faker.random.word();
+        item.test4 = faker.random.word();
+    }
+
+    await secondContext.saveChanges();
+
+    return secondContext;
+}
+
 const shouldAttachSomeEntities = async () => {
     const context = new PerformanceDbDataContext();
 
@@ -394,7 +455,7 @@ const shouldAttachSomeEntities = async () => {
 
     await secondContext.saveChanges();
 
-    return context;
+    return secondContext;
 }
 
 const shouldAttachManyEntities = async () => {
@@ -427,6 +488,10 @@ export const run = async () => {
         await runTest(shouldAddSomeEntities, "shouldAddSomeEntities");
         await runTest(shouldAddManyEntities, "shouldAddManyEntities");
 
+        await runTest(shouldUpsertOneEntity, "shouldUpsertOneEntity");
+        await runTest(shouldUpsertSomeEntities, "shouldUpsertSomeEntities");
+        await runTest(shouldUpsertManyEntities, "shouldUpsertManyEntities");
+
         await runTest(shouldRemoveOneEntity, "shouldRemoveOneEntity");
         await runTest(shouldRemoveSomeEntities, "shouldRemoveSomeEntities");
         await runTest(shouldRemoveManyEntities, "shouldRemoveManyEntities");
@@ -445,13 +510,13 @@ export const run = async () => {
         await runTest(shouldGetSomeEntities, "shouldGetSomeEntities");
         await runTest(shouldGetManyEntities, "shouldGetManyEntities");
 
+        await runTest(shouldAttachOneEntity, "shouldAttachOneEntity");
         await runTest(shouldAttachSomeEntities, "shouldAttachSomeEntities");
         await runTest(shouldAttachManyEntities, "shouldAttachManyEntities");
 
         await generateDeltas();
 
     } catch (e) {
-        debugger;
         console.log(e)
     }
 

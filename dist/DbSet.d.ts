@@ -30,8 +30,11 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
      */
     constructor(props: IDbSetProps<TDocumentType, TEntity>);
     info(): IDbSetInfo<TDocumentType, TEntity>;
+    private _processAddition;
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[];
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
+    private _merge;
+    upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>;
     private _getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;
     remove(...ids: string[]): Promise<void>;

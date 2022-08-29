@@ -8,21 +8,13 @@ npm install pouchdb-entity-fabric
 PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouchdb.com/) and makes creating repeatable processes in PouchDB easier.  Often times using PouchDB, a repository layer needs to be created and adding new document types requires a new repository.  PouchDB Entity Fabric removes the need for these repository layers all together.  Let's get to the code:
 
 ## Changes
-### 1.4.1 -> 1.4.2 
-- Added `.previewChanges()` to `DataContext`
-- Changed processing order of changes
-    - **Old**: Adds, Removals, Updates
-    - **New**: Removals, Adds, Updates
-    - Will now remove entities first, this will help with single instance dbset's when users want to remove and add.  `saveChanges()` will only need to be called once now in this case instead of between the removal and add
-- Changed `DbSet` key building in the fluent API.  Options are now:
-    - `add()` to start a chaining operation to build the Id
-    - `none()` tell the dbset that the key should be the document type.  This will only allow a max of one entity in the dbset
-    - `auto()` automatically generate a key for the dbset.  This is currently the default when `keys()` is not supplied to the fluent API.
-- Exported `DeepPartial`
-- Changed `first()` on `DbSet` to return `Entity | undefined` instead of `Entity`
-- Fixed bug with `DbSet` fluent API when trying to use `.on()`, events were not being called
-- Added `.map()` to `DbSet` fluent API
-- Changed `.link()` to return the linked entities, please use the returned entities now
+### 1.4.2 -> 1.4.3 
+- Added `.upsert()` to `DbSet`
+    - Will either add or update an existing document
+    - Can upsert adds and updates at the same time
+    - Slower than `.add()`.  If you know the documents are going to be added, use `.add()` for much better performance, especially with large amounts of data
+- Fixed bug in the `DbSetBuilder` where the retrieve defaults were not being applied property when add and retrieve where different
+- Fixed issue with `.link()` showing entity as changed after attaching
 
 ## Installation
 ```
@@ -234,6 +226,9 @@ const all = await context.myFirstDbSet.all()
 await context.myFirstDbSet.remove(...all);
 await context.saveChanges();
 ```
+
+### Upserting Data
+Entites can be added or updated depending on if they are found in the database or not.  If an id is supplied and it is found
 
 ### Entity Declaration
 Entites can be declared a few different ways.  Two of the main ways are to create an interface and inherit from `IDbRecord<TDocumentType>` or add the properties from `IDbRecord<TDocumentType>` to your entity.
@@ -598,18 +593,19 @@ const found = await context.myFirstDbSet.first();
 ```
 
 ## Linking/Unlinking Entities
-Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.  When an entity is linked, the dbset will automatically grab the latest _rev in the database for the document and set it on the linked entity.
+Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.  When an entity is linked, the dbset will update the _rev with the newest in the database.
 
 Unlinking entities is useful to make changes to the entity that will not be persisted to the underlying data store after saveChanges() is called.
 
 ### Linking
+Always ensure we use the linked resulting entity, not the one we passed in
 ```typescript
 
 const someNewContext = new PouchDbDataContext();
 
-await someNewContext.myFirstDbSet.link(someEntity); // NOTE: Ensure changes are made to the entity after its attached
+const [myLinkedEntity] = await someNewContext.myFirstDbSet.link(someEntity); // NOTE: Ensure changes are made to the entity after its attached
 
-someEntity.propertyOne = "some changed value"
+myLinkedEntity.propertyOne = "some changed value"
 
 await context.saveChanges(); // Changes will be persisted
 ```
@@ -763,6 +759,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | Method | Description |
 | ----- | --- |
 | `add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>` | Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
+| `upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>` |Add or update one or more entities from the underlying data context, saveChanges must be called to persist these items to the store |
 | `instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[]` | Create one or more entities and do not add it to the underlying data context.  This is useful for creating entities and passing them to other functions. Call add to add the entity to a context for persistance |
 | `isMatch(first: TEntity, second: TEntity): boolean` | Check for equality between two entities |
 | `remove(...ids: string[]): Promise<void>` | Remove one or more entities by id from the underlying data context, saveChanges must be called to persist these items to the store |
@@ -778,7 +775,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `first(): Promise<TEntity | undefined>` | Get first item in the DbSet |  
 | `on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void` | Called when an item is queued for creation in the underlying data context |
 | `on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> \| DbSetIdOnlyEventCallback): void` | Called when an item is queued for removal in the underlying data context |
-| `nfo(): IDbSetInfo<TDocumentType, TEntity>` | Get DbSet info |
+| `info(): IDbSetInfo<TDocumentType, TEntity>` | Get DbSet info |
 
 ### DataContext Methods
 | Method | Description |

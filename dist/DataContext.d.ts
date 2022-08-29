@@ -30,7 +30,12 @@ declare abstract class PouchDbInteractionBase<TDocumentType extends string> exte
         successes_count: number;
     }>;
     /**
-     * Get entity from the data store, this is used by DbSet
+     * Get entity from the data store, this is used by DbSet, will throw when an id is not found, very fast
+     * @param ids
+     */
+    protected getStrict(...ids: string[]): Promise<IDbRecordBase[]>;
+    /**
+     * Get entity from the data store, this is used by DbSet, will NOT throw when an id is not found, much slower than strict version
      * @param ids
      */
     protected get(...ids: string[]): Promise<IDbRecordBase[]>;
@@ -110,6 +115,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     purge(purgeType?: "memory" | "disk"): Promise<IPurgeResponse>;
     static asUntracked<T extends IDbRecordBase>(...entities: IDbRecordBase[]): T[];
     static isProxy(entities: IDbRecordBase): boolean;
+    static merge<T extends IDbRecordBase>(to: T, from: T): void;
     [Symbol.iterator](): {
         next: () => {
             value: IDbSetBase<string>;

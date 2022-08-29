@@ -93,10 +93,10 @@ class PouchDbInteractionBase extends PouchDbBase {
         });
     }
     /**
-     * Get entity from the data store, this is used by DbSet
+     * Get entity from the data store, this is used by DbSet, will throw when an id is not found, very fast
      * @param ids
      */
-    get(...ids) {
+    getStrict(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
             if (ids.length === 0) {
                 return [];
@@ -109,6 +109,30 @@ class PouchDbInteractionBase extends PouchDbBase {
                 }
                 return result.ok;
             });
+        });
+    }
+    /**
+     * Get entity from the data store, this is used by DbSet, will NOT throw when an id is not found, much slower than strict version
+     * @param ids
+     */
+    get(...ids) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const result = yield this.doWork(w => w.find({
+                    selector: {
+                        _id: {
+                            $in: ids
+                        }
+                    }
+                }), false);
+                return result.docs;
+            }
+            catch (e) {
+                if ('message' in e && e.message.includes("database is closed")) {
+                    throw e;
+                }
+                return [];
+            }
         });
     }
     /**
@@ -127,6 +151,9 @@ class PouchDbInteractionBase extends PouchDbBase {
                 return result.docs;
             }
             catch (e) {
+                if ('message' in e && e.message.includes("database is closed")) {
+                    throw e;
+                }
                 return [];
             }
         });
@@ -190,7 +217,8 @@ class DataContext extends PouchDbInteractionBase {
             send: this._sendData.bind(this),
             detach: this._detach.bind(this),
             makeTrackable: this._makeTrackable.bind(this),
-            get: this.get.bind(this)
+            get: this.get.bind(this),
+            getStrict: this.getStrict.bind(this)
         };
     }
     _addDbSet(dbset) {
@@ -211,13 +239,7 @@ class DataContext extends PouchDbInteractionBase {
      * Used by the context api
      * @param data
      */
-    _sendData(data, shouldThrowOnDuplicate) {
-        if (shouldThrowOnDuplicate && data.length > 0) {
-            const [duplicate] = this._attachments.get(...data);
-            if (duplicate) {
-                throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
-            }
-        }
+    _sendData(data) {
         this._attachments.push(...data);
     }
     /**
@@ -325,9 +347,9 @@ class DataContext extends PouchDbInteractionBase {
         return __awaiter(this, void 0, void 0, function* () {
             const { add, remove, updated } = yield this._getModifications();
             const clone = JSON.stringify({
-                add: add.map(w => (Object.assign({}, w))),
-                remove: remove.map(w => (Object.assign({}, w))),
-                update: updated.map(w => (Object.assign({}, w)))
+                add,
+                remove,
+                update: updated
             });
             return JSON.parse(clone);
         });
@@ -354,7 +376,7 @@ class DataContext extends PouchDbInteractionBase {
     _getModifications() {
         return __awaiter(this, void 0, void 0, function* () {
             const { add, remove, removeById, updated } = this._getPendingChanges();
-            const extraRemovals = yield this.get(...removeById);
+            const extraRemovals = yield this.getStrict(...removeById);
             return {
                 add,
                 remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
@@ -487,6 +509,12 @@ class DataContext extends PouchDbInteractionBase {
     }
     static isProxy(entities) {
         return entities[DataContext.PROXY_MARKER] === true;
+    }
+    static merge(to, from) {
+        for (let property in from) {
+            const value = from[property];
+            to[property] = value;
+        }
     }
     [Symbol.iterator]() {
         let index = -1;

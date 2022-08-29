@@ -67,17 +67,20 @@ class DbSet {
         };
         return info;
     }
+    _processAddition(entity) {
+        const addItem = entity;
+        addItem.DocumentType = this._documentType;
+        const id = this._getKeyFromEntity(entity);
+        if (id != undefined) {
+            addItem._id = id;
+        }
+        if (this._events["add"].length > 0) {
+            this._events["add"].forEach(w => w(entity));
+        }
+        return this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map);
+    }
     instance(...entities) {
-        return entities.map(entity => {
-            const addItem = entity;
-            addItem.DocumentType = this._documentType;
-            const id = this._getKeyFromEntity(entity);
-            if (id != undefined) {
-                addItem._id = id;
-            }
-            const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map);
-            return Object.assign({}, trackableEntity);
-        });
+        return entities.map(entity => (Object.assign({}, this._processAddition(entity))));
     }
     add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -88,23 +91,39 @@ class DbSet {
                 if (indexableEntity["_rev"] !== undefined) {
                     throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity');
                 }
-                const addItem = entity;
-                addItem.DocumentType = this._documentType;
-                const id = this._getKeyFromEntity(entity);
-                if (id != undefined) {
-                    const ids = add.map(w => w._id);
-                    if (ids.includes(id)) {
-                        throw new Error(`Cannot add entity with same id more than once.  _id: ${id}`);
-                    }
-                    addItem._id = id;
-                }
-                this._events["add"].forEach(w => w(entity));
-                const trackableEntity = this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map);
+                const trackableEntity = this._processAddition(entity);
                 add.push(trackableEntity);
                 return trackableEntity;
             });
             if (this._asyncEvents['add-invoked'].length > 0) {
                 yield Promise.all(this._asyncEvents['add-invoked'].map(w => w(result)));
+            }
+            return result;
+        });
+    }
+    _merge(from, to) {
+        var _a;
+        return Object.assign(Object.assign(Object.assign({}, from), to), { [exports.PRISTINE_ENTITY_KEY]: Object.assign(Object.assign({}, from), ((_a = to[exports.PRISTINE_ENTITY_KEY]) !== null && _a !== void 0 ? _a : {})), _rev: from._rev });
+    }
+    upsert(...entities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // build the id's
+            const all = yield this._api.getAllData(this._documentType);
+            const allDictionary = all.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v })), {});
+            const result = [];
+            for (let entity of entities) {
+                const instance = entity._id != null ? entity : Object.assign({}, this._processAddition(entity));
+                const found = allDictionary[instance._id];
+                if (found) {
+                    // update
+                    const merged = this._merge(found, entity);
+                    const mergedAndTrackable = this._api.makeTrackable(merged, this._defaults.add, this._isReadonly, this._map);
+                    this._api.send([mergedAndTrackable]);
+                    result.push(mergedAndTrackable);
+                    continue;
+                }
+                const [added] = yield this.add(entity);
+                result.push(added);
             }
             return result;
         });
@@ -185,7 +204,7 @@ class DbSet {
     all() {
         return __awaiter(this, void 0, void 0, function* () {
             const result = yield this._all();
-            this._api.send(result, false);
+            this._api.send(result);
             return result;
         });
     }
@@ -193,7 +212,7 @@ class DbSet {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._all();
             const result = [...data].filter(selector);
-            this._api.send(result, false);
+            this._api.send(result);
             return result;
         });
     }
@@ -202,10 +221,10 @@ class DbSet {
     }
     get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
-            const entities = yield this._api.get(...ids);
+            const entities = yield this._api.getStrict(...ids);
             const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map));
             if (result.length > 0) {
-                this._api.send(result, false);
+                this._api.send(result);
             }
             return result;
         });
@@ -215,7 +234,7 @@ class DbSet {
             const data = yield this._all();
             const result = [...data].find(selector);
             if (result) {
-                this._api.send([result], false);
+                this._api.send([result]);
             }
             return result;
         });
@@ -239,17 +258,10 @@ class DbSet {
                 throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
             }
             // Find the existing _rev just in case it's not in sync
-            const found = yield this._api.get(...entities.map(w => w._id));
-            if (found.length != entities.length) {
-                throw new Error(`Error linking entities, document not found`);
-            }
+            const found = yield this._api.getStrict(...entities.map(w => w._id));
             const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
-            const result = entities.map(w => {
-                const entity = this._api.makeTrackable(w, this._defaults.add, this._isReadonly, this._map);
-                entity._rev = foundDictionary[w._id];
-                return entity;
-            });
-            this._api.send(result, true);
+            const result = entities.map(w => this._api.makeTrackable(Object.assign(Object.assign({}, w), { _rev: foundDictionary[w._id] }), this._defaults.add, this._isReadonly, this._map));
+            this._api.send(result);
             return result;
         });
     }
@@ -263,7 +275,7 @@ class DbSet {
             const data = yield this._all();
             const result = data[0];
             if (result) {
-                this._api.send([result], false);
+                this._api.send([result]);
             }
             return result;
         });

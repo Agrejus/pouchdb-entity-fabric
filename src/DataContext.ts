@@ -90,10 +90,10 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
     }
 
     /**
-     * Get entity from the data store, this is used by DbSet
+     * Get entity from the data store, this is used by DbSet, will throw when an id is not found, very fast
      * @param ids 
      */
-    protected async get(...ids: string[]) {
+    protected async getStrict(...ids: string[]) {
 
         if (ids.length === 0) {
             return [];
@@ -110,6 +110,33 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
             return result.ok as IDbRecordBase;
         });
+    }
+
+    /**
+     * Get entity from the data store, this is used by DbSet, will NOT throw when an id is not found, much slower than strict version
+     * @param ids 
+     */
+    protected async get(...ids: string[]) {
+
+        try {
+
+            const result = await this.doWork(w => w.find({
+                selector: {
+                    _id: {
+                        $in: ids
+                    }
+                }
+            }), false);
+
+            return result.docs as IDbRecordBase[];
+        } catch (e) {
+
+            if ('message' in e && e.message.includes("database is closed")) {
+                throw e;
+            }
+
+            return [] as IDbRecordBase[];
+        }
     }
 
     /**
@@ -130,6 +157,11 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
             return result.docs as IDbRecordBase[];
         } catch (e) {
+
+            if ('message' in e && e.message.includes("database is closed")) {
+                throw e;
+            }
+
             return [] as IDbRecordBase[];
         }
     }
@@ -215,7 +247,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             send: this._sendData.bind(this),
             detach: this._detach.bind(this),
             makeTrackable: this._makeTrackable.bind(this),
-            get: this.get.bind(this)
+            get: this.get.bind(this),
+            getStrict: this.getStrict.bind(this)
         }
     }
 
@@ -242,16 +275,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * Used by the context api
      * @param data 
      */
-    private _sendData(data: IDbRecordBase[], shouldThrowOnDuplicate: boolean) {
-        if (shouldThrowOnDuplicate && data.length > 0) {
-
-            const [duplicate] = this._attachments.get(...data)
-
-            if (duplicate) {
-                throw new Error(`DataContext already contains item with the same id, cannot add more than once.  _id: ${duplicate._id}`);
-            }
-        }
-
+    private _sendData(data: IDbRecordBase[]) {
         this._attachments.push(...data)
     }
 
@@ -390,9 +414,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     async previewChanges(): Promise<IPreviewChanges> {
         const { add, remove, updated } = await this._getModifications();
         const clone = JSON.stringify({
-            add: add.map(w => ({ ...w })),
-            remove: remove.map(w => ({ ...w })),
-            update: updated.map(w => ({ ...w }))
+            add,
+            remove,
+            update: updated
         });
 
         return JSON.parse(clone)
@@ -428,7 +452,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     private async _getModifications() {
         const { add, remove, removeById, updated } = this._getPendingChanges();
 
-        const extraRemovals = await this.get(...removeById);
+        const extraRemovals = await this.getStrict(...removeById);
 
         return {
             add,
@@ -581,6 +605,13 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     static isProxy(entities: IDbRecordBase) {
         return (entities as IIndexableEntity)[DataContext.PROXY_MARKER] === true;
+    }
+
+    static merge<T extends IDbRecordBase>(to: T, from: T) {
+        for(let property in from) {
+            const value = from[property];
+            to[property] = value;
+        }
     }
 
     [Symbol.iterator]() {
