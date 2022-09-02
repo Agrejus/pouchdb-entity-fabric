@@ -33,6 +33,8 @@ Maybe?
 operation
     asUntracked
 
+
+https://www.albahari.com/nutshell/predicatebuilder.aspx
 predicateBuilder
     Take advantage of speed with larger data sets
     .and(w => w.one).equals(1)
