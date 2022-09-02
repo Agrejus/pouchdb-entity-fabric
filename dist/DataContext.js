@@ -33,6 +33,28 @@ const DbSetBuilder_1 = require("./DbSetBuilder");
 const IndexApi_1 = require("./IndexApi");
 pouchdb_1.default.plugin(pouchdb_find_1.default);
 pouchdb_1.default.plugin(pouchdb_adapter_memory_1.default);
+var CacheKeys;
+(function (CacheKeys) {
+    CacheKeys["IsOptimized"] = "IsOptimized";
+})(CacheKeys || (CacheKeys = {}));
+class ContextCache {
+    constructor() {
+        this._data = {};
+    }
+    upsert(key, value) {
+        this._data[key] = value;
+    }
+    remove(key) {
+        delete this._data[key];
+    }
+    get(key) {
+        return this._data[key];
+    }
+    contains(key) {
+        return this._data[key] != null;
+    }
+}
+const cache = new ContextCache();
 class PouchDbBase {
     constructor(name, options) {
         this._dbOptions = options;
@@ -138,14 +160,17 @@ class PouchDbInteractionBase extends PouchDbBase {
     /**
      * Gets all data from the data store
      */
-    getAllData(documentType) {
+    getAllData(payload) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const findOptions = {
                     selector: {},
                 };
-                if (documentType != null) {
-                    findOptions.selector.DocumentType = documentType;
+                if ((payload === null || payload === void 0 ? void 0 : payload.documentType) != null) {
+                    findOptions.selector.DocumentType = payload.documentType;
+                }
+                if ((payload === null || payload === void 0 ? void 0 : payload.index) != null) {
+                    findOptions.use_index = payload.index;
                 }
                 const result = yield this.doWork(w => w.find(findOptions));
                 return result.docs;
@@ -200,6 +225,7 @@ class DataContext extends PouchDbInteractionBase {
             yield this.$indexes.create(w => w.name("autogen_document-type-index")
                 .designDocumentName("autogen_document-type-index")
                 .fields(x => x.add("DocumentType")));
+            cache.upsert(CacheKeys.IsOptimized, true);
         });
     }
     /**

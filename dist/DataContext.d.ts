@@ -2,10 +2,14 @@
 /// <reference types="pouchdb-core" />
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
-import { DataContextEvent, DataContextEventCallback, DataContextOptions, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPreviewChanges, IPurgeResponse } from './typings';
+import { DataContextEvent, DataContextEventCallback, DataContextOptions, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetBase, IPreviewChanges, IPurgeResponse, IQueryParams } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder } from './DbSetBuilder';
 import { IIndexApi } from './IndexApi';
+export interface IContextCache {
+    upsert(key: string, value: any): void;
+    remove(key: string): void;
+}
 declare abstract class PouchDbBase {
     protected readonly _dbOptions?: PouchDB.Configuration.DatabaseConfiguration;
     private readonly _dbName?;
@@ -42,7 +46,7 @@ declare abstract class PouchDbInteractionBase<TDocumentType extends string> exte
     /**
      * Gets all data from the data store
      */
-    protected getAllData(documentType?: TDocumentType): Promise<IDbRecordBase[]>;
+    protected getAllData(payload?: IQueryParams<TDocumentType>): Promise<IDbRecordBase[]>;
 }
 export declare class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
     static PROXY_MARKER: string;

@@ -13,6 +13,24 @@ exports.DbSet = exports.PRISTINE_ENTITY_KEY = void 0;
 const Validation_1 = require("./Validation");
 const uuid_1 = require("uuid");
 exports.PRISTINE_ENTITY_KEY = "__pristine_entity__";
+class IndexStore {
+    constructor(defaultName) {
+        this._default = null;
+        this._once = null;
+        this._default = defaultName;
+    }
+    once(name) {
+        this._once = name;
+    }
+    get() {
+        if (this._once) {
+            const result = this._once;
+            this._once = null;
+            return result;
+        }
+        return this._default;
+    }
+}
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
@@ -39,6 +57,7 @@ class DbSet {
         this._events = props.events;
         this._asyncEvents = props.asyncEvents;
         this._map = props.map;
+        this._indexStore = new IndexStore(props.index);
         this._api = this._context._getApi();
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
         // Allow spread operator to work on the class for extending it - Deprecated
@@ -105,10 +124,19 @@ class DbSet {
         var _a;
         return Object.assign(Object.assign(Object.assign({}, from), to), { [exports.PRISTINE_ENTITY_KEY]: Object.assign(Object.assign({}, from), ((_a = to[exports.PRISTINE_ENTITY_KEY]) !== null && _a !== void 0 ? _a : {})), _rev: from._rev });
     }
+    _getAllData() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const index = this._indexStore.get();
+            return yield this._api.getAllData({
+                documentType: this._documentType,
+                index
+            });
+        });
+    }
     upsert(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             // build the id's
-            const all = yield this._api.getAllData(this._documentType);
+            const all = yield this._getAllData();
             const allDictionary = all.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v })), {});
             const result = [];
             for (let entity of entities) {
@@ -174,6 +202,10 @@ class DbSet {
             remove.push(entity);
         });
     }
+    useIndex(name) {
+        this._indexStore.once(name);
+        return this;
+    }
     empty() {
         return __awaiter(this, void 0, void 0, function* () {
             const items = yield this.all();
@@ -196,7 +228,7 @@ class DbSet {
     }
     _all() {
         return __awaiter(this, void 0, void 0, function* () {
-            const data = yield this._api.getAllData(this._documentType);
+            const data = yield this._getAllData();
             // process the mappings when we make the item trackable.  We are essentially prepping the entity
             return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map));
         });

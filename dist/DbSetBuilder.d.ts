@@ -13,11 +13,13 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
         [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[];
     };
     readonly: boolean;
-    extend?: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
+    extend?: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
     keyType?: DbSetKeyType;
     map?: PropertyMap<TDocumentType, TEntity, any>[];
+    index?: string;
 }
 declare type ConvertDateToString<T> = T extends Date ? string : T;
+declare type DbSetExtenderCreator<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> = (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
 export declare type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = {
     property: TProperty;
     map: (value: ConvertDateToString<TEntity[TProperty]>) => TEntity[TProperty];
@@ -35,6 +37,7 @@ export declare class DbSetBuilder<TDocumentType extends string, TEntity extends 
     private _extend;
     private _onCreate;
     private _map;
+    private _index;
     private _defaultExtend;
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>);
     private _buildParams;
@@ -76,6 +79,12 @@ export declare class DbSetBuilder<TDocumentType extends string, TEntity extends 
     exclude<T extends (keyof OmittedEntity<TEntity>)>(...exclusions: T[]): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions | T, IDbSet<TDocumentType, TEntity, TExtraExclusions | T>>;
     map<T extends (keyof OmittedEntity<TEntity>)>(propertyMap: PropertyMap<TDocumentType, TEntity, T>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     /**
+     * Specify the name of the index to use for all queries
+     * @param name Name of the index
+     * @returns DbSetBuilder
+     */
+    useIndex(name: string): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
+    /**
      * Add an event listener to the DbSet
      * @param event
      * @param callback
@@ -85,7 +94,7 @@ export declare class DbSetBuilder<TDocumentType extends string, TEntity extends 
     on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     on(event: "remove-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     on(event: "add-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
-    extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TExtension): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>;
+    extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult, args: IDbSetProps<TDocumentType, TEntity>) => TExtension): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>;
     /**
      * Must call to fully create the DbSet.
      * @returns new DbSet

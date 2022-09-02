@@ -33,9 +33,8 @@ Maybe?
 operation
     asUntracked
 
-useIndex("").first()
-
-useIndex should return a copy of the dbset?  Maybe?
-    How can we set one time meta data
-    Can we set it, consume it, and remove it?  I think so
-    
+predicateBuilder
+    Take advantage of speed with larger data sets
+    .and(w => w.one).equals(1)
+    .and(w => w.two).lessThan(1)
+        or();
