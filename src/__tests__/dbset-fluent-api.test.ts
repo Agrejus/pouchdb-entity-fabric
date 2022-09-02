@@ -34,11 +34,13 @@ describe('dbset - fluent api', () => {
         Contacts = "Contacts",
         OverrideContacts = "OverrideContacts",
         OverrideContactsV2 = "OverrideContactsV2",
+        OverrideContactsV3 = "OverrideContactsV3",
         Books = "Books",
         BooksWithOn = "BooksWithOn",
         BooksWithOnV2 = "BooksWithOnV2",
         BooksNoKey = "BooksNoKey",
         BooksV3 = "BooksV3",
+        BooksV4 = "BooksV4",
         BooksWithDefaults = "BooksWithDefaults",
         BooksWithDefaultsV2 = "BooksWithDefaultsV2",
         BooksWithNoDefaults = "BooksWithNoDefaults",
@@ -161,11 +163,21 @@ describe('dbset - fluent api', () => {
             entities.forEach(w => w.status = "pending")
         }).create();
 
-        //map({ property: "author", map: w => w })
         booksNoKey = this.dbset<IBook>(DocumentTypes.BooksNoKey).exclude("status", "rejectedCount").keys(w => w.none()).create();
         notes = this.dbset<INote>(DocumentTypes.Notes).create();
         contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
         booksV3 = this._setupSyncDbSet<IBookV3>(DocumentTypes.BooksV3).create();
+        booksV4 = this._setupSyncDbSet<IBookV3>(DocumentTypes.BooksV4).extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+
+                otherFirst() {
+                    return super.first();
+                }
+            }
+        }).create();
         cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
         preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
         preferencev2 = this.dbset<IPreference>(DocumentTypes.PreferenceV2).keys(w => w.add(() => "")).create();
@@ -179,6 +191,28 @@ describe('dbset - fluent api', () => {
                 }
 
                 otherFirst() {
+                    return super.first();
+                }
+            }
+        }).create();
+
+        overrideContactsV3 = this.dbset<IContact>(DocumentTypes.OverrideContactsV3).keys(w => w.add("firstName").add("lastName")).extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+
+                otherFirst() {
+                    return super.first();
+                }
+            }
+        }).extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+
+                otherOtherFirst() {
                     return super.first();
                 }
             }
@@ -1307,6 +1341,24 @@ describe('dbset - fluent api', () => {
         expect(first).toBeDefined();
     });
 
+    it('should extend dbset more than once and methods should work', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        await context.overrideContactsV3.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const otherFirst = await context.overrideContactsV3.otherFirst();
+        const otherOtherFirst = await context.overrideContactsV3.otherOtherFirst();
+
+        expect(otherFirst).toBeDefined();
+        expect(otherOtherFirst).toBeDefined();
+    });
+
     it('dbset should set defaults on add', async () => {
         const context = dbFactory(PouchDbDataContext);
         const date = new Date();
@@ -1547,6 +1599,27 @@ describe('dbset - fluent api', () => {
         expect(book.publishDate).toBeDefined();
     });
 
+    it('should extend more than once when calling common method', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [book] = await context.booksV4.add({
+            author: "me",
+            rejectedCount: 1,
+            publishDate: new Date()
+        });
+
+        expect(book.SyncRetryCount).toBe(0);
+        expect(book.SyncStatus).toBe("Pending");
+
+        await context.saveChanges();
+
+        const status = await context.booksV4.toStatus();
+        const first = await context.booksV4.otherFirst();
+
+        expect(status).toBeDefined();
+        expect(first).toBeDefined();
+    });
+
+
     it('should should upsert one entity', async () => {
 
         const dbname = uuidv4()
@@ -1747,7 +1820,7 @@ describe('dbset - fluent api', () => {
                 userId: "changed user 2"
             });
 
-            
+
             expect(upsertedOne._id).toBe(one._id);
             expect(context.hasPendingChanges()).toBe(true);
             await context.saveChanges();

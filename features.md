@@ -29,3 +29,13 @@ dbSet
 
 Maybe?
 - Way to undo changes?
+
+operation
+    asUntracked
+
+useIndex("").first()
+
+useIndex should return a copy of the dbset?  Maybe?
+    How can we set one time meta data
+    Can we set it, consume it, and remove it?  I think so
+    

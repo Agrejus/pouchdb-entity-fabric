@@ -10,12 +10,13 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     events?: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
     asyncEvents?: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
     readonly: boolean;
-    extend?: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult
+    extend?: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[]
     keyType?: DbSetKeyType;
     map?: PropertyMap<TDocumentType, TEntity, any>[];
 }
 
 type ConvertDateToString<T> = T extends Date ? string : T;
+type DbSetExtenderCreator<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> = (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult
 
 export type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: (value: ConvertDateToString<TEntity[TProperty]>) => TEntity[TProperty] }
 
@@ -30,16 +31,15 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
     private _asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
     private _readonly: boolean = false;
-    private _extend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
+    private _extend: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
     private _onCreate: (dbset: IDbSetBase<string>) => void;
     private _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
 
     private _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
-
         const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map } = params;
-        this._extend = extend ?? this._defaultExtend;
+        this._extend = extend ?? [];
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys ?? [];
@@ -181,9 +181,9 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
-    extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TExtension) {
+    extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult, args: IDbSetProps<TDocumentType, TEntity>) => TExtension) {
 
-        this._extend = extend as any;
+        this._extend.push(extend as any);
 
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>(this._onCreate, this._buildParams<TExtraExclusions>());
     }
@@ -218,7 +218,12 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             });
             result = extend(dbset) as any
         } else {
-            result = this._extend(DbSet, {
+
+            if (this._extend.length === 0) {
+                this._extend.push(this._defaultExtend)
+            }
+
+            result = this._extend.reduce((a: any, v, i) => v(i === 0 ? a : a.constructor, {
                 context: this._context,
                 defaults: this._defaults,
                 documentType: this._documentType,
@@ -228,7 +233,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 asyncEvents: this._asyncEvents,
                 events: this._events,
                 map: this._map
-            });
+            }), DbSet);
         }
 
         this._onCreate(result);

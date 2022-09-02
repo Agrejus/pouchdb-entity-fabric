@@ -116,7 +116,6 @@ export const run = async () => {
 
         const contact = await context.contacts.first();
 
-
         debugger;
 
     } catch (e) {
