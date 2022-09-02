@@ -2,13 +2,45 @@ import PouchDB from 'pouchdb';
 import { PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder, PropertyMap } from './DbSetBuilder';
 import { IndexApi, IIndexApi } from './IndexApi';
 
 PouchDB.plugin(findAdapter);
 PouchDB.plugin(memoryAdapter);
+
+export interface IContextCache {
+    upsert(key: string, value: any): void;
+    remove(key: string): void;
+}
+
+enum CacheKeys {
+    IsOptimized = "IsOptimized"
+}
+
+class ContextCache implements IContextCache {
+
+    private _data: { [key: string]: any } = {}
+
+    upsert(key: CacheKeys, value: any) {
+        this._data[key] = value
+    }
+
+    remove(key: CacheKeys) {
+        delete this._data[key];
+    }
+
+    get<T extends any>(key: CacheKeys) {
+        return  this._data[key] as T
+    }
+
+    contains(key: CacheKeys) {
+        return this._data[key] != null;
+    }
+}
+
+const cache: ContextCache = new ContextCache();
 
 abstract class PouchDbBase {
 
@@ -142,15 +174,19 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
     /**
      * Gets all data from the data store
      */
-    protected async getAllData(documentType?: TDocumentType) {
+    protected async getAllData(payload?: IQueryParams<TDocumentType>) {
 
         try {
             const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
                 selector: {},
             }
 
-            if (documentType != null) {
-                findOptions.selector.DocumentType = documentType;
+            if (payload?.documentType != null) {
+                findOptions.selector.DocumentType = payload.documentType;
+            }
+
+            if (payload?.index != null) {
+                findOptions.use_index = payload.index;
             }
 
             const result = await this.doWork(w => w.find(findOptions));
@@ -229,6 +265,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             w.name("autogen_document-type-index")
                 .designDocumentName("autogen_document-type-index")
                 .fields(x => x.add("DocumentType")));
+
+        cache.upsert(CacheKeys.IsOptimized, true)
     }
 
     /**

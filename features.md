@@ -29,3 +29,14 @@ dbSet
 
 Maybe?
 - Way to undo changes?
+
+operation
+    asUntracked
+
+
+https://www.albahari.com/nutshell/predicatebuilder.aspx
+predicateBuilder
+    Take advantage of speed with larger data sets
+    .and(w => w.one).equals(1)
+    .and(w => w.two).lessThan(1)
+        or();

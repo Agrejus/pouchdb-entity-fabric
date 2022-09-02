@@ -8,13 +8,10 @@ npm install pouchdb-entity-fabric
 PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouchdb.com/) and makes creating repeatable processes in PouchDB easier.  Often times using PouchDB, a repository layer needs to be created and adding new document types requires a new repository.  PouchDB Entity Fabric removes the need for these repository layers all together.  Let's get to the code:
 
 ## Changes
-### 1.4.2 -> 1.4.3 
-- Added `.upsert()` to `DbSet`
-    - Will either add or update an existing document
-    - Can upsert adds and updates at the same time
-    - Slower than `.add()`.  If you know the documents are going to be added, use `.add()` for much better performance, especially with large amounts of data
-- Fixed bug in the `DbSetBuilder` where the retrieve defaults were not being applied property when add and retrieve where different
-- Fixed issue with `.link()` showing entity as changed after attaching
+### 1.4.3 -> 1.4.4 
+- Added `.useIndex()` to `DbSetBuilder` and to `DbSet`
+    - Can set a default index or use an index one time
+- Changed `.extend()` in the `DbSetBuilder` to allow extend to be called more than once
 
 ## Installation
 ```
@@ -229,6 +226,34 @@ await context.saveChanges();
 
 ### Upserting Data
 Entites can be added or updated depending on if they are found in the database or not.  If an id is supplied and it is found
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
+}
+
+
+const context = new PouchDbDataContext();
+
+const [myFirstItem, mySecondItem] = await context.myFirstDbSet.upsert(
+    { propertyOne: "some value 1", propertyTwo: "some value 1" },
+    { propertyOne: "some value 2", propertyTwo: "some value 2" , _id: "my-existing-id", _rev: "my-existing-rev"});
+
+await context.saveChanges();
+
+// myFirstItem will be inserted and mySecondItem will be updated
+```
 
 ### Entity Declaration
 Entites can be declared a few different ways.  Two of the main ways are to create an interface and inherit from `IDbRecord<TDocumentType>` or add the properties from `IDbRecord<TDocumentType>` to your entity.
@@ -592,6 +617,33 @@ const found = await context.myFirstDbSet.first();
 // found.dateProperty will now be a date
 ```
 
+#### DbSet Fluent API - Using an index
+We can direct a DbSet to use an index for all queries using the below syntax.  The index must exist, it will not be created.
+
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+    dateProperty: Date
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).useIndex('my-index').create();
+}
+
+const context = new PouchDbDataContext();
+
+const items = await context.myFirstDbSet.filter(w => w.propertyOne === "some value");
+
+// my-index will be used for all queries with this DbSet
+```
+
 ## Linking/Unlinking Entities
 Linking entities is useful for transferring entites from one context to another.  For example, if dev's want to pass an entity from one context to one or many child functions and do not want to pass the context with it.  We can pass the entity and create a new context, link, and save changes.  When an entity is linked, the dbset will update the _rev with the newest in the database.
 
@@ -740,6 +792,37 @@ await context.$indexes.remove({
     name: "some-name",
     ddoc: "some-ddoc"
 });
+
+```
+
+### Querying an index - one time
+```typescript
+import { DataContext } from 'pouchdb-entity-fabric';
+
+export enum DocumentTypes {
+    MyFirstDocument = "MyFirstDocument",
+    MySecondDocument = "MySecondDocument"
+}
+
+interface IMyFirstEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+interface IMySecondEntity extends IDbRecord<DocumentTypes> {
+    propertyOne: string;
+    propertyTwo: string;
+}
+
+export class PouchDbDataContext extends DataContext<DocumentTypes> {
+    myFirstDbSet = this.dbset<IMyFirstEntity>(DocumentTypes.MyFirstDocument).create();
+}
+
+const context = new PouchDbDataContext();
+const found = await context.myFirstDbSet.useIndex('some-index').find(w => w.propertyOne === "some value");
+const otherFound = await context.myFirstDbSet.find(w => w.propertyOne === "some value");
+
+// the first find will use the index as directed, but then second find will not use an index when searching for data
 
 ```
 

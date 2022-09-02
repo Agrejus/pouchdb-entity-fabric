@@ -1,4 +1,4 @@
-import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, IDbSetInfo, IDbSetProps, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync } from './typings';
+import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, IDbSetInfo, IDbSetProps, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync, IDbSetEnumerable } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
@@ -14,6 +14,7 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
      * @deprecated Use {@link info()} instead.
      */
     get DocumentType(): TDocumentType;
+    private _indexStore;
     private _defaults;
     private _idKeys;
     private _documentType;
@@ -34,18 +35,20 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[];
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
     private _merge;
+    private _getAllData;
     upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>;
     private _getKeyFromEntity;
     isMatch(first: TEntity, second: TEntity): boolean;
     remove(...ids: string[]): Promise<void>;
     remove(...entities: TEntity[]): Promise<void>;
     private _remove;
+    useIndex(name: string): IDbSetEnumerable<TDocumentType, TEntity, TExtraExclusions>;
     empty(): Promise<void>;
     private _removeById;
     private _detachItems;
     private _all;
     all(): Promise<TEntity[]>;
-    filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
+    filter(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity[]>;
     match(...items: IDbRecordBase[]): TEntity[];
     get(...ids: string[]): Promise<TEntity[]>;
     find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>;

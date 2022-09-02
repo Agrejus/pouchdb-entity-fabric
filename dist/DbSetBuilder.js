@@ -7,8 +7,8 @@ class DbSetBuilder {
         this._readonly = false;
         this._map = [];
         this._defaultExtend = (Instance, a) => new Instance(a);
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map } = params;
-        this._extend = extend !== null && extend !== void 0 ? extend : this._defaultExtend;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index } = params;
+        this._extend = extend !== null && extend !== void 0 ? extend : [];
         this._documentType = documentType;
         this._context = context;
         this._idKeys = idKeys !== null && idKeys !== void 0 ? idKeys : [];
@@ -25,6 +25,7 @@ class DbSetBuilder {
             "remove-invoked": []
         };
         this._map = map !== null && map !== void 0 ? map : [];
+        this._index = index;
         this._onCreate = onCreate;
     }
     _buildParams() {
@@ -39,7 +40,8 @@ class DbSetBuilder {
             extend: this._extend,
             keyType: this._keyType,
             asyncEvents: this._asyncEvents,
-            map: this._map
+            map: this._map,
+            index: this._index
         };
     }
     /**
@@ -89,6 +91,15 @@ class DbSetBuilder {
         this._map.push(propertyMap);
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
+    /**
+     * Specify the name of the index to use for all queries
+     * @param name Name of the index
+     * @returns DbSetBuilder
+     */
+    useIndex(name) {
+        this._index = name;
+        return new DbSetBuilder(this._onCreate, this._buildParams());
+    }
     on(event, callback) {
         if (event === 'add-invoked' || event === "remove-invoked") {
             this._asyncEvents[event].push(callback);
@@ -99,7 +110,7 @@ class DbSetBuilder {
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     extend(extend) {
-        this._extend = extend;
+        this._extend.push(extend);
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     create(extend) {
@@ -114,12 +125,16 @@ class DbSetBuilder {
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map
+                map: this._map,
+                index: this._index
             });
             result = extend(dbset);
         }
         else {
-            result = this._extend(DbSet_1.DbSet, {
+            if (this._extend.length === 0) {
+                this._extend.push(this._defaultExtend);
+            }
+            result = this._extend.reduce((a, v, i) => v(i === 0 ? a : a.constructor, {
                 context: this._context,
                 defaults: this._defaults,
                 documentType: this._documentType,
@@ -128,8 +143,9 @@ class DbSetBuilder {
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map
-            });
+                map: this._map,
+                index: this._index
+            }), DbSet_1.DbSet);
         }
         this._onCreate(result);
         return result;

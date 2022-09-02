@@ -34,11 +34,13 @@ describe('dbset - fluent api', () => {
         Contacts = "Contacts",
         OverrideContacts = "OverrideContacts",
         OverrideContactsV2 = "OverrideContactsV2",
+        OverrideContactsV3 = "OverrideContactsV3",
         Books = "Books",
         BooksWithOn = "BooksWithOn",
         BooksWithOnV2 = "BooksWithOnV2",
         BooksNoKey = "BooksNoKey",
         BooksV3 = "BooksV3",
+        BooksV4 = "BooksV4",
         BooksWithDefaults = "BooksWithDefaults",
         BooksWithDefaultsV2 = "BooksWithDefaultsV2",
         BooksWithNoDefaults = "BooksWithNoDefaults",
@@ -47,7 +49,8 @@ describe('dbset - fluent api', () => {
         Preference = "Preference",
         PreferenceV2 = "PreferenceV2",
         ReadonlyPreference = "ReadonlyPreference",
-        BooksWithDateMapped = "BooksWithDateMapped"
+        BooksWithDateMapped = "BooksWithDateMapped",
+        BooksWithIndex = "BooksWithIndex",
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -161,11 +164,21 @@ describe('dbset - fluent api', () => {
             entities.forEach(w => w.status = "pending")
         }).create();
 
-        //map({ property: "author", map: w => w })
         booksNoKey = this.dbset<IBook>(DocumentTypes.BooksNoKey).exclude("status", "rejectedCount").keys(w => w.none()).create();
         notes = this.dbset<INote>(DocumentTypes.Notes).create();
         contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
         booksV3 = this._setupSyncDbSet<IBookV3>(DocumentTypes.BooksV3).create();
+        booksV4 = this._setupSyncDbSet<IBookV3>(DocumentTypes.BooksV4).extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+
+                otherFirst() {
+                    return super.first();
+                }
+            }
+        }).create();
         cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
         preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
         preferencev2 = this.dbset<IPreference>(DocumentTypes.PreferenceV2).keys(w => w.add(() => "")).create();
@@ -184,6 +197,28 @@ describe('dbset - fluent api', () => {
             }
         }).create();
 
+        overrideContactsV3 = this.dbset<IContact>(DocumentTypes.OverrideContactsV3).keys(w => w.add("firstName").add("lastName")).extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+
+                otherFirst() {
+                    return super.first();
+                }
+            }
+        }).extend((Instance, props) => {
+            return new class extends Instance {
+                constructor() {
+                    super(props)
+                }
+
+                otherOtherFirst() {
+                    return super.first();
+                }
+            }
+        }).create();
+
         booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
         booksWithDefaultsV2 = this.dbset<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
             return new class extends Instance {
@@ -194,6 +229,8 @@ describe('dbset - fluent api', () => {
         }).defaults({ status: "pending", rejectedCount: 0 }).create();
         booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
         booksNoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithNoDefaults).exclude("status", "rejectedCount").create();
+
+        booksWithIndex = this.dbset<IBook>(DocumentTypes.BooksWithIndex).exclude("status", "rejectedCount").useIndex('some-default-index').create();
     }
 
     class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
@@ -1307,6 +1344,24 @@ describe('dbset - fluent api', () => {
         expect(first).toBeDefined();
     });
 
+    it('should extend dbset more than once and methods should work', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        await context.overrideContactsV3.add({
+            firstName: "James",
+            lastName: "DeMeuse",
+            phone: "111-111-1111",
+            address: "1234 Test St"
+        });
+
+        await context.saveChanges();
+
+        const otherFirst = await context.overrideContactsV3.otherFirst();
+        const otherOtherFirst = await context.overrideContactsV3.otherOtherFirst();
+
+        expect(otherFirst).toBeDefined();
+        expect(otherOtherFirst).toBeDefined();
+    });
+
     it('dbset should set defaults on add', async () => {
         const context = dbFactory(PouchDbDataContext);
         const date = new Date();
@@ -1547,6 +1602,27 @@ describe('dbset - fluent api', () => {
         expect(book.publishDate).toBeDefined();
     });
 
+    it('should extend more than once when calling common method', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [book] = await context.booksV4.add({
+            author: "me",
+            rejectedCount: 1,
+            publishDate: new Date()
+        });
+
+        expect(book.SyncRetryCount).toBe(0);
+        expect(book.SyncStatus).toBe("Pending");
+
+        await context.saveChanges();
+
+        const status = await context.booksV4.toStatus();
+        const first = await context.booksV4.otherFirst();
+
+        expect(status).toBeDefined();
+        expect(first).toBeDefined();
+    });
+
+
     it('should should upsert one entity', async () => {
 
         const dbname = uuidv4()
@@ -1747,7 +1823,7 @@ describe('dbset - fluent api', () => {
                 userId: "changed user 2"
             });
 
-            
+
             expect(upsertedOne._id).toBe(one._id);
             expect(context.hasPendingChanges()).toBe(true);
             await context.saveChanges();
@@ -1769,5 +1845,122 @@ describe('dbset - fluent api', () => {
         } catch (e) {
             expect(e).not.toBeDefined()
         }
+    });
+
+    it('should use index from dbset', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const all = await context.books.useIndex("some-index").all();
+        const filter = await context.books.useIndex("some-index").filter(w => w.author == "");
+        const find = await context.books.useIndex("some-index").find(w => w.author == "");
+        const first = await context.books.useIndex("some-index").first();
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(4, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+    });
+
+    it('should use index from dbset once', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const allOne = await context.books.useIndex("some-index").all();
+        const allTwo = await context.books.all();
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.Books } });
+    });
+
+    it('should use index from dbset once, skip, and use again', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const allOne = await context.books.useIndex("some-index").all();
+        const allTwo = await context.books.all();
+        const find = await context.books.useIndex("some-index").find(w => w.author == "");
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.Books } });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+    });
+
+    it('should use index from dbset fluent api', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const all = await context.booksWithIndex.all();
+        const filter = await context.booksWithIndex.filter(w => w.author == "");
+        const find = await context.booksWithIndex.find(w => w.author == "");
+        const first = await context.booksWithIndex.first();
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(4, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+    });
+
+    it('should use temp index over the default index', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const allOne = await context.booksWithIndex.useIndex("some-index").all();
+        const allTwo = await context.booksWithIndex.all();
+        const find = await context.booksWithIndex.useIndex("some-index").find(w => w.author == "");
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-index" });
     });
 });
