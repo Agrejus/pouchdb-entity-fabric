@@ -285,7 +285,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     private async _all() {
         const data = await this._getAllData();
-        
+
         // process the mappings when we make the item trackable.  We are essentially prepping the entity
         return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map) as TEntity);
     }
@@ -298,7 +298,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result;
     }
 
-    async filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean) {
+    async filter(selector: EntitySelector<TDocumentType, TEntity>) {
         const data = await this._all();
 
         const result = [...data].filter(selector);
@@ -322,6 +322,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
         return result;
     }
+
 
     async find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined> {
 

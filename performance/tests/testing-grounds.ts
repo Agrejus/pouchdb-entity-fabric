@@ -186,18 +186,19 @@ const generateData = async (context: PouchDbDataContext, count: number) => {
 export const run = async () => {
     try {
         const context = new PouchDbDataContext();
-        await generateData(context, 10000);
+        await context.contacts.filter(w => w.randomNumber === 10);
+        // await generateData(context, 10000);
 
-        const s = performance.now();
-        const all = await context.contacts.filter(w => w.randomNumber === 10);
-        console.log(all.length);
-        const e = performance.now();
-        await context.destroyDatabase();
-        console.log('time', e - s);
+        // const s = performance.now();
+        // const all = await context.contacts.filter(w => w.randomNumber === 10);
+        // console.log(all.length);
+        // const e = performance.now();
+        // await context.destroyDatabase();
+        // console.log('time', e - s);
 
-        if (true) {
+        // if (true) {
 
-        }
+        // }
 
     } catch (e) {
         debugger;

@@ -72,7 +72,7 @@ interface IIndexFactory {
     /**
      * This is the name to use for useIndex
      * @param name Name
-     * @returns 
+     * @returns IIndexFactory
      */
     designDocumentName(name: string): IIndexFactory;
     name(name: string): IIndexFactory;
