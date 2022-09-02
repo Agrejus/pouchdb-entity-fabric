@@ -68,6 +68,12 @@ export class IndexApi implements IIndexApi {
 
 interface IIndexFactory {
     fields(creator: (factory: IKeyFactory) => void): IIndexFactory;
+
+    /**
+     * This is the name to use for useIndex
+     * @param name Name
+     * @returns 
+     */
     designDocumentName(name: string): IIndexFactory;
     name(name: string): IIndexFactory;
 }

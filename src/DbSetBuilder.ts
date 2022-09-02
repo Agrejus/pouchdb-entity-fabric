@@ -13,6 +13,7 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     extend?: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[]
     keyType?: DbSetKeyType;
     map?: PropertyMap<TDocumentType, TEntity, any>[];
+    index?:string;
 }
 
 type ConvertDateToString<T> = T extends Date ? string : T;
@@ -34,11 +35,12 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _extend: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
     private _onCreate: (dbset: IDbSetBase<string>) => void;
     private _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
+    private _index: string | null;
 
     private _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index } = params;
         this._extend = extend ?? [];
         this._documentType = documentType;
         this._context = context;
@@ -56,6 +58,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             "remove-invoked": []
         }
         this._map = map ?? [];
+        this._index = index;
 
         this._onCreate = onCreate;
     }
@@ -72,7 +75,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             extend: this._extend,
             keyType: this._keyType,
             asyncEvents: this._asyncEvents,
-            map: this._map
+            map: this._map,
+            index: this._index
         } as IDbSetBuilderParams<TDocumentType, TEntity, T, any>
     }
 
@@ -161,6 +165,18 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     }
 
     /**
+     * Specify the name of the index to use for all queries
+     * @param name Name of the index
+     * @returns DbSetBuilder
+     */
+    useIndex(name: string) {
+
+        this._index = name;
+
+        return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
+    }
+
+    /**
      * Add an event listener to the DbSet
      * @param event 
      * @param callback 
@@ -214,7 +230,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map
+                map: this._map,
+                index: this._index
             });
             result = extend(dbset) as any
         } else {
@@ -232,7 +249,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map
+                map: this._map,
+                index: this._index
             }), DbSet);
         }
 

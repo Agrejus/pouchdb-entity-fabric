@@ -49,7 +49,8 @@ describe('dbset - fluent api', () => {
         Preference = "Preference",
         PreferenceV2 = "PreferenceV2",
         ReadonlyPreference = "ReadonlyPreference",
-        BooksWithDateMapped = "BooksWithDateMapped"
+        BooksWithDateMapped = "BooksWithDateMapped",
+        BooksWithIndex = "BooksWithIndex",
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -228,6 +229,8 @@ describe('dbset - fluent api', () => {
         }).defaults({ status: "pending", rejectedCount: 0 }).create();
         booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
         booksNoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithNoDefaults).exclude("status", "rejectedCount").create();
+
+        booksWithIndex = this.dbset<IBook>(DocumentTypes.BooksWithIndex).exclude("status", "rejectedCount").useIndex('some-default-index').create();
     }
 
     class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
@@ -1842,5 +1845,122 @@ describe('dbset - fluent api', () => {
         } catch (e) {
             expect(e).not.toBeDefined()
         }
+    });
+
+    it('should use index from dbset', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const all = await context.books.useIndex("some-index").all();
+        const filter = await context.books.useIndex("some-index").filter(w => w.author == "");
+        const find = await context.books.useIndex("some-index").find(w => w.author == "");
+        const first = await context.books.useIndex("some-index").first();
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(4, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+    });
+
+    it('should use index from dbset once', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const allOne = await context.books.useIndex("some-index").all();
+        const allTwo = await context.books.all();
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.Books } });
+    });
+
+    it('should use index from dbset once, skip, and use again', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const allOne = await context.books.useIndex("some-index").all();
+        const allTwo = await context.books.all();
+        const find = await context.books.useIndex("some-index").find(w => w.author == "");
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.Books } });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.Books }, use_index: "some-index" });
+    });
+
+    it('should use index from dbset fluent api', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const all = await context.booksWithIndex.all();
+        const filter = await context.booksWithIndex.filter(w => w.author == "");
+        const find = await context.booksWithIndex.find(w => w.author == "");
+        const first = await context.booksWithIndex.first();
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(4, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+    });
+
+    it('should use temp index over the default index', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const mockFind = jest.fn(async() => ({ docs: [] }));
+        (context as any).doWork = async (action: (db: any) => Promise<any>) => {
+            const db  = {
+                find: mockFind
+            }
+            const result = await action(db);
+            return result;
+        }
+
+        const allOne = await context.booksWithIndex.useIndex("some-index").all();
+        const allTwo = await context.booksWithIndex.all();
+        const find = await context.booksWithIndex.useIndex("some-index").find(w => w.author == "");
+
+        expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
+        expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-index" });
     });
 });

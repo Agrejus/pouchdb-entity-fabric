@@ -2,7 +2,49 @@ import PouchDB from 'pouchdb';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
 
-export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
+export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
+    /**
+      * Return all items in the underlying data store for the document type
+      * @returns Promise\<TEntity[]\>
+      */
+    all(): Promise<TEntity[]>;
+
+    /**
+     * Filter items in the underlying data store and return the results
+     * @param selector Callback to filter entities matching the criteria
+     * @returns Promise\<TEntity[]\>
+     */
+    filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
+
+    /**
+     * Find first item matching the selector in the underlying data store and return the result
+     * @param selector Callback to find entity matching the criteria
+     * @returns Promise\<TEntity \| undefined\>
+     */
+    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined>;
+
+    /**
+     * Find first item in the underlying data store and return the result 
+     * @returns Promise\<TEntity\>
+     */
+    first(): Promise<TEntity | undefined>;
+}
+
+export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetEnumerable<TDocumentType, TEntity, TExtraExclusions> {
+
+    /**
+     * Direct pouchDB to use an index with your request.  Index will only be used with the single request, all subsequent requests will use the default index if any
+     * @param name Name of the index
+     * @returns Promise\<TEntity[]\>
+     */
+    useIndex(name: string) : IDbSetEnumerable<TDocumentType, TEntity, TExtraExclusions>;
+
+    /**
+     * Find entity by an id or ids
+     * @param ids ids of the documents to retrieve
+     * @returns Promise<\TEntity[]\>
+     */
+     get(...ids: string[]): Promise<TEntity[]>;
 
     /**
      * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
@@ -41,33 +83,6 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     remove(...ids: string[]): Promise<void>;
 
     /**
-     * Return all items in the underlying data store for the document type
-     * @returns Promise\<TEntity[]\>
-     */
-    all(): Promise<TEntity[]>;
-
-    /**
-     * Filter items in the underlying data store and return the results
-     * @param selector Callback to filter entities matching the criteria
-     * @returns Promise\<TEntity[]\>
-     */
-    filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>;
-
-    /**
-     * Find first item matching the selector in the underlying data store and return the result
-     * @param selector Callback to find entity matching the criteria
-     * @returns Promise\<TEntity \| undefined\>
-     */
-    find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity | undefined>;
-
-    /**
-     * Find entity by an id or ids
-     * @param ids ids of the documents to retrieve
-     * @returns Promise<\TEntity[]\>
-     */
-    get(...ids: string[]): Promise<TEntity[]>
-
-    /**
      * Check for equality between two entities
      * @param first First entity to compare
      * @param second Second entity to compare
@@ -101,19 +116,12 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      */
     attach(...entites: TEntity[]): Promise<void>;
 
-
     /**
      * Matches items with the same document type.  Useful for retrieving all docs and calling match() to find the ones that belong in the db set
      * @param entities Entity or entities to match on document type.
      * @returns TEntity[]
      */
     match(...entities: IDbRecordBase[]): TEntity[];
-
-    /**
-     * Find first item in the underlying data store and return the result 
-     * @returns Promise\<TEntity\>
-     */
-    first(): Promise<TEntity | undefined>;
 
     /**
      * Called once per entity added
@@ -170,7 +178,8 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     keyType: DbSetKeyType;
     events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
     asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
-    map: PropertyMap<TDocumentType, TEntity, any>[]
+    map: PropertyMap<TDocumentType, TEntity, any>[];
+    index: string | null;
 }
 
 export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -221,16 +230,21 @@ export interface IDbSetBase<TDocumentType extends string> {
 }
 
 export type DatabaseConfigurationAdditionalConfiguration = {
-    
+
 }
 
 export type DataContextOptions = PouchDB.Configuration.DatabaseConfiguration & DatabaseConfigurationAdditionalConfiguration
 
 export type EntitySelector<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity, index?: number, array?: TEntity[]) => boolean
 
+export interface IQueryParams<TDocumentType extends string> {
+    documentType?: TDocumentType;
+    index?: string;
+}
+
 export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
-    getAllData: (documentType: TDocumentType) => Promise<IDbRecordBase[]>;
+    getAllData: (payload?: IQueryParams<TDocumentType>) => Promise<IDbRecordBase[]>;
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[]) => void;

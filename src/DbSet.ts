@@ -1,4 +1,4 @@
-import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps, DbSetAsyncEvent, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync } from './typings';
+import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps, DbSetAsyncEvent, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync, IDbSetEnumerable } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
@@ -7,6 +7,30 @@ export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
 
 interface IPrivateContext<TDocumentType extends string> extends IDataContext {
     _getApi: () => IDbSetApi<TDocumentType>;
+}
+
+class IndexStore {
+
+    private readonly _default: string | null = null;
+    private _once: string | null = null;
+
+    constructor(defaultName: string) {
+        this._default = defaultName;
+    }
+
+    once(name: string) {
+        this._once = name;
+    }
+
+    get(): string | null {
+        if (this._once) {
+            const result = this._once;
+            this._once = null;
+            return result;
+        }
+
+        return this._default
+    }
 }
 
 /**
@@ -26,6 +50,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
      */
     get DocumentType() { return this._documentType }
 
+    private _indexStore: IndexStore;
     private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     private _idKeys: EntityIdKeys<TDocumentType, TEntity>;
     private _documentType: TDocumentType;
@@ -58,6 +83,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._events = props.events;
         this._asyncEvents = props.asyncEvents;
         this._map = props.map;
+
+        this._indexStore = new IndexStore(props.index);
 
         this._api = this._context._getApi();
 
@@ -127,13 +154,21 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return result
     }
 
-    private _merge(from: TEntity, to: TEntity){
+    private _merge(from: TEntity, to: TEntity) {
         return { ...from, ...to, [PRISTINE_ENTITY_KEY]: { ...from, ...((to as IIndexableEntity)[PRISTINE_ENTITY_KEY] ?? {}) }, _rev: from._rev } as TEntity
+    }
+
+    private async _getAllData() {
+        const index = this._indexStore.get();
+        return await this._api.getAllData({
+            documentType: this._documentType,
+            index
+        });
     }
 
     async upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]) {
         // build the id's
-        const all = await this._api.getAllData(this._documentType);
+        const all = await this._getAllData();
         const allDictionary: { [key: string]: TEntity } = all.reduce((a, v) => ({ ...a, [v._id]: v }), {})
         const result: TEntity[] = [];
 
@@ -220,6 +255,12 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         remove.push(entity as any);
     }
 
+
+    useIndex(name: string): IDbSetEnumerable<TDocumentType, TEntity, TExtraExclusions> {
+        this._indexStore.once(name);
+        return this;
+    }
+
     async empty() {
         const items = await this.all();
         await this.remove(...items);
@@ -243,7 +284,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     }
 
     private async _all() {
-        const data = await this._api.getAllData(this._documentType);
+        const data = await this._getAllData();
+        
         // process the mappings when we make the item trackable.  We are essentially prepping the entity
         return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map) as TEntity);
     }
