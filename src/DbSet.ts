@@ -2,8 +2,10 @@ import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys,
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
 import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
+import { DataContext } from './DataContext';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
+export const DIRTY_ENTITY_MARKER = "__isDirty";
 
 interface IPrivateContext<TDocumentType extends string> extends IDataContext {
     _getApi: () => IDbSetApi<TDocumentType>;
@@ -177,9 +179,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             const found = allDictionary[instance._id]
 
             if (found) {
-                // update
-                const merged = this._merge(found, entity as TEntity);
-                const mergedAndTrackable = this._api.makeTrackable(merged, this._defaults.add, this._isReadonly, this._map) as TEntity;
+                const mergedAndTrackable = this._api.makeTrackable(found, this._defaults.add, this._isReadonly, this._map) as TEntity;
+
+                DataContext.merge(mergedAndTrackable, entity, { skip: [PRISTINE_ENTITY_KEY] });
+
                 this._api.send([mergedAndTrackable]);
                 result.push(mergedAndTrackable)
                 continue;
@@ -219,7 +222,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return [this._documentType, ...keyData].join("/");
     }
 
-    isMatch(first: TEntity, second: TEntity) {
+    isMatch(first: TEntity, second: any) {
         return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
     }
 
@@ -350,6 +353,18 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         }
 
         this._detachItems(entities)
+    }
+
+    async markDirty(...entities: TEntity[]) {
+
+        if (entities.some(w => DataContext.isProxy(w) === false)) {
+            throw new Error(`Entities must be linked to context in order to mark as dirty`)
+        }
+
+        return entities.map(w => {
+            (w as IIndexableEntity)[DIRTY_ENTITY_MARKER] = true;
+            return w;
+        });
     }
 
     async link(...entities: TEntity[]) {

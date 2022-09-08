@@ -244,7 +244,8 @@ class DataContext extends PouchDbInteractionBase {
             detach: this._detach.bind(this),
             makeTrackable: this._makeTrackable.bind(this),
             get: this.get.bind(this),
-            getStrict: this.getStrict.bind(this)
+            getStrict: this.getStrict.bind(this),
+            map: this._map.bind(this)
         };
     }
     _addDbSet(dbset) {
@@ -311,11 +312,29 @@ class DataContext extends PouchDbInteractionBase {
             return first[w] != second[w];
         }) === false;
     }
+    _map(entity, maps, defaults = {}) {
+        const mergedInstance = Object.assign(Object.assign({}, defaults), entity);
+        let mappedInstance = {};
+        if (maps.length > 0) {
+            mappedInstance = maps.reduce((a, v) => {
+                const preTransformValue = mergedInstance[v.property];
+                return Object.assign(Object.assign({}, a), { [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) });
+            }, {});
+        }
+        return Object.assign(Object.assign({}, mergedInstance), mappedInstance);
+    }
     _makeTrackable(entity, defaults, readonly, maps) {
         const proxyHandler = {
             set: (entity, property, value) => {
                 const indexableEntity = entity;
                 const key = String(property);
+                if (property === DbSet_1.DIRTY_ENTITY_MARKER) {
+                    if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] === undefined) {
+                        indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] = {};
+                    }
+                    indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY][DbSet_1.DIRTY_ENTITY_MARKER] = true;
+                    return true;
+                }
                 if (property !== DbSet_1.PRISTINE_ENTITY_KEY && indexableEntity._id != null) {
                     const oldValue = indexableEntity[key];
                     if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] === undefined) {
@@ -335,15 +354,7 @@ class DataContext extends PouchDbInteractionBase {
                 return Reflect.get(target, property, receiver);
             }
         };
-        const mergedInstance = Object.assign(Object.assign({}, defaults), entity);
-        let mappedInstance = {};
-        if (maps.length > 0) {
-            mappedInstance = maps.reduce((a, v) => {
-                const preTransformValue = mergedInstance[v.property];
-                return Object.assign(Object.assign({}, a), { [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) });
-            }, {});
-        }
-        const instance = Object.assign(Object.assign({}, mergedInstance), mappedInstance);
+        const instance = this._map(entity, maps, defaults);
         const result = readonly ? Object.freeze(instance) : instance;
         return new Proxy(result, proxyHandler);
     }
@@ -536,10 +547,15 @@ class DataContext extends PouchDbInteractionBase {
     static isProxy(entities) {
         return entities[DataContext.PROXY_MARKER] === true;
     }
-    static merge(to, from) {
+    static isDate(value) {
+        return Object.prototype.toString.call(value) === '[object Date]';
+    }
+    static merge(to, from, options) {
         for (let property in from) {
-            const value = from[property];
-            to[property] = value;
+            if ((options === null || options === void 0 ? void 0 : options.skip) && options.skip.includes(property)) {
+                continue;
+            }
+            to[property] = from[property];
         }
     }
     [Symbol.iterator]() {
