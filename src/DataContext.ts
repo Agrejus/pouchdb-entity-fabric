@@ -1,5 +1,5 @@
 import PouchDB from 'pouchdb';
-import { PRISTINE_ENTITY_KEY } from "./DbSet";
+import { DIRTY_ENTITY_MARKER, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams } from './typings';
@@ -32,7 +32,7 @@ class ContextCache implements IContextCache {
     }
 
     get<T extends any>(key: CacheKeys) {
-        return  this._data[key] as T
+        return this._data[key] as T
     }
 
     contains(key: CacheKeys) {
@@ -286,7 +286,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             detach: this._detach.bind(this),
             makeTrackable: this._makeTrackable.bind(this),
             get: this.get.bind(this),
-            getStrict: this.getStrict.bind(this)
+            getStrict: this.getStrict.bind(this),
+            map: this._map.bind(this)
         }
     }
 
@@ -371,12 +372,36 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
+    private _map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults: DeepPartial<OmittedEntity<T>> = {} as any) {
+        const mergedInstance = { ...defaults, ...entity };
+        let mappedInstance = {};
+
+        if (maps.length > 0) {
+            mappedInstance = maps.reduce((a, v) => {
+                const preTransformValue = (mergedInstance as any)[v.property];
+                return { ...a, [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) }
+            }, {});
+        }
+
+        return { ...mergedInstance, ...mappedInstance };
+    }
+
     private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
                 const indexableEntity: IIndexableEntity = entity as any;
                 const key = String(property);
+
+                if (property === DIRTY_ENTITY_MARKER) {
+
+                    if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
+                        indexableEntity[PRISTINE_ENTITY_KEY] = {};
+                    }
+
+                    indexableEntity[PRISTINE_ENTITY_KEY][DIRTY_ENTITY_MARKER] = true;
+                    return true;
+                }
 
                 if (property !== PRISTINE_ENTITY_KEY && indexableEntity._id != null) {
                     const oldValue = indexableEntity[key];
@@ -404,17 +429,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        const mergedInstance = { ...defaults, ...entity };
-        let mappedInstance = {};
-
-        if (maps.length > 0) {
-            mappedInstance = maps.reduce((a, v) => {
-                const preTransformValue = (mergedInstance as any)[v.property];
-                return { ...a, [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) }
-            }, {});
-        }
-
-        const instance = { ...mergedInstance, ...mappedInstance };
+        const instance = this._map(entity, maps, defaults);
         const result = readonly ? Object.freeze(instance) : instance;
 
         return new Proxy(result, proxyHandler) as T
@@ -645,10 +660,18 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         return (entities as IIndexableEntity)[DataContext.PROXY_MARKER] === true;
     }
 
-    static merge<T extends IDbRecordBase>(to: T, from: T) {
-        for(let property in from) {
-            const value = from[property];
-            to[property] = value;
+    static isDate(value: any) {
+        return Object.prototype.toString.call(value) === '[object Date]'
+    }
+
+    static merge<T extends IDbRecordBase>(to: T, from: T, options?: { skip?: string[]; }) {
+        for (let property in from) {
+
+            if (options?.skip && options.skip.includes(property)) {
+                continue;
+            }
+
+            to[property] = from[property];
         }
     }
 

@@ -8,10 +8,9 @@ npm install pouchdb-entity-fabric
 PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouchdb.com/) and makes creating repeatable processes in PouchDB easier.  Often times using PouchDB, a repository layer needs to be created and adding new document types requires a new repository.  PouchDB Entity Fabric removes the need for these repository layers all together.  Let's get to the code:
 
 ## Changes
-### 1.4.3 -> 1.4.4 
-- Added `.useIndex()` to `DbSetBuilder` and to `DbSet`
-    - Can set a default index or use an index one time
-- Changed `.extend()` in the `DbSetBuilder` to allow extend to be called more than once
+### 1.4.4 -> 1.4.5 
+- Fixed bug with `.upsert()` when spreading two objects with optional property
+- Added `markDirty()` to `DbSet`.  Allows users to force an object to be marked as dirty so it can be saved
 
 ## Installation
 ```
@@ -850,6 +849,7 @@ The DataContext has three available events that can be subscribed to, `"entity-c
 | `empty(): Promise<void>` | Remove all entities from the DbSet, save changes must be called to persist changes |
 | `all(): Promise<TEntity[]>` | Return all items in the underlying data store for the document type |
 | `get(...ids: string[]): Promise<TEntity[]>` | Find entity by an id or ids |
+| `markDirty(...entities: TEntity[]): Promise<TEntity[]>` | Mark an entity as dirty, will be saved even if there are no changes detected |
 | `filter(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity[]>` | Filter items in the underlying data store and return the results |
 | `match(...items: IDbRecordBase[]): TEntity[]` | Matches items with the same document type.  Useful for retrieving all docs and calling match() to find the ones that belong in the db set |
 | `find(selector: (entity: TEntity, index?: number, array?: TEntity[]) => boolean): Promise<TEntity \| undefined>` | Find an entity for the underlying document type |

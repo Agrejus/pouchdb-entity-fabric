@@ -1,5 +1,6 @@
 import { DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, IDbSetInfo, IDbSetProps, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync, IDbSetEnumerable } from './typings';
 export declare const PRISTINE_ENTITY_KEY = "__pristine_entity__";
+export declare const DIRTY_ENTITY_MARKER = "__isDirty";
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
@@ -38,7 +39,7 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     private _getAllData;
     upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>;
     private _getKeyFromEntity;
-    isMatch(first: TEntity, second: TEntity): boolean;
+    isMatch(first: TEntity, second: any): boolean;
     remove(...ids: string[]): Promise<void>;
     remove(...entities: TEntity[]): Promise<void>;
     private _remove;
@@ -54,6 +55,7 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     find(selector: EntitySelector<TDocumentType, TEntity>): Promise<TEntity | undefined>;
     detach(...entities: TEntity[]): void;
     unlink(...entities: TEntity[]): void;
+    markDirty(...entities: TEntity[]): Promise<TEntity[]>;
     link(...entities: TEntity[]): Promise<TEntity[]>;
     attach(...entities: TEntity[]): Promise<void>;
     first(): Promise<TEntity>;

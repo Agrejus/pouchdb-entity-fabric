@@ -9,10 +9,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DbSet = exports.PRISTINE_ENTITY_KEY = void 0;
+exports.DbSet = exports.DIRTY_ENTITY_MARKER = exports.PRISTINE_ENTITY_KEY = void 0;
 const Validation_1 = require("./Validation");
 const uuid_1 = require("uuid");
+const DataContext_1 = require("./DataContext");
 exports.PRISTINE_ENTITY_KEY = "__pristine_entity__";
+exports.DIRTY_ENTITY_MARKER = "__isDirty";
 class IndexStore {
     constructor(defaultName) {
         this._default = null;
@@ -143,9 +145,8 @@ class DbSet {
                 const instance = entity._id != null ? entity : Object.assign({}, this._processAddition(entity));
                 const found = allDictionary[instance._id];
                 if (found) {
-                    // update
-                    const merged = this._merge(found, entity);
-                    const mergedAndTrackable = this._api.makeTrackable(merged, this._defaults.add, this._isReadonly, this._map);
+                    const mergedAndTrackable = this._api.makeTrackable(found, this._defaults.add, this._isReadonly, this._map);
+                    DataContext_1.DataContext.merge(mergedAndTrackable, entity, { skip: [exports.PRISTINE_ENTITY_KEY] });
                     this._api.send([mergedAndTrackable]);
                     result.push(mergedAndTrackable);
                     continue;
@@ -281,6 +282,17 @@ class DbSet {
             throw new Error(`Entities to be attached have errors.  Errors: \r\n${errors}`);
         }
         this._detachItems(entities);
+    }
+    markDirty(...entities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (entities.some(w => DataContext_1.DataContext.isProxy(w) === false)) {
+                throw new Error(`Entities must be linked to context in order to mark as dirty`);
+            }
+            return entities.map(w => {
+                w[exports.DIRTY_ENTITY_MARKER] = true;
+                return w;
+            });
+        });
     }
     link(...entities) {
         return __awaiter(this, void 0, void 0, function* () {

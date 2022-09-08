@@ -97,6 +97,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns boolean
      */
     private areEqual;
+    private _map;
     private _makeTrackable;
     private _getPendingChanges;
     previewChanges(): Promise<IPreviewChanges>;
@@ -119,7 +120,10 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     purge(purgeType?: "memory" | "disk"): Promise<IPurgeResponse>;
     static asUntracked<T extends IDbRecordBase>(...entities: IDbRecordBase[]): T[];
     static isProxy(entities: IDbRecordBase): boolean;
-    static merge<T extends IDbRecordBase>(to: T, from: T): void;
+    static isDate(value: any): boolean;
+    static merge<T extends IDbRecordBase>(to: T, from: T, options?: {
+        skip?: string[];
+    }): void;
     [Symbol.iterator](): {
         next: () => {
             value: IDbSetBase<string>;

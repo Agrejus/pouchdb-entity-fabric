@@ -36,6 +36,12 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      */
     useIndex(name: string): IDbSetEnumerable<TDocumentType, TEntity, TExtraExclusions>;
     /**
+     * Mark an entity as dirty, will be saved even if there are no changes detected
+     * @param entities Entities to mark as dirty
+     * @returns Promise\<TEntity[]\>
+     */
+    markDirty(...entities: TEntity[]): Promise<TEntity[]>;
+    /**
      * Find entity by an id or ids
      * @param ids ids of the documents to retrieve
      * @returns Promise<\TEntity[]\>
@@ -78,7 +84,7 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
      * @param second Second entity to compare
      * @returns boolean
      */
-    isMatch(first: TEntity, second: TEntity): boolean;
+    isMatch(first: TEntity, second: any): boolean;
     /**
      * Unlinks an entity or entities from the context so they can be modified and changes will not be persisted to the underlying data store
      * @param entities Entity or entities to unlink from the data context
@@ -222,6 +228,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     send: (data: IDbRecordBase[]) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
     makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T;
+    map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults?: DeepPartial<OmittedEntity<T, never>>): T;
 }
 export interface IDbRecord<TDocumentType extends string> extends IDbAdditionRecord<TDocumentType> {
     readonly _id: string;

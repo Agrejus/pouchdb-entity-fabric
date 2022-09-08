@@ -31,6 +31,7 @@ describe('dbset - fluent api', () => {
 
     enum DocumentTypes {
         Notes = "Notes",
+        NotesWithMapping = "NotesWithMapping",
         Contacts = "Contacts",
         OverrideContacts = "OverrideContacts",
         OverrideContactsV2 = "OverrideContactsV2",
@@ -51,6 +52,8 @@ describe('dbset - fluent api', () => {
         ReadonlyPreference = "ReadonlyPreference",
         BooksWithDateMapped = "BooksWithDateMapped",
         BooksWithIndex = "BooksWithIndex",
+
+        Computers = "Computers",
     }
 
     interface IContact extends IDbRecord<DocumentTypes> {
@@ -58,6 +61,12 @@ describe('dbset - fluent api', () => {
         lastName: string;
         address: string;
         phone: string;
+    }
+
+    interface IComputer extends IDbRecord<DocumentTypes> {
+        name: string;
+        cores: number;
+        keyboard?: string;
     }
 
     interface INote extends IDbRecord<DocumentTypes> {
@@ -149,6 +158,8 @@ describe('dbset - fluent api', () => {
             });
         }
 
+        computers = this.dbset<IComputer>(DocumentTypes.Computers).create();
+
         books = this.dbset<IBook>(DocumentTypes.Books).exclude("status", "rejectedCount").create();
         booksWithDateMapped = this.dbset<IBookV4>(DocumentTypes.BooksWithDateMapped)
             .exclude("status", "rejectedCount")
@@ -231,6 +242,10 @@ describe('dbset - fluent api', () => {
         booksNoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithNoDefaults).exclude("status", "rejectedCount").create();
 
         booksWithIndex = this.dbset<IBook>(DocumentTypes.BooksWithIndex).exclude("status", "rejectedCount").useIndex('some-default-index').create();
+
+
+
+        notesWithMapping = this.dbset<INote>(DocumentTypes.NotesWithMapping).map({ property: "createdDate", map: w => new Date(w) }).create();
     }
 
     class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
@@ -1666,6 +1681,89 @@ describe('dbset - fluent api', () => {
         expect(DataContext.isProxy(two)).toBe(true)
     });
 
+
+    it('should should upsert one entity using spread not the instance with optional property', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const all = await context.books.all();
+
+        expect(all.length).toBe(0);
+
+        const [one] = await context.books.add({
+            author: "me"
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        await context.books.upsert({
+            ...one,
+            publishDate: new Date()
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+    });
+
+    it('should should upsert one entity using spread not the instance with optional property and show no changes', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const all = await context.computers.all();
+
+        expect(all.length).toBe(0);
+
+        const [one] = await context.computers.add({
+            cores: 4,
+            name: "test",
+            keyboard: "something"
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        await context.computers.upsert({
+            ...one,
+            keyboard: "something"
+        });
+
+        expect(context.hasPendingChanges()).toBe(false);
+    });
+
+    it('should should upsert one entity using spread not the instance with optional date and show no changes', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const all = await context.books.all();
+
+        expect(all.length).toBe(0);
+
+        const [one] = await context.books.add({
+            author: "me",
+            publishDate: new Date()
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        await context.books.upsert({
+            ...one,
+            publishDate: new Date()
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+    });
+
     it('should should add and update in one transaction', async () => {
 
         const dbname = uuidv4()
@@ -1722,11 +1820,11 @@ describe('dbset - fluent api', () => {
             const dbname = uuidv4()
             const context = dbFactory(PouchDbDataContext, dbname);
 
-            const all = await context.notes.all();
+            const all = await context.notesWithMapping.all();
 
             expect(all.length).toBe(0);
 
-            const [one] = await context.notes.upsert({
+            const [one] = await context.notesWithMapping.upsert({
                 contents: "some contents",
                 createdDate: new Date(),
                 userId: "some user"
@@ -1736,7 +1834,7 @@ describe('dbset - fluent api', () => {
             await context.saveChanges();
             expect(context.hasPendingChanges()).toBe(false);
 
-            const [two] = await context.notes.upsert({
+            const [two] = await context.notesWithMapping.upsert({
                 contents: "some contents",
                 createdDate: new Date(),
                 userId: "some user"
@@ -1746,14 +1844,14 @@ describe('dbset - fluent api', () => {
             await context.saveChanges();
             expect(context.hasPendingChanges()).toBe(false);
 
-            const allAfterAdd = await context.notes.all();
+            const allAfterAdd = await context.notesWithMapping.all();
             expect(allAfterAdd.length).toBe(2);
 
-            const foundOne = await context.notes.find(w => w._id === one._id);
+            const foundOne = await context.notesWithMapping.find(w => w._id === one._id);
 
             expect(foundOne).toBeDefined();
 
-            const [upsertedOne] = await context.notes.upsert({
+            const [upsertedOne] = await context.notesWithMapping.upsert({
                 _id: one._id,
                 contents: "changed contents",
                 createdDate: new Date(),
@@ -1765,9 +1863,9 @@ describe('dbset - fluent api', () => {
             await context.saveChanges();
             expect(context.hasPendingChanges()).toBe(false);
 
-            const foundUpsertOne = await context.notes.find(w => w._id === one._id);
+            const foundUpsertOne = await context.notesWithMapping.find(w => w._id === one._id);
 
-            expect({ ...upsertedOne, createdDate: upsertedOne.createdDate.toISOString() }).toEqual({ ...foundUpsertOne });
+            expect({ ...upsertedOne, createdDate: upsertedOne.createdDate }).toEqual({ ...foundUpsertOne });
             expect(foundUpsertOne?.contents).toBe("changed contents");
             expect(foundUpsertOne?.userId).toBe("changed user");
         } catch (e) {
@@ -1852,9 +1950,9 @@ describe('dbset - fluent api', () => {
         const dbname = uuidv4()
         const context = dbFactory(PouchDbDataContext, dbname);
 
-        const mockFind = jest.fn(async() => ({ docs: [] }));
+        const mockFind = jest.fn(async () => ({ docs: [] }));
         (context as any).doWork = async (action: (db: any) => Promise<any>) => {
-            const db  = {
+            const db = {
                 find: mockFind
             }
             const result = await action(db);
@@ -1877,9 +1975,9 @@ describe('dbset - fluent api', () => {
         const dbname = uuidv4()
         const context = dbFactory(PouchDbDataContext, dbname);
 
-        const mockFind = jest.fn(async() => ({ docs: [] }));
+        const mockFind = jest.fn(async () => ({ docs: [] }));
         (context as any).doWork = async (action: (db: any) => Promise<any>) => {
-            const db  = {
+            const db = {
                 find: mockFind
             }
             const result = await action(db);
@@ -1898,9 +1996,9 @@ describe('dbset - fluent api', () => {
         const dbname = uuidv4()
         const context = dbFactory(PouchDbDataContext, dbname);
 
-        const mockFind = jest.fn(async() => ({ docs: [] }));
+        const mockFind = jest.fn(async () => ({ docs: [] }));
         (context as any).doWork = async (action: (db: any) => Promise<any>) => {
-            const db  = {
+            const db = {
                 find: mockFind
             }
             const result = await action(db);
@@ -1921,9 +2019,9 @@ describe('dbset - fluent api', () => {
         const dbname = uuidv4()
         const context = dbFactory(PouchDbDataContext, dbname);
 
-        const mockFind = jest.fn(async() => ({ docs: [] }));
+        const mockFind = jest.fn(async () => ({ docs: [] }));
         (context as any).doWork = async (action: (db: any) => Promise<any>) => {
-            const db  = {
+            const db = {
                 find: mockFind
             }
             const result = await action(db);
@@ -1946,9 +2044,9 @@ describe('dbset - fluent api', () => {
         const dbname = uuidv4()
         const context = dbFactory(PouchDbDataContext, dbname);
 
-        const mockFind = jest.fn(async() => ({ docs: [] }));
+        const mockFind = jest.fn(async () => ({ docs: [] }));
         (context as any).doWork = async (action: (db: any) => Promise<any>) => {
-            const db  = {
+            const db = {
                 find: mockFind
             }
             const result = await action(db);
@@ -1962,5 +2060,39 @@ describe('dbset - fluent api', () => {
         expect(mockFind).toHaveBeenNthCalledWith(1, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-index" });
         expect(mockFind).toHaveBeenNthCalledWith(2, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-default-index" });
         expect(mockFind).toHaveBeenNthCalledWith(3, { selector: { DocumentType: DocumentTypes.BooksWithIndex }, use_index: "some-index" });
+    });
+
+    it('should mark entity as dirty and save', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const all = await context.notes.all();
+
+        expect(all.length).toBe(0);
+
+        const [one] = await context.notes.add({
+            contents: "some contents",
+            createdDate: new Date(),
+            userId: "some user"
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+        const found = await context.notes.first();
+
+        if (found == null) {
+            expect(true).toBe(false);
+            return
+        }
+
+        const [dirty] = await context.notes.markDirty(found);
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        expect(dirty._rev).not.toEqual(one._rev)
     });
 });
