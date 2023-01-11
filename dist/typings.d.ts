@@ -3,7 +3,7 @@
 /// <reference types="pouchdb-mapreduce" />
 /// <reference types="pouchdb-replication" />
 import { AdvancedDictionary } from './AdvancedDictionary';
-import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
+import { DbSetKeyType, PropertyDeserializer, PropertyMap, PropertySerializer } from './DbSetBuilder';
 export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
     /**
       * Return all items in the underlying data store for the document type
@@ -148,7 +148,8 @@ export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRec
     IdKeys: EntityIdKeys<TDocumentType, TEntity>;
     Defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     KeyType: DbSetKeyType;
-    Map: PropertyMap<TDocumentType, TEntity, any>[];
+    Serializers: PropertySerializer<TDocumentType, TEntity, any>[];
+    Deserializers: PropertyDeserializer<TDocumentType, TEntity, any>[];
     Readonly: boolean;
 }
 export declare type Work = <T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose?: boolean) => Promise<T>;
@@ -165,7 +166,8 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     asyncEvents: {
         [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[];
     };
-    map: PropertyMap<TDocumentType, TEntity, any>[];
+    serializers: PropertySerializer<TDocumentType, TEntity, any>[];
+    deserializers: PropertyDeserializer<TDocumentType, TEntity, any>[];
     index: string | null;
 }
 export declare type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -227,8 +229,8 @@ export interface IDbSetApi<TDocumentType extends string> {
     getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[]) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
-    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T;
-    map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults?: DeepPartial<OmittedEntity<T, never>>): T;
+    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyDeserializer<any, any, any>[]): T;
+    deserialize<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults?: DeepPartial<OmittedEntity<T, never>>): T;
 }
 export interface IDbRecord<TDocumentType extends string> extends IDbAdditionRecord<TDocumentType> {
     readonly _id: string;

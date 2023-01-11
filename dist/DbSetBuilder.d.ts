@@ -15,14 +15,33 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     readonly: boolean;
     extend?: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
     keyType?: DbSetKeyType;
-    map?: PropertyMap<TDocumentType, TEntity, any>[];
+    serializers?: PropertySerializer<TDocumentType, TEntity, any>[];
+    deserializers?: PropertyDeserializer<TDocumentType, TEntity, any>[];
     index?: string;
 }
 declare type ConvertDateToString<T> = T extends Date ? string : T;
 declare type DbSetExtenderCreator<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> = (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
+export declare type PropertyDeserializer<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = {
+    property: TProperty;
+    map: PropertyDeserializationMapper<TDocumentType, TEntity, TProperty>;
+};
+export declare type PropertySerializer<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = {
+    property: TProperty;
+    map: PropertySerializationMapper<TDocumentType, TEntity, TProperty>;
+};
+export declare type PropertyMappper<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = {
+    serialize: PropertySerializationMapper<TDocumentType, TEntity, TProperty>;
+    deserialize: PropertyDeserializationMapper<TDocumentType, TEntity, TProperty>;
+};
+export declare type PropertyDeserializationMapper<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = (value: ConvertDateToString<TEntity[TProperty]>, entity: TEntity) => TEntity[TProperty];
+export declare type PropertySerializationMapper<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = (value: ConvertDateToString<TEntity[TProperty]>, entity: TEntity) => any;
+export declare type PickPropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = {
+    property: TProperty;
+    map: PropertyDeserializationMapper<TDocumentType, TEntity, TProperty> | PropertySerializationMapper<TDocumentType, TEntity, TProperty> | PropertyMappper<TDocumentType, TEntity, TProperty>;
+};
 export declare type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = {
     property: TProperty;
-    map: (value: ConvertDateToString<TEntity[TProperty]>) => TEntity[TProperty];
+    map: PropertyMappper<TDocumentType, TEntity, TProperty>;
 };
 export declare class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
     private _context;
@@ -36,7 +55,8 @@ export declare class DbSetBuilder<TDocumentType extends string, TEntity extends 
     private _readonly;
     private _extend;
     private _onCreate;
-    private _map;
+    private _serializers;
+    private _deserializers;
     private _index;
     private _defaultExtend;
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>);
@@ -77,7 +97,7 @@ export declare class DbSetBuilder<TDocumentType extends string, TEntity extends 
      * @returns DbSetBuilder
      */
     exclude<T extends (keyof OmittedEntity<TEntity>)>(...exclusions: T[]): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions | T, IDbSet<TDocumentType, TEntity, TExtraExclusions | T>>;
-    map<T extends (keyof OmittedEntity<TEntity>)>(propertyMap: PropertyMap<TDocumentType, TEntity, T>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
+    map<T extends (keyof OmittedEntity<TEntity>)>(map: PickPropertyMap<TDocumentType, TEntity, T>): DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     /**
      * Specify the name of the index to use for all queries
      * @param name Name of the index

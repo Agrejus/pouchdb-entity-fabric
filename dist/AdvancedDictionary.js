@@ -53,6 +53,16 @@ class AdvancedDictionary {
         }
         return this._enumeration.filter(predicate);
     }
+    forEach(callback) {
+        if (this._enumeration.length === 0) {
+            for (let key in this._data) {
+                const data = this._data[key];
+                for (let item of data) {
+                    callback(item);
+                }
+            }
+        }
+    }
 }
 exports.AdvancedDictionary = AdvancedDictionary;
 //# sourceMappingURL=AdvancedDictionary.js.map

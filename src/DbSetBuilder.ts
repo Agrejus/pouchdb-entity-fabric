@@ -12,14 +12,21 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     readonly: boolean;
     extend?: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[]
     keyType?: DbSetKeyType;
-    map?: PropertyMap<TDocumentType, TEntity, any>[];
-    index?:string;
+    serializers?: PropertySerializer<TDocumentType, TEntity, any>[];
+    deserializers?: PropertyDeserializer<TDocumentType, TEntity, any>[];
+    index?: string;
 }
 
 type ConvertDateToString<T> = T extends Date ? string : T;
 type DbSetExtenderCreator<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> = (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult
 
-export type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: (value: ConvertDateToString<TEntity[TProperty]>) => TEntity[TProperty] }
+export type PropertyDeserializer<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: PropertyDeserializationMapper<TDocumentType, TEntity, TProperty> }
+export type PropertySerializer<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: PropertySerializationMapper<TDocumentType, TEntity, TProperty> }
+export type PropertyMappper<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { serialize: PropertySerializationMapper<TDocumentType, TEntity, TProperty>, deserialize: PropertyDeserializationMapper<TDocumentType, TEntity, TProperty> }
+export type PropertyDeserializationMapper<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = (value: ConvertDateToString<TEntity[TProperty]>, entity: TEntity) => TEntity[TProperty];
+export type PropertySerializationMapper<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = (value: ConvertDateToString<TEntity[TProperty]>, entity: TEntity) => any;
+export type PickPropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: PropertyDeserializationMapper<TDocumentType, TEntity, TProperty> | PropertySerializationMapper<TDocumentType, TEntity, TProperty> | PropertyMappper<TDocumentType, TEntity, TProperty> }
+export type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: PropertyMappper<TDocumentType, TEntity, TProperty> }
 
 export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
 
@@ -34,13 +41,14 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _readonly: boolean = false;
     private _extend: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
     private _onCreate: (dbset: IDbSetBase<string>) => void;
-    private _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
+    private _serializers: PropertySerializer<TDocumentType, TEntity, any>[] = [];
+    private _deserializers: PropertyDeserializer<TDocumentType, TEntity, any>[] = [];
     private _index: string | null;
 
     private _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, serializers, deserializers, index } = params;
         this._extend = extend ?? [];
         this._documentType = documentType;
         this._context = context;
@@ -57,7 +65,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             "add-invoked": [],
             "remove-invoked": []
         }
-        this._map = map ?? [];
+        this._serializers = serializers ?? [];
+        this._deserializers = deserializers ?? [];
         this._index = index;
 
         this._onCreate = onCreate;
@@ -75,7 +84,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             extend: this._extend,
             keyType: this._keyType,
             asyncEvents: this._asyncEvents,
-            map: this._map,
+            serializers: this._serializers,
+            deserializers: this._deserializers,
             index: this._index
         } as IDbSetBuilderParams<TDocumentType, TEntity, T, any>
     }
@@ -159,8 +169,24 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         return new DbSetBuilder<TDocumentType, TEntity, T | TExtraExclusions, IDbSet<TDocumentType, TEntity, T | TExtraExclusions>>(this._onCreate, this._buildParams<T | TExtraExclusions>());
     }
 
-    map<T extends (keyof OmittedEntity<TEntity>)>(propertyMap: PropertyMap<TDocumentType, TEntity, T>) {
-        this._map.push(propertyMap);
+    map<T extends (keyof OmittedEntity<TEntity>)>(map: PickPropertyMap<TDocumentType, TEntity, T>) {
+
+        const keys = Object.keys(map.map);
+
+        if (keys.length === 0) {
+            this._deserializers.push({ property: map.property, map: map.map as PropertyDeserializationMapper<TDocumentType, TEntity, T> });
+        } else {
+            const instance = map.map as PropertyMappper<TDocumentType, TEntity, T>;
+            
+            if (instance.deserialize != null) {
+                this._deserializers.push({ property: map.property, map: instance.deserialize });
+            }
+            
+            if (instance.serialize != null) {
+                this._serializers.push({ property: map.property, map: instance.serialize });
+            }
+        }
+
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
@@ -230,7 +256,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map,
+                deserializers: this._deserializers,
+                serializers: this._serializers,
                 index: this._index
             });
             result = extend(dbset) as any
@@ -249,7 +276,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map,
+                deserializers: this._deserializers,
+                serializers: this._serializers,
                 index: this._index
             }), DbSet);
         }

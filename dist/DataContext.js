@@ -208,7 +208,7 @@ class DataContext extends PouchDbInteractionBase {
                 const dbSet = this._dbSets[w.DocumentType];
                 if (dbSet) {
                     const info = dbSet.info();
-                    return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Map);
+                    return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Deserializers);
                 }
                 return w;
             });
@@ -245,7 +245,7 @@ class DataContext extends PouchDbInteractionBase {
             makeTrackable: this._makeTrackable.bind(this),
             get: this.get.bind(this),
             getStrict: this.getStrict.bind(this),
-            map: this._map.bind(this)
+            deserialize: this._deserialize.bind(this)
         };
     }
     _addDbSet(dbset) {
@@ -312,13 +312,13 @@ class DataContext extends PouchDbInteractionBase {
             return first[w] != second[w];
         }) === false;
     }
-    _map(entity, maps, defaults = {}) {
+    _deserialize(entity, maps, defaults = {}) {
         const mergedInstance = Object.assign(Object.assign({}, defaults), entity);
         let mappedInstance = {};
         if (maps.length > 0) {
             mappedInstance = maps.reduce((a, v) => {
                 const preTransformValue = mergedInstance[v.property];
-                return Object.assign(Object.assign({}, a), { [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) });
+                return Object.assign(Object.assign({}, a), { [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue, mergedInstance) });
             }, {});
         }
         return Object.assign(Object.assign({}, mergedInstance), mappedInstance);
@@ -354,7 +354,7 @@ class DataContext extends PouchDbInteractionBase {
                 return Reflect.get(target, property, receiver);
             }
         };
-        const instance = this._map(entity, maps, defaults);
+        const instance = this._deserialize(entity, maps, defaults);
         const result = readonly ? Object.freeze(instance) : instance;
         return new Proxy(result, proxyHandler);
     }
@@ -413,12 +413,53 @@ class DataContext extends PouchDbInteractionBase {
     _getModifications() {
         return __awaiter(this, void 0, void 0, function* () {
             const { add, remove, removeById, updated } = this._getPendingChanges();
-            const extraRemovals = yield this.getStrict(...removeById);
+            let extraRemovals = [];
+            if (removeById.length > 0) {
+                extraRemovals = yield this.getStrict(...removeById);
+            }
             return {
                 add,
                 remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
                 updated
             };
+        });
+    }
+    _serialize(data) {
+        const maps = {};
+        return data.map(w => {
+            let map = maps[w.DocumentType];
+            if (!map) {
+                const dbSet = this._dbSets[w.DocumentType];
+                maps[w.DocumentType] = dbSet.info().Serializers;
+                map = maps[w.DocumentType];
+            }
+            if (map.length > 0) {
+                for (let item of map) {
+                    const value = w[item.property];
+                    w[item.property] = item.map(value, w);
+                }
+                return w;
+            }
+            return w;
+        });
+    }
+    _deserializeAfter(data) {
+        const maps = {};
+        return data.map(w => {
+            let map = maps[w.DocumentType];
+            if (!map) {
+                const dbSet = this._dbSets[w.DocumentType];
+                maps[w.DocumentType] = dbSet.info().Deserializers;
+                map = maps[w.DocumentType];
+            }
+            if (map.length > 0) {
+                for (let item of map) {
+                    const value = w[item.property];
+                    w[item.property] = item.map(value, w);
+                }
+                return w;
+            }
+            return w;
         });
     }
     saveChanges() {
@@ -427,7 +468,7 @@ class DataContext extends PouchDbInteractionBase {
                 const { add, remove, updated } = yield this._getModifications();
                 // Process removals first, so we can remove items first and then add.  Just
                 // in case are are trying to remove and add the same Id
-                const modifications = [...remove, ...add, ...updated];
+                const modifications = [...remove, ...this._serialize(add), ...this._serialize(updated)];
                 // remove pristine entity before we send to bulk docs
                 this._makePristine(...modifications);
                 const modificationResult = yield this.bulkDocs(modifications);
@@ -441,6 +482,12 @@ class DataContext extends PouchDbInteractionBase {
                         // make pristine again because we set the _rev above
                         this._makePristine(modification);
                     }
+                }
+                if (add.length > 0) {
+                    this._deserializeAfter(add);
+                }
+                if (updated.length > 0) {
+                    this._deserializeAfter(updated);
                 }
                 // removals are being grouped with updates, 
                 // need to separate out calls to events so we don't double dip

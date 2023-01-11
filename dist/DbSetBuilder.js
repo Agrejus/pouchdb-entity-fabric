@@ -5,9 +5,10 @@ const DbSet_1 = require("./DbSet");
 class DbSetBuilder {
     constructor(onCreate, params) {
         this._readonly = false;
-        this._map = [];
+        this._serializers = [];
+        this._deserializers = [];
         this._defaultExtend = (Instance, a) => new Instance(a);
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, serializers, deserializers, index } = params;
         this._extend = extend !== null && extend !== void 0 ? extend : [];
         this._documentType = documentType;
         this._context = context;
@@ -24,7 +25,8 @@ class DbSetBuilder {
             "add-invoked": [],
             "remove-invoked": []
         };
-        this._map = map !== null && map !== void 0 ? map : [];
+        this._serializers = serializers !== null && serializers !== void 0 ? serializers : [];
+        this._deserializers = deserializers !== null && deserializers !== void 0 ? deserializers : [];
         this._index = index;
         this._onCreate = onCreate;
     }
@@ -40,7 +42,8 @@ class DbSetBuilder {
             extend: this._extend,
             keyType: this._keyType,
             asyncEvents: this._asyncEvents,
-            map: this._map,
+            serializers: this._serializers,
+            deserializers: this._deserializers,
             index: this._index
         };
     }
@@ -87,8 +90,20 @@ class DbSetBuilder {
         this._exclusions.push(...exclusions);
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
-    map(propertyMap) {
-        this._map.push(propertyMap);
+    map(map) {
+        const keys = Object.keys(map.map);
+        if (keys.length === 0) {
+            this._deserializers.push({ property: map.property, map: map.map });
+        }
+        else {
+            const instance = map.map;
+            if (instance.deserialize != null) {
+                this._deserializers.push({ property: map.property, map: instance.deserialize });
+            }
+            if (instance.serialize != null) {
+                this._serializers.push({ property: map.property, map: instance.serialize });
+            }
+        }
         return new DbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
@@ -125,7 +140,8 @@ class DbSetBuilder {
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map,
+                deserializers: this._deserializers,
+                serializers: this._serializers,
                 index: this._index
             });
             result = extend(dbset);
@@ -143,7 +159,8 @@ class DbSetBuilder {
                 keyType: this._keyType,
                 asyncEvents: this._asyncEvents,
                 events: this._events,
-                map: this._map,
+                deserializers: this._deserializers,
+                serializers: this._serializers,
                 index: this._index
             }), DbSet_1.DbSet);
         }

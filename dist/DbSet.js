@@ -42,6 +42,8 @@ class DbSet {
      * @param props Properties for the constructor
      */
     constructor(props) {
+        this._serializers = [];
+        this._deserializers = [];
         this._events = {
             "add": [],
             "remove": []
@@ -58,7 +60,8 @@ class DbSet {
         this._keyType = props.keyType;
         this._events = props.events;
         this._asyncEvents = props.asyncEvents;
-        this._map = props.map;
+        this._serializers = props.serializers;
+        this._deserializers = props.deserializers;
         this._indexStore = new IndexStore(props.index);
         this._api = this._context._getApi();
         const properties = Object.getOwnPropertyNames(DbSet.prototype).filter(w => w !== "IdKeys" && w !== "DocumentType");
@@ -84,7 +87,8 @@ class DbSet {
             Defaults: this._defaults,
             KeyType: this._keyType,
             Readonly: this._isReadonly,
-            Map: this._map
+            Deserializers: this._deserializers,
+            Serializers: this._serializers
         };
         return info;
     }
@@ -98,7 +102,7 @@ class DbSet {
         if (this._events["add"].length > 0) {
             this._events["add"].forEach(w => w(entity));
         }
-        return this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map);
+        return this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, []);
     }
     instance(...entities) {
         return entities.map(entity => (Object.assign({}, this._processAddition(entity))));
@@ -145,7 +149,9 @@ class DbSet {
                 const instance = entity._id != null ? entity : Object.assign({}, this._processAddition(entity));
                 const found = allDictionary[instance._id];
                 if (found) {
-                    const mergedAndTrackable = this._api.makeTrackable(found, this._defaults.add, this._isReadonly, this._map);
+                    const mergedAndTrackable = this._api.makeTrackable(found, this._defaults.add, this._isReadonly, this._deserializers);
+                    delete mergedAndTrackable._rev;
+                    delete entity._rev;
                     DataContext_1.DataContext.merge(mergedAndTrackable, entity, { skip: [exports.PRISTINE_ENTITY_KEY] });
                     this._api.send([mergedAndTrackable]);
                     result.push(mergedAndTrackable);
@@ -231,7 +237,7 @@ class DbSet {
         return __awaiter(this, void 0, void 0, function* () {
             const data = yield this._getAllData();
             // process the mappings when we make the item trackable.  We are essentially prepping the entity
-            return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map));
+            return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._deserializers));
         });
     }
     all() {
@@ -255,7 +261,7 @@ class DbSet {
     get(...ids) {
         return __awaiter(this, void 0, void 0, function* () {
             const entities = yield this._api.getStrict(...ids);
-            const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map));
+            const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._deserializers));
             if (result.length > 0) {
                 this._api.send(result);
             }
@@ -304,7 +310,7 @@ class DbSet {
             // Find the existing _rev just in case it's not in sync
             const found = yield this._api.getStrict(...entities.map(w => w._id));
             const foundDictionary = found.reduce((a, v) => (Object.assign(Object.assign({}, a), { [v._id]: v._rev })), {});
-            const result = entities.map(w => this._api.makeTrackable(Object.assign(Object.assign({}, w), { _rev: foundDictionary[w._id] }), this._defaults.add, this._isReadonly, this._map));
+            const result = entities.map(w => this._api.makeTrackable(Object.assign(Object.assign({}, w), { _rev: foundDictionary[w._id] }), this._defaults.add, this._isReadonly, []));
             this._api.send(result);
             return result;
         });

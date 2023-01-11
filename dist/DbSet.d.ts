@@ -23,7 +23,8 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     private _api;
     private _isReadonly;
     private _keyType;
-    private _map;
+    private _serializers;
+    private _deserializers;
     private _events;
     private _asyncEvents;
     /**

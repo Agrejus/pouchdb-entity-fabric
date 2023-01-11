@@ -9,4 +9,5 @@ export declare class AdvancedDictionary<T> {
     get(...entities: T[]): T[];
     remove(...entities: T[]): void;
     filter(predicate: (value: T, index: number, array: T[]) => boolean): T[];
+    forEach(callback: (value: T) => void): void;
 }

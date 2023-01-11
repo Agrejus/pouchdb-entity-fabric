@@ -1,7 +1,7 @@
 import { DbSetEvent, DbSetEventCallback, DbSetIdOnlyEventCallback, EntityIdKeys, EntitySelector, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, DocumentKeySelector, IIndexableEntity, OmittedEntity, DeepPartial, DbSetPickDefaultActionRequired, IDbSetInfo, IDbSetProps, DbSetAsyncEvent, DbSetEventCallbackAsync, DbSetIdOnlyEventCallbackAsync, IDbSetEnumerable } from './typings';
 import { validateAttachedEntity } from './Validation';
 import { v4 as uuidv4 } from 'uuid';
-import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
+import { DbSetKeyType, PropertyDeserializer, PropertyMap, PropertySerializer } from './DbSetBuilder';
 import { DataContext } from './DataContext';
 
 export const PRISTINE_ENTITY_KEY = "__pristine_entity__";
@@ -60,7 +60,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     private _api: IDbSetApi<TDocumentType>;
     private _isReadonly: boolean;
     private _keyType: DbSetKeyType;
-    private _map: PropertyMap<TDocumentType, TEntity, any>[];
+    private _serializers: PropertySerializer<TDocumentType, TEntity, any>[] = [];
+    private _deserializers: PropertyDeserializer<TDocumentType, TEntity, any>[] = [];
     private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] } = {
         "add": [],
         "remove": []
@@ -84,7 +85,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         this._keyType = props.keyType;
         this._events = props.events;
         this._asyncEvents = props.asyncEvents;
-        this._map = props.map;
+        this._serializers = props.serializers;
+        this._deserializers = props.deserializers;
 
         this._indexStore = new IndexStore(props.index);
 
@@ -105,7 +107,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             Defaults: this._defaults,
             KeyType: this._keyType,
             Readonly: this._isReadonly,
-            Map: this._map
+            Deserializers: this._deserializers,
+            Serializers: this._serializers
         }
 
         return info;
@@ -124,7 +127,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             this._events["add"].forEach(w => w(entity as any));
         }
 
-        return this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, this._map) as TEntity;
+        return this._api.makeTrackable(addItem, this._defaults.add, this._isReadonly, []) as TEntity;
     }
 
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
@@ -179,7 +182,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
             const found = allDictionary[instance._id]
 
             if (found) {
-                const mergedAndTrackable = this._api.makeTrackable(found, this._defaults.add, this._isReadonly, this._map) as TEntity;
+                const mergedAndTrackable = this._api.makeTrackable(found, this._defaults.add, this._isReadonly, this._deserializers) as TEntity;
 
                 DataContext.merge(mergedAndTrackable, entity, { skip: [PRISTINE_ENTITY_KEY] });
 
@@ -290,7 +293,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         const data = await this._getAllData();
 
         // process the mappings when we make the item trackable.  We are essentially prepping the entity
-        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map) as TEntity);
+        return data.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._deserializers) as TEntity);
     }
 
     async all() {
@@ -317,7 +320,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     async get(...ids: string[]) {
         const entities = await this._api.getStrict(...ids);
-        const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._map) as TEntity);
+        const result = entities.map(w => this._api.makeTrackable(w, this._defaults.retrieve, this._isReadonly, this._deserializers) as TEntity);
 
         if (result.length > 0) {
             this._api.send(result)
@@ -379,7 +382,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         // Find the existing _rev just in case it's not in sync
         const found = await this._api.getStrict(...entities.map(w => w._id));
         const foundDictionary = found.reduce((a, v) => ({ ...a, [v._id]: v._rev }), {} as IIndexableEntity);
-        const result = entities.map(w => this._api.makeTrackable({ ...w, _rev: foundDictionary[w._id] }, this._defaults.add, this._isReadonly, this._map));
+        const result = entities.map(w => this._api.makeTrackable({ ...w, _rev: foundDictionary[w._id] }, this._defaults.add, this._isReadonly, []));
 
         this._api.send(result);
 

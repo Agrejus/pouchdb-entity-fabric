@@ -32,6 +32,8 @@ describe('dbset - fluent api', () => {
     enum DocumentTypes {
         Notes = "Notes",
         NotesWithMapping = "NotesWithMapping",
+        NotesWithDeserialization  = "NotesWithDeserialization",
+        NotesWithSerialization  = "NotesWithSerialization",
         Contacts = "Contacts",
         OverrideContacts = "OverrideContacts",
         OverrideContactsV2 = "OverrideContactsV2",
@@ -246,6 +248,9 @@ describe('dbset - fluent api', () => {
 
 
         notesWithMapping = this.dbset<INote>(DocumentTypes.NotesWithMapping).map({ property: "createdDate", map: w => new Date(w) }).create();
+        notesWithDeserialization = this.dbset<INote>(DocumentTypes.NotesWithDeserialization).map({ property: "createdDate", map: { deserialize: w => new Date(w) } }).create();
+
+        notesWithSerialization = this.dbset<INote>(DocumentTypes.NotesWithSerialization).map({ property: "contents", map: { serialize: w => `${w} - TESTING` } }).create();
     }
 
     class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
@@ -1873,6 +1878,65 @@ describe('dbset - fluent api', () => {
         }
     });
 
+    it('should upsert with auto generated id and defined deserializer', async () => {
+
+        try {
+            const dbname = uuidv4()
+            const context = dbFactory(PouchDbDataContext, dbname);
+
+            const all = await context.notesWithDeserialization.all();
+
+            expect(all.length).toBe(0);
+
+            const [one] = await context.notesWithDeserialization.upsert({
+                contents: "some contents",
+                createdDate: new Date(),
+                userId: "some user"
+            });
+
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const [two] = await context.notesWithDeserialization.upsert({
+                contents: "some contents",
+                createdDate: new Date(),
+                userId: "some user"
+            });
+
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const allAfterAdd = await context.notesWithDeserialization.all();
+            expect(allAfterAdd.length).toBe(2);
+
+            const foundOne = await context.notesWithDeserialization.find(w => w._id === one._id);
+
+            expect(foundOne).toBeDefined();
+
+            const [upsertedOne] = await context.notesWithDeserialization.upsert({
+                _id: one._id,
+                contents: "changed contents",
+                createdDate: new Date(),
+                userId: "changed user"
+            });
+
+            expect(upsertedOne._id).toBe(one._id);
+            expect(context.hasPendingChanges()).toBe(true);
+            await context.saveChanges();
+            expect(context.hasPendingChanges()).toBe(false);
+
+            const foundUpsertOne = await context.notesWithDeserialization.find(w => w._id === one._id);
+
+            expect({ ...upsertedOne, createdDate: upsertedOne.createdDate }).toEqual({ ...foundUpsertOne });
+            expect(foundUpsertOne?.contents).toBe("changed contents");
+            expect(foundUpsertOne?.userId).toBe("changed user");
+        } catch (e) {
+            expect(e).not.toBeDefined()
+        }
+    });
+
     it('should insert and add with auto generated id', async () => {
 
         try {
@@ -2094,5 +2158,29 @@ describe('dbset - fluent api', () => {
         expect(context.hasPendingChanges()).toBe(false);
 
         expect(dirty._rev).not.toEqual(one._rev)
+    });
+
+    it('should serialize the note', async () => {
+        const context = dbFactory(PouchDbDataContext);
+        const [note] = await context.notesWithSerialization.add({
+            contents: "name",
+            createdDate: new Date(),
+            userId: ""
+        });
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        expect(note.contents).toEqual("name - TESTING");
+
+        const first = await context.notesWithSerialization.first();
+
+        if (first == null) {
+            expect(true).toBe(false);
+            return;
+        }
+
+        expect(first.contents).toEqual("name - TESTING");
     });
 });

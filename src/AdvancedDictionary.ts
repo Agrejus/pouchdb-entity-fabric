@@ -68,4 +68,17 @@ export class AdvancedDictionary<T> {
 
         return this._enumeration.filter(predicate);
     }
+
+    forEach(callback: (value: T) => void) {
+
+        if (this._enumeration.length === 0) {
+            for (let key in this._data) {
+                const data = this._data[key];
+
+                for (let item of data) {
+                    callback(item)
+                }
+            }
+        }
+    }
 }

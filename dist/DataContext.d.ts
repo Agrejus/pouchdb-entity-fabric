@@ -97,7 +97,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns boolean
      */
     private areEqual;
-    private _map;
+    private _deserialize;
     private _makeTrackable;
     private _getPendingChanges;
     previewChanges(): Promise<IPreviewChanges>;
@@ -105,6 +105,8 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _callEvents;
     private _makePristine;
     private _getModifications;
+    private _serialize;
+    private _deserializeAfter;
     saveChanges(): Promise<number>;
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional

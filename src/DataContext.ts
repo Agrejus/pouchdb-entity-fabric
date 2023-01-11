@@ -2,9 +2,9 @@ import PouchDB from 'pouchdb';
 import { DIRTY_ENTITY_MARKER, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams, IDbSetInfo } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
-import { DbSetBuilder, PropertyMap } from './DbSetBuilder';
+import { DbSetBuilder, PropertyDeserializer } from './DbSetBuilder';
 import { IndexApi, IIndexApi } from './IndexApi';
 
 PouchDB.plugin(findAdapter);
@@ -246,7 +246,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             if (dbSet) {
                 const info = dbSet.info();
 
-                return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Map)
+                return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Deserializers)
             }
 
             return w
@@ -287,7 +287,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             makeTrackable: this._makeTrackable.bind(this),
             get: this.get.bind(this),
             getStrict: this.getStrict.bind(this),
-            map: this._map.bind(this)
+            deserialize: this._deserialize.bind(this)
         }
     }
 
@@ -372,21 +372,21 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
-    private _map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults: DeepPartial<OmittedEntity<T>> = {} as any) {
+    private _deserialize<T extends Object>(entity: T, maps: PropertyDeserializer<any, any, any>[], defaults: DeepPartial<OmittedEntity<T>> = {} as any) {
         const mergedInstance = { ...defaults, ...entity };
         let mappedInstance = {};
 
         if (maps.length > 0) {
             mappedInstance = maps.reduce((a, v) => {
                 const preTransformValue = (mergedInstance as any)[v.property];
-                return { ...a, [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) }
+                return { ...a, [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue, mergedInstance) }
             }, {});
         }
 
         return { ...mergedInstance, ...mappedInstance };
     }
 
-    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T {
+    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyDeserializer<any, any, any>[]): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
@@ -429,7 +429,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        const instance = this._map(entity, maps, defaults);
+        const instance = this._deserialize(entity, maps, defaults);
         const result = readonly ? Object.freeze(instance) : instance;
 
         return new Proxy(result, proxyHandler) as T
@@ -505,7 +505,11 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     private async _getModifications() {
         const { add, remove, removeById, updated } = this._getPendingChanges();
 
-        const extraRemovals = await this.getStrict(...removeById);
+        let extraRemovals: IDbRecordBase[] = [];
+
+        if (removeById.length > 0) {
+            extraRemovals = await this.getStrict(...removeById);
+        }
 
         return {
             add,
@@ -514,6 +518,57 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    private _serialize(data: IDbRecordBase[]) {
+
+        const maps: { [key: string]: PropertyDeserializer<any, any, any>[] } = {};
+
+        return data.map(w => {
+            let map = maps[w.DocumentType];
+
+            if (!map) {
+                const dbSet = this._dbSets[w.DocumentType] as IDbSet<any, any>;
+                maps[w.DocumentType] = dbSet.info().Serializers;
+                map = maps[w.DocumentType];
+            }
+
+            if (map.length > 0) {
+                for(let item of map) {
+                    const value = (w as any)[item.property];
+                    (w as any)[item.property] = item.map(value, w)
+                }
+
+                return w;
+            }
+
+            return w;
+        })
+    }
+
+    private _deserializeAfter(data: IDbRecordBase[]) {
+
+        const maps: { [key: string]: PropertyDeserializer<any, any, any>[] } = {};
+
+        return data.map(w => {
+            let map = maps[w.DocumentType];
+
+            if (!map) {
+                const dbSet = this._dbSets[w.DocumentType] as IDbSet<any, any>;
+                maps[w.DocumentType] = dbSet.info().Deserializers;
+                map = maps[w.DocumentType];
+            }
+
+            if (map.length > 0) {
+                for(let item of map) {
+                    const value = (w as any)[item.property];
+                    (w as any)[item.property] = item.map(value, w)
+                }
+
+                return w;
+            }
+
+            return w;
+        })
+    }
 
     async saveChanges() {
         try {
@@ -521,7 +576,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
             // Process removals first, so we can remove items first and then add.  Just
             // in case are are trying to remove and add the same Id
-            const modifications = [...remove, ...add, ...updated];
+            const modifications = [...remove, ...this._serialize(add), ...this._serialize(updated)];
 
             // remove pristine entity before we send to bulk docs
             this._makePristine(...modifications)
@@ -540,6 +595,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                     // make pristine again because we set the _rev above
                     this._makePristine(modification);
                 }
+            }
+
+            if (add.length > 0) {
+                this._deserializeAfter(add)
+            }
+
+            if (updated.length > 0) {
+                this._deserializeAfter(updated)
             }
 
             // removals are being grouped with updates, 
