@@ -1,6 +1,6 @@
 import PouchDB from 'pouchdb';
 import { AdvancedDictionary } from './AdvancedDictionary';
-import { DbSetKeyType, PropertyMap } from './DbSetBuilder';
+import { DbSetKeyType, HashFunction, PropertyMap } from './DbSetBuilder';
 
 export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends IDbSetBase<TDocumentType> {
     /**
@@ -172,6 +172,7 @@ export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRec
     KeyType: DbSetKeyType;
     Map: PropertyMap<TDocumentType, TEntity, any>[];
     Readonly: boolean;
+    HashFunction: HashFunction | null;
 }
 
 export type Work = <T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose?: boolean) => Promise<T>
@@ -187,6 +188,7 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
     map: PropertyMap<TDocumentType, TEntity, any>[];
     index: string | null;
+    hashFunction: HashFunction | null;
 }
 
 export type OmittedEntity<TEntity, TExtraExclusions extends (keyof TEntity) = never> = Omit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
@@ -256,7 +258,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[]) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
-    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T;
+    makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[], doesHash: boolean): T;
     map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults?: DeepPartial<OmittedEntity<T, never>>): T
 }
 

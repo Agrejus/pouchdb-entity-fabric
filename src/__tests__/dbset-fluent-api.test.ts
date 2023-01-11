@@ -32,6 +32,7 @@ describe('dbset - fluent api', () => {
     enum DocumentTypes {
         Notes = "Notes",
         NotesWithMapping = "NotesWithMapping",
+        NotesWithHashing = "NotesWithHashing",
         Contacts = "Contacts",
         OverrideContacts = "OverrideContacts",
         OverrideContactsV2 = "OverrideContactsV2",
@@ -246,6 +247,8 @@ describe('dbset - fluent api', () => {
 
 
         notesWithMapping = this.dbset<INote>(DocumentTypes.NotesWithMapping).map({ property: "createdDate", map: w => new Date(w) }).create();
+
+        notesWithHashing = this.dbset<INote>(DocumentTypes.NotesWithHashing).map({ property: "createdDate", map: w => new Date(w) }).useHash().create();
     }
 
     class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
@@ -2094,5 +2097,19 @@ describe('dbset - fluent api', () => {
         expect(context.hasPendingChanges()).toBe(false);
 
         expect(dirty._rev).not.toEqual(one._rev)
+    });
+
+    it('should create hash after save', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const [note] = await context.notesWithHashing.add({ contents: "some contents", createdDate: new Date(), userId: ""  });
+
+        expect(note.hash).not.toBeDefined();
+
+        await context.saveChanges();
+
+        expect(note.hash).toBeDefined();
     });
 });

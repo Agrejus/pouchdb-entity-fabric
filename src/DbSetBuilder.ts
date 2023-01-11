@@ -1,5 +1,6 @@
 import { DbSet } from "./DbSet";
 import { DbSetAsyncEvent, DbSetEvent, DbSetEventCallback, DbSetEventCallbackAsync, DbSetIdOnlyEventCallback, DbSetIdOnlyEventCallbackAsync, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, IDbSetProps, OmittedEntity } from "./typings";
+import hash from 'object-hash';
 
 interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
     context: IDataContext;
@@ -13,12 +14,13 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     extend?: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[]
     keyType?: DbSetKeyType;
     map?: PropertyMap<TDocumentType, TEntity, any>[];
-    index?:string;
+    index?: string;
+    hashFunction?: HashFunction;
 }
 
 type ConvertDateToString<T> = T extends Date ? string : T;
 type DbSetExtenderCreator<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> = (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult
-
+export type HashFunction = (object: any) => string;
 export type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TProperty extends (keyof OmittedEntity<TEntity>)> = { property: TProperty, map: (value: ConvertDateToString<TEntity[TProperty]>) => TEntity[TProperty] }
 
 export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
@@ -36,11 +38,12 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     private _onCreate: (dbset: IDbSetBase<string>) => void;
     private _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
     private _index: string | null;
+    private _hashFunction: HashFunction | null = null;
 
     private _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index, hashFunction } = params;
         this._extend = extend ?? [];
         this._documentType = documentType;
         this._context = context;
@@ -59,6 +62,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         }
         this._map = map ?? [];
         this._index = index;
+        this._hashFunction = hashFunction;
 
         this._onCreate = onCreate;
     }
@@ -76,7 +80,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
             keyType: this._keyType,
             asyncEvents: this._asyncEvents,
             map: this._map,
-            index: this._index
+            index: this._index,
+            hashFunction: this._hashFunction
         } as IDbSetBuilderParams<TDocumentType, TEntity, T, any>
     }
 
@@ -204,6 +209,19 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         return new DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>(this._onCreate, this._buildParams<TExtraExclusions>());
     }
 
+    useHash(hashFunction?: HashFunction) {
+
+        if (hashFunction) {
+            this._hashFunction = hashFunction;
+        } else {
+            this._hashFunction = (value: any) => hash(value, { algorithm: "sha1", encoding: "base64" });
+        }
+
+        const result = new DbSetBuilder<TDocumentType, TEntity & { hash: string }, TExtraExclusions, IDbSet<TDocumentType, TEntity & { hash: string }, TExtraExclusions>>(this._onCreate, this._buildParams() as any);
+
+        return result.exclude("hash");
+    }
+
     /**
      * Must call to fully create the DbSet.
      * @returns new DbSet
@@ -231,7 +249,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 asyncEvents: this._asyncEvents,
                 events: this._events,
                 map: this._map,
-                index: this._index
+                index: this._index,
+                hashFunction: this._hashFunction                
             });
             result = extend(dbset) as any
         } else {
@@ -250,7 +269,8 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
                 asyncEvents: this._asyncEvents,
                 events: this._events,
                 map: this._map,
-                index: this._index
+                index: this._index,
+                hashFunction: this._hashFunction  
             }), DbSet);
         }
 

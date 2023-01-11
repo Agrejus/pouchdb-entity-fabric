@@ -1,8 +1,8 @@
 import PouchDB from 'pouchdb';
-import { DIRTY_ENTITY_MARKER, PRISTINE_ENTITY_KEY } from "./DbSet";
+import { DIRTY_ENTITY_MARKER, HASH_PROPERTY_NAME, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams, IDbSetInfo } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
 import { DbSetBuilder, PropertyMap } from './DbSetBuilder';
 import { IndexApi, IIndexApi } from './IndexApi';
@@ -246,7 +246,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             if (dbSet) {
                 const info = dbSet.info();
 
-                return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Map)
+                return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Map, info.HashFunction != null)
             }
 
             return w
@@ -386,12 +386,20 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         return { ...mergedInstance, ...mappedInstance };
     }
 
-    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T {
+    private _makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[], doesHash: boolean): T {
         const proxyHandler: ProxyHandler<T> = {
             set: (entity, property, value) => {
 
                 const indexableEntity: IIndexableEntity = entity as any;
                 const key = String(property);
+
+                if (doesHash === true && key === HASH_PROPERTY_NAME) {
+
+                    // bypass tracking
+                    indexableEntity[key] = value;
+
+                    return true;
+                }
 
                 if (property === DIRTY_ENTITY_MARKER) {
 
@@ -456,11 +464,26 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             return false;
         });
 
+        const hashDbSets = [...add, ...updated].reduce((a, v) => ({ ...a, [v.DocumentType]: {} }), {} as { [key: string]: IDbSetInfo<any, any> });
+
+        Object.keys(hashDbSets).forEach(w => {
+            const dbSet = this._dbSets[w] as (IDbSet<any, any, any> | undefined);
+            const info = dbSet.info();
+
+            if (info.HashFunction == null) {
+                delete hashDbSets[w];
+                return;
+            }
+
+            hashDbSets[w] = info;
+        })
+
         return {
             add,
             remove,
             removeById,
-            updated
+            updated,
+            hashDbSets
         }
     }
 
@@ -503,28 +526,43 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     private async _getModifications() {
-        const { add, remove, removeById, updated } = this._getPendingChanges();
+        const { add, remove, removeById, updated, hashDbSets } = this._getPendingChanges();
 
         const extraRemovals = await this.getStrict(...removeById);
 
         return {
             add,
             remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
-            updated
+            updated,
+            hashDbSets
         }
     }
 
 
     async saveChanges() {
         try {
-            const { add, remove, updated } = await this._getModifications();
+            const { add, remove, updated, hashDbSets } = await this._getModifications();
 
             // Process removals first, so we can remove items first and then add.  Just
             // in case are are trying to remove and add the same Id
-            const modifications = [...remove, ...add, ...updated];
+            const upserts = [...add, ...updated];
 
             // remove pristine entity before we send to bulk docs
-            this._makePristine(...modifications)
+            this._makePristine(...upserts);
+
+            // generate the hash right before we insert
+            const hashedUpserts = upserts.map(w => {
+
+                if (hashDbSets[w.DocumentType] == null) {
+                    return w
+                }
+
+                const indexableEntity = w as IIndexableEntity;
+                indexableEntity.hash = hashDbSets[w.DocumentType].HashFunction(w);
+                return indexableEntity as IDbRecordBase
+            });
+            
+            const modifications = [...remove, ...hashedUpserts];
 
             const modificationResult = await this.bulkDocs(modifications);
 
