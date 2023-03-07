@@ -226,6 +226,24 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
     }
 
+    async purge(...entities: TEntity[]) {
+        entities.forEach(w => this._purge(w));
+    }
+
+    private _purge(entity: TEntity) {
+        const data = this._api.getTrackedData();
+        const { purge } = data;
+
+        const ids = purge.map(w => w._id);
+        const indexableEntity = entity as IIndexableEntity;
+
+        if (ids.includes(indexableEntity._id)) {
+            throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`)
+        }
+
+        purge.push(entity as any);
+    }
+
     async remove(...ids: string[]): Promise<void>;
     async remove(...entities: TEntity[]): Promise<void>;
     async remove(...entities: any[]) {

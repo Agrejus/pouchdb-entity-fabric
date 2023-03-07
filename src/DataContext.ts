@@ -19,6 +19,10 @@ enum CacheKeys {
     IsOptimized = "IsOptimized"
 }
 
+interface PurgeDatabase<Content extends {} = {}> extends PouchDB.Database<Content> {
+    purge(id: string, rev: string): Promise<{ ok: boolean, deletedRevs: string[], documentWasRemovedCompletely: boolean }>
+}
+
 class ContextCache implements IContextCache {
 
     private _data: { [key: string]: any } = {}
@@ -210,6 +214,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     protected _removals: IDbRecordBase[] = [];
     protected _additions: IDbRecordBase[] = [];
     protected _attachments: AdvancedDictionary<IDbRecordBase> = new AdvancedDictionary<IDbRecordBase>("_id");
+    protected _purges: IDbRecordBase[] = [];
 
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
@@ -326,7 +331,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             add: this._additions,
             remove: this._removals,
             attach: this._attachments,
-            removeById: this._removeById
+            removeById: this._removeById,
+            purge: this._purges
         } as ITrackedData;
     }
 
@@ -334,6 +340,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         this._additions = [];
         this._removals = [];
         this._removeById = [];
+        this._purges = [];
 
         this._attachments.remove(...removals);
 
@@ -436,7 +443,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     private _getPendingChanges() {
-        const { add, remove, removeById } = this._getTrackedData();
+        const { add, remove, removeById, purge } = this._getTrackedData();
 
         const updated = this._attachments.filter(w => {
 
@@ -460,17 +467,19 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             add,
             remove,
             removeById,
-            updated
+            updated,
+            purge
         }
     }
 
     async previewChanges(): Promise<IPreviewChanges> {
-        const { add, remove, updated } = await this._getModifications();
+        const { add, remove, updated, purge } = await this._getModifications();
         const clone = JSON.stringify({
             add,
             remove,
-            update: updated
-        });
+            update: updated,
+            purge
+        } as IPreviewChanges);
 
         return JSON.parse(clone)
     }
@@ -503,21 +512,27 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     private async _getModifications() {
-        const { add, remove, removeById, updated } = this._getPendingChanges();
+        const { add, remove, removeById, updated, purge } = this._getPendingChanges();
 
         const extraRemovals = await this.getStrict(...removeById);
 
         return {
             add,
             remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
-            updated
+            updated,
+            purge
         }
     }
 
+    private async _purgeDocument(document: IDbRecordBase) {
+        const result = await this.doWork(async (w: PurgeDatabase) => await w.purge(document._id, document._rev));
+
+        return result.ok === true && result.documentWasRemovedCompletely === true;
+    }
 
     async saveChanges() {
         try {
-            const { add, remove, updated } = await this._getModifications();
+            const { add, remove, updated, purge } = await this._getModifications();
 
             // Process removals first, so we can remove items first and then add.  Just
             // in case are are trying to remove and add the same Id
@@ -542,14 +557,20 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 }
             }
 
+            const purges: boolean[] = []
+            if (purge.length > 0) {
+                const result = await Promise.all(purge.map(async w => this._purgeDocument(w)));
+                purges.push(...result.filter(w => w === true));
+            }
+
             // removals are being grouped with updates, 
             // need to separate out calls to events so we don't double dip
             // on updates and removals
             this._tryCallPostSaveEvents({ remove, add, updated });
 
-            this._reinitialize(remove, add);
+            this._reinitialize([...remove, ...purge], add);
 
-            return modificationResult.successes_count;
+            return modificationResult.successes_count + purges.length;
         } catch (e) {
             this._reinitialize()
             throw e;
@@ -574,8 +595,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     }
 
     hasPendingChanges() {
-        const { add, remove, removeById, updated } = this._getPendingChanges();
-        return [add.length, remove.length, removeById.length, updated.length].some(w => w > 0);
+        const { add, remove, removeById, updated, purge } = this._getPendingChanges();
+        return [add.length, remove.length, removeById.length, updated.length, purge.length].some(w => w > 0);
     }
 
     on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>) {

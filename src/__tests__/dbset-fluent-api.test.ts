@@ -2095,4 +2095,34 @@ describe('dbset - fluent api', () => {
 
         expect(dirty._rev).not.toEqual(one._rev)
     });
+
+    it('should purge document', async () => {
+
+        const dbname = uuidv4()
+        const context = dbFactory(PouchDbDataContext, dbname);
+
+        const [one] = await context.notes.add({
+            contents: "some contents",
+            createdDate: new Date(),
+            userId: "some user"
+        });
+
+        await context.saveChanges();
+        const [found] = await context.notes.filter(w => w._id === one._id);
+
+        if (found == null) {
+            expect(true).toBe(false);
+            return
+        }
+
+        await context.notes.purge(found);
+
+        expect(context.hasPendingChanges()).toBe(true);
+        await context.saveChanges();
+        expect(context.hasPendingChanges()).toBe(false);
+
+        const data = await context.notes.filter(w => w._id === one._id);
+
+        expect(data.length).toBe(0)
+    });
 });

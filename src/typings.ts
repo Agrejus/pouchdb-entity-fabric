@@ -90,6 +90,14 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     remove(...ids: string[]): Promise<void>;
 
     /**
+     * Completely destroy one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
+     * Warning: This is a destructive process and is not recommended unless you know what you are doing
+     * @param entities Entity or entities to destroy from the data context
+     * @returns Promise\<void\>
+     */
+    purge(...entities: TEntity[]): Promise<void>;
+
+    /**
      * Check for equality between two entities
      * @param first First entity to compare
      * @param second Second entity to compare
@@ -341,7 +349,8 @@ export interface ITrackedData {
     add: IDbRecordBase[];
     remove: IDbRecordBase[];
     attach: AdvancedDictionary<IDbRecordBase>;
-    removeById: string[]
+    removeById: string[];
+    purge: IDbRecordBase[];
 }
 
 export type DeepReadOnly<T> = { readonly [key in keyof T]: DeepReadOnly<T[key]> };
@@ -351,4 +360,5 @@ export interface IPreviewChanges {
     add: IDbRecordBase[];
     remove: IRemovalRecord[];
     update: IDbRecordBase[];
+    purge: IDbRecordBase[];
 }
