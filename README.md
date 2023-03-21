@@ -7,10 +7,12 @@ npm install pouchdb-entity-fabric
 
 PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouchdb.com/) and makes creating repeatable processes in PouchDB easier.  Often times using PouchDB, a repository layer needs to be created and adding new document types requires a new repository.  PouchDB Entity Fabric removes the need for these repository layers all together.  Let's get to the code:
 
+
+
 ## Changes
-### 1.4.4 -> 1.4.5 
-- Fixed bug with `.upsert()` when spreading two objects with optional property
-- Added `markDirty()` to `DbSet`.  Allows users to force an object to be marked as dirty so it can be saved
+### 1.4.5 -> 2.0.0-beta.0 
+- Added `purge()` to `DbSet`.  Allows users to permantently destroy a document
+- `pouchdb`, `pouchdb-adapter-memory`, `pouchdb-find` moved to peer dependencies
 
 ## Installation
 ```

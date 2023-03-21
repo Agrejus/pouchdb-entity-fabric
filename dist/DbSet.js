@@ -178,6 +178,21 @@ class DbSet {
     isMatch(first, second) {
         return this._getKeyFromEntity(first) === this._getKeyFromEntity(second);
     }
+    purge(...entities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            entities.forEach(w => this._purge(w));
+        });
+    }
+    _purge(entity) {
+        const data = this._api.getTrackedData();
+        const { purge } = data;
+        const ids = purge.map(w => w._id);
+        const indexableEntity = entity;
+        if (ids.includes(indexableEntity._id)) {
+            throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`);
+        }
+        purge.push(entity);
+    }
     remove(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             if (this._asyncEvents['remove-invoked'].length > 0) {

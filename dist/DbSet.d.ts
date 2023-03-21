@@ -40,6 +40,8 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>;
     private _getKeyFromEntity;
     isMatch(first: TEntity, second: any): boolean;
+    purge(...entities: TEntity[]): Promise<void>;
+    private _purge;
     remove(...ids: string[]): Promise<void>;
     remove(...entities: TEntity[]): Promise<void>;
     private _remove;

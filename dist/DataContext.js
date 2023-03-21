@@ -191,6 +191,7 @@ class DataContext extends PouchDbInteractionBase {
         this._removals = [];
         this._additions = [];
         this._attachments = new AdvancedDictionary_1.AdvancedDictionary("_id");
+        this._purges = [];
         this._removeById = [];
         this._events = {
             "entity-created": [],
@@ -277,13 +278,15 @@ class DataContext extends PouchDbInteractionBase {
             add: this._additions,
             remove: this._removals,
             attach: this._attachments,
-            removeById: this._removeById
+            removeById: this._removeById,
+            purge: this._purges
         };
     }
     _reinitialize(removals = [], add = []) {
         this._additions = [];
         this._removals = [];
         this._removeById = [];
+        this._purges = [];
         this._attachments.remove(...removals);
         // move additions to attachments so we can track changes
         this._attachments.push(...add);
@@ -359,7 +362,7 @@ class DataContext extends PouchDbInteractionBase {
         return new Proxy(result, proxyHandler);
     }
     _getPendingChanges() {
-        const { add, remove, removeById } = this._getTrackedData();
+        const { add, remove, removeById, purge } = this._getTrackedData();
         const updated = this._attachments.filter(w => {
             const indexableEntity = w;
             if (indexableEntity[DbSet_1.PRISTINE_ENTITY_KEY] === undefined) {
@@ -377,16 +380,18 @@ class DataContext extends PouchDbInteractionBase {
             add,
             remove,
             removeById,
-            updated
+            updated,
+            purge
         };
     }
     previewChanges() {
         return __awaiter(this, void 0, void 0, function* () {
-            const { add, remove, updated } = yield this._getModifications();
+            const { add, remove, updated, purge } = yield this._getModifications();
             const clone = JSON.stringify({
                 add,
                 remove,
-                update: updated
+                update: updated,
+                purge
             });
             return JSON.parse(clone);
         });
@@ -412,19 +417,26 @@ class DataContext extends PouchDbInteractionBase {
     }
     _getModifications() {
         return __awaiter(this, void 0, void 0, function* () {
-            const { add, remove, removeById, updated } = this._getPendingChanges();
+            const { add, remove, removeById, updated, purge } = this._getPendingChanges();
             const extraRemovals = yield this.getStrict(...removeById);
             return {
                 add,
                 remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
-                updated
+                updated,
+                purge
             };
+        });
+    }
+    _purgeDocument(document) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const result = yield this.doWork((w) => __awaiter(this, void 0, void 0, function* () { return yield w.purge(document._id, document._rev); }));
+            return result.ok === true && result.documentWasRemovedCompletely === true;
         });
     }
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { add, remove, updated } = yield this._getModifications();
+                const { add, remove, updated, purge } = yield this._getModifications();
                 // Process removals first, so we can remove items first and then add.  Just
                 // in case are are trying to remove and add the same Id
                 const modifications = [...remove, ...add, ...updated];
@@ -442,12 +454,17 @@ class DataContext extends PouchDbInteractionBase {
                         this._makePristine(modification);
                     }
                 }
+                const purges = [];
+                if (purge.length > 0) {
+                    const result = yield Promise.all(purge.map((w) => __awaiter(this, void 0, void 0, function* () { return this._purgeDocument(w); })));
+                    purges.push(...result.filter(w => w === true));
+                }
                 // removals are being grouped with updates, 
                 // need to separate out calls to events so we don't double dip
                 // on updates and removals
                 this._tryCallPostSaveEvents({ remove, add, updated });
-                this._reinitialize(remove, add);
-                return modificationResult.successes_count;
+                this._reinitialize([...remove, ...purge], add);
+                return modificationResult.successes_count + purges.length;
             }
             catch (e) {
                 this._reinitialize();
@@ -473,8 +490,8 @@ class DataContext extends PouchDbInteractionBase {
         });
     }
     hasPendingChanges() {
-        const { add, remove, removeById, updated } = this._getPendingChanges();
-        return [add.length, remove.length, removeById.length, updated.length].some(w => w > 0);
+        const { add, remove, removeById, updated, purge } = this._getPendingChanges();
+        return [add.length, remove.length, removeById.length, updated.length, purge.length].some(w => w > 0);
     }
     on(event, callback) {
         this._events[event].push(callback);

@@ -53,6 +53,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     protected _removals: IDbRecordBase[];
     protected _additions: IDbRecordBase[];
     protected _attachments: AdvancedDictionary<IDbRecordBase>;
+    protected _purges: IDbRecordBase[];
     protected _removeById: string[];
     private _configuration;
     $indexes: IIndexApi;
@@ -105,6 +106,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _callEvents;
     private _makePristine;
     private _getModifications;
+    private _purgeDocument;
     saveChanges(): Promise<number>;
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional
