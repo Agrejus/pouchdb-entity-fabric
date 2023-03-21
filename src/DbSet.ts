@@ -170,6 +170,7 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     async upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]) {
         // build the id's
+        this._context.
         const all = await this._getAllData();
         const allDictionary: { [key: string]: TEntity } = all.reduce((a, v) => ({ ...a, [v._id]: v }), {})
         const result: TEntity[] = [];
