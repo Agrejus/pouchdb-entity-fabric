@@ -442,10 +442,7 @@ class DataContext extends PouchDbInteractionBase {
                         this._makePristine(modification);
                     }
                 }
-                // removals are being grouped with updates, 
-                // need to separate out calls to events so we don't double dip
-                // on updates and removals
-                this._tryCallPostSaveEvents({ remove, add, updated });
+                yield this.onAfterSaveChanges({ adds: add.length, removes: remove.length, updates: updated.length });
                 this._reinitialize(remove, add);
                 return modificationResult.successes_count;
             }
@@ -453,6 +450,10 @@ class DataContext extends PouchDbInteractionBase {
                 this._reinitialize();
                 throw e;
             }
+        });
+    }
+    onAfterSaveChanges(modifications) {
+        return __awaiter(this, void 0, void 0, function* () {
         });
     }
     /**

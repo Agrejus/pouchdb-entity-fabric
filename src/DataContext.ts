@@ -1,10 +1,9 @@
 import PouchDB from 'pouchdb';
-import { DIRTY_ENTITY_MARKER, PRISTINE_ENTITY_KEY } from "./DbSet";
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams } from './typings';
+import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams, IReferenceDbRecord, IReferenceDbSet } from './typings';
 import { AdvancedDictionary } from './AdvancedDictionary';
-import { DbSetBuilder, PropertyMap } from './DbSetBuilder';
+import { DbSetBuilder, DbSetReferenceBuilder, PropertyMap } from './DbSetBuilder';
 import { IndexApi, IIndexApi } from './IndexApi';
 
 PouchDB.plugin(findAdapter);
@@ -14,6 +13,8 @@ export interface IContextCache {
     upsert(key: string, value: any): void;
     remove(key: string): void;
 }
+
+const _PROTOCOL = "pouchdb://";
 
 enum CacheKeys {
     IsOptimized = "IsOptimized"
@@ -205,6 +206,8 @@ abstract class PouchDbInteractionBase<TDocumentType extends string> extends Pouc
 
 export class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
 
+    protected readonly PRISTINE_ENTITY_KEY = "__pristine_entity__";
+    protected readonly DIRTY_ENTITY_MARKER = "__isDirty";
     static PROXY_MARKER: string = '__isProxy';
 
     protected _removals: IDbRecordBase[] = [];
@@ -287,7 +290,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             makeTrackable: this._makeTrackable.bind(this),
             get: this.get.bind(this),
             getStrict: this.getStrict.bind(this),
-            map: this._map.bind(this)
+            map: this._map.bind(this),
+            DIRTY_ENTITY_MARKER: this.DIRTY_ENTITY_MARKER,
+            PRISTINE_ENTITY_KEY: this.PRISTINE_ENTITY_KEY
         }
     }
 
@@ -393,25 +398,25 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 const indexableEntity: IIndexableEntity = entity as any;
                 const key = String(property);
 
-                if (property === DIRTY_ENTITY_MARKER) {
+                if (property === this.DIRTY_ENTITY_MARKER) {
 
-                    if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
-                        indexableEntity[PRISTINE_ENTITY_KEY] = {};
+                    if (indexableEntity[this.PRISTINE_ENTITY_KEY] === undefined) {
+                        indexableEntity[this.PRISTINE_ENTITY_KEY] = {};
                     }
 
-                    indexableEntity[PRISTINE_ENTITY_KEY][DIRTY_ENTITY_MARKER] = true;
+                    indexableEntity[this.PRISTINE_ENTITY_KEY][this.DIRTY_ENTITY_MARKER] = true;
                     return true;
                 }
 
-                if (property !== PRISTINE_ENTITY_KEY && indexableEntity._id != null) {
+                if (property !== this.PRISTINE_ENTITY_KEY && indexableEntity._id != null) {
                     const oldValue = indexableEntity[key];
 
-                    if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
-                        indexableEntity[PRISTINE_ENTITY_KEY] = {};
+                    if (indexableEntity[this.PRISTINE_ENTITY_KEY] === undefined) {
+                        indexableEntity[this.PRISTINE_ENTITY_KEY] = {};
                     }
 
-                    if (indexableEntity[PRISTINE_ENTITY_KEY][key] === undefined) {
-                        indexableEntity[PRISTINE_ENTITY_KEY][key] = oldValue;
+                    if (indexableEntity[this.PRISTINE_ENTITY_KEY][key] === undefined) {
+                        indexableEntity[this.PRISTINE_ENTITY_KEY][key] = oldValue;
                     }
                 }
 
@@ -441,14 +446,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         const updated = this._attachments.filter(w => {
 
             const indexableEntity = w as IIndexableEntity;
-            if (indexableEntity[PRISTINE_ENTITY_KEY] === undefined) {
+            if (indexableEntity[this.PRISTINE_ENTITY_KEY] === undefined) {
                 return false;
             }
 
-            const pristineKeys = Object.keys(indexableEntity[PRISTINE_ENTITY_KEY]);
+            const pristineKeys = Object.keys(indexableEntity[this.PRISTINE_ENTITY_KEY]);
 
             for (let pristineKey of pristineKeys) {
-                if (indexableEntity[PRISTINE_ENTITY_KEY][pristineKey] != indexableEntity[pristineKey]) {
+                if (indexableEntity[this.PRISTINE_ENTITY_KEY][pristineKey] != indexableEntity[pristineKey]) {
                     return true
                 }
             }
@@ -498,7 +503,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             const indexableEntity = entities[i] as IIndexableEntity;
 
             // make pristine again
-            delete indexableEntity[PRISTINE_ENTITY_KEY];
+            delete indexableEntity[this.PRISTINE_ENTITY_KEY];
         }
     }
 
@@ -542,10 +547,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 }
             }
 
-            // removals are being grouped with updates, 
-            // need to separate out calls to events so we don't double dip
-            // on updates and removals
-            this._tryCallPostSaveEvents({ remove, add, updated });
+            await this.onAfterSaveChanges({ adds: add.length, removes: remove.length, updates: updated.length })
 
             this._reinitialize(remove, add);
 
@@ -556,13 +558,25 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    protected async onAfterSaveChanges(modifications: { adds: number, removes: number, updates: number }) {
+
+    }
+
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional
      * @param documentType Document Type for the entity
-     * @returns DbSetBuilder
+     * @returns {DbSetBuilder}
      */
     protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
         return new DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity>>(this._addDbSet.bind(this), {
+            documentType,
+            context: this,
+            readonly: false
+        });
+    }
+
+    protected referenceDbSet<TReferenceDocumentType extends string, TReferenceEntity extends IDbRecord<TReferenceDocumentType>, TEntity extends IReferenceDbRecord<TDocumentType, TReferenceDocumentType, TReferenceEntity>>(documentType: TDocumentType) {
+        return new DbSetReferenceBuilder<TReferenceDocumentType, TReferenceEntity, TDocumentType, TEntity, "__referencePath", IReferenceDbSet<TReferenceDocumentType, TReferenceEntity, TDocumentType, TEntity, "__referencePath">>(this._addDbSet.bind(this), {
             documentType,
             context: this,
             readonly: false
@@ -578,9 +592,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         return [add.length, remove.length, removeById.length, updated.length].some(w => w > 0);
     }
 
-    on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>) {
-        this._events[event].push(callback);
-    }
+    // on(event: DataContextEvent, callback: DataContextEventCallback<TDocumentType>) {
+    //     this._events[event].push(callback);
+    // }
 
     async empty() {
 
@@ -652,7 +666,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }, false);
     }
 
-    static asUntracked<T extends IDbRecordBase>(...entities: IDbRecordBase[]) {
+    static asUntracked<T extends IDbRecordBase>(...entities: T[]) {
         return entities.map(w => ({ ...w } as T));
     }
 
@@ -662,6 +676,46 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     static isDate(value: any) {
         return Object.prototype.toString.call(value) === '[object Date]'
+    }
+
+    static createDocumentLink<T extends IDbRecordBase>(...entities: T[]) {
+
+    }
+
+    static isDocumentLink(value: string) {
+        return this.parseDocumentLink(value) != null
+    }
+
+    static parseDocumentLink(value: string) {
+        if (value.startsWith(_PROTOCOL) === false) {
+            return null
+        }
+
+        const protocolSplit = value.split(_PROTOCOL);
+
+        if (protocolSplit.length <= 1) {
+            return null
+        }
+
+        const [databaseName, selector] = protocolSplit[1].split('/').filter(w => !!w).map(w => decodeURIComponent(w));
+
+        if (!databaseName || !selector) {
+            return null
+        }
+
+        const [selectorProperty, selectorValue] = selector.split(':');
+
+        if (!selectorProperty || !selectorValue) {
+            return null
+        }
+
+        return {
+            databaseName,
+            selector: {
+                property: selectorProperty,
+                value: selectorValue
+            }
+        }
     }
 
     static merge<T extends IDbRecordBase>(to: T, from: T, options?: { skip?: string[]; }) {

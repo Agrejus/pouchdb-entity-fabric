@@ -1,5 +1,5 @@
 import { DbSet } from "./DbSet";
-import { DbSetAsyncEvent, DbSetEvent, DbSetEventCallback, DbSetEventCallbackAsync, DbSetIdOnlyEventCallback, DbSetIdOnlyEventCallbackAsync, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, IDbSetProps, OmittedEntity } from "./typings";
+import { DbSetAsyncEvent, DbSetEvent, DbSetEventCallback, DbSetEventCallbackAsync, DbSetIdOnlyEventCallback, DbSetIdOnlyEventCallbackAsync, DbSetPickDefaultActionOptional, DbSetPickDefaultActionRequired, DeepPartial, EntityIdKey, EntityIdKeys, IDataContext, IDbRecord, IDbSet, IDbSetBase, IDbSetProps, IReferenceDbRecord, OmittedEntity } from "./typings";
 
 interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
     context: IDataContext;
@@ -13,7 +13,7 @@ interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbR
     extend?: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[]
     keyType?: DbSetKeyType;
     map?: PropertyMap<TDocumentType, TEntity, any>[];
-    index?:string;
+    index?: string;
 }
 
 type ConvertDateToString<T> = T extends Date ? string : T;
@@ -23,21 +23,21 @@ export type PropertyMap<TDocumentType extends string, TEntity extends IDbRecord<
 
 export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
 
-    private _context: IDataContext;
-    private _documentType: TDocumentType;
-    private _idKeys: EntityIdKeys<TDocumentType, TEntity>;
-    private _keyType: DbSetKeyType;
-    private _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
-    private _exclusions: (keyof TEntity)[];
-    private _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
-    private _asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
-    private _readonly: boolean = false;
-    private _extend: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
-    private _onCreate: (dbset: IDbSetBase<string>) => void;
-    private _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
-    private _index: string | null;
+    protected _context: IDataContext;
+    protected _documentType: TDocumentType;
+    protected _idKeys: EntityIdKeys<TDocumentType, TEntity>;
+    protected _keyType: DbSetKeyType;
+    protected _defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
+    protected _exclusions: (keyof TEntity)[];
+    protected _events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
+    protected _asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
+    protected _readonly: boolean = false;
+    protected _extend: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
+    protected _onCreate: (dbset: IDbSetBase<string>) => void;
+    protected _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
+    protected _index: string | null;
 
-    private _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
+    protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
         const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index } = params;
@@ -63,7 +63,7 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
         this._onCreate = onCreate;
     }
 
-    private _buildParams<T extends (keyof TEntity)>() {
+    protected _buildParams<T extends (keyof TEntity)>() {
         return {
             context: this._context,
             documentType: this._documentType,
@@ -208,51 +208,25 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
      * Must call to fully create the DbSet.
      * @returns new DbSet
      */
-    create<TExtension extends {}>(): TResult
+    create(): TResult {
 
-    /**
-     * Create a DbSet
-     * @param extend Can be used to add functionality to the DbSet
-     * @deprecated Use {@link extend} instead.
-     */
-    create<TExtension extends {}>(extend: (dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions>) => IDbSet<TDocumentType, TEntity, TExtraExclusions> & TExtension): TResult
-    create<TExtension extends {}>(extend?: (dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions>) => IDbSet<TDocumentType, TEntity, TExtraExclusions> & TExtension): TResult {
-
-        let result: TResult;
-
-        if (extend) {
-            const dbset: IDbSet<TDocumentType, TEntity, TExtraExclusions> = new DbSet<TDocumentType, TEntity, TExtraExclusions>({
-                context: this._context,
-                defaults: this._defaults,
-                documentType: this._documentType,
-                idKeys: this._idKeys,
-                readonly: this._readonly,
-                keyType: this._keyType,
-                asyncEvents: this._asyncEvents,
-                events: this._events,
-                map: this._map,
-                index: this._index
-            });
-            result = extend(dbset) as any
-        } else {
-
-            if (this._extend.length === 0) {
-                this._extend.push(this._defaultExtend)
-            }
-
-            result = this._extend.reduce((a: any, v, i) => v(i === 0 ? a : a.constructor, {
-                context: this._context,
-                defaults: this._defaults,
-                documentType: this._documentType,
-                idKeys: this._idKeys,
-                readonly: this._readonly,
-                keyType: this._keyType,
-                asyncEvents: this._asyncEvents,
-                events: this._events,
-                map: this._map,
-                index: this._index
-            }), DbSet);
+        if (this._extend.length === 0) {
+            this._extend.push(this._defaultExtend)
         }
+
+        const result = this._extend.reduce((a: any, v, i) => v(i === 0 ? a : a.constructor, {
+            context: this._context,
+            defaults: this._defaults,
+            documentType: this._documentType,
+            idKeys: this._idKeys,
+            readonly: this._readonly,
+            keyType: this._keyType,
+            asyncEvents: this._asyncEvents,
+            events: this._events,
+            map: this._map,
+            index: this._index,
+            isRefrenceDbSet: false
+        }), DbSet);
 
         this._onCreate(result);
 
@@ -260,6 +234,41 @@ export class DbSetBuilder<TDocumentType extends string, TEntity extends IDbRecor
     }
 }
 
+export class DbSetReferenceBuilder<TReferenceDocumentType extends string, TReferenceEntity extends IDbRecord<TReferenceDocumentType>, TDocumentType extends string, TEntity extends IReferenceDbRecord<TDocumentType, TReferenceDocumentType, TReferenceEntity>, TExtraExclusions extends (keyof TEntity), TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> extends DbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult> {
+
+    constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
+        super(onCreate, params);
+    }
+
+    /**
+     * Must call to fully create the DbSet.
+     * @returns new DbSet
+     */
+    create(): TResult {
+
+        if (this._extend.length === 0) {
+            this._extend.push(this._defaultExtend)
+        }
+
+        const result = this._extend.reduce((a: any, v, i) => v(i === 0 ? a : a.constructor, {
+            context: this._context,
+            defaults: this._defaults,
+            documentType: this._documentType,
+            idKeys: this._idKeys,
+            readonly: this._readonly,
+            keyType: this._keyType,
+            asyncEvents: this._asyncEvents,
+            events: this._events,
+            map: this._map,
+            index: this._index,
+            isRefrenceDbSet: true
+        }), DbSet);
+
+        this._onCreate(result);
+
+        return result;
+    }
+}
 
 interface ITerminateIdBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
 

@@ -106,6 +106,11 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _makePristine;
     private _getModifications;
     saveChanges(): Promise<number>;
+    protected onAfterSaveChanges(modifications: {
+        adds: number;
+        removes: number;
+        updates: number;
+    }): Promise<void>;
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional
      * @param documentType Document Type for the entity
