@@ -1,8 +1,9 @@
-import { IDbRecord, IDbSetProps } from '../typings';
+import { IDbSetIndexAdapter } from '../types/adapter-types';
+import { IDbSetProps } from '../types/dbset-types';
+import { IDbRecord } from '../types/entity-types';
 import { DbSetBaseAdapter } from './DbSetBaseAdapter';
-import { IDbSetIndexAdapter } from './types';
 
-export class DbSetIndexAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions> {
+export class DbSetIndexAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         super(props);

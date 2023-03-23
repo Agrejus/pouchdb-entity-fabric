@@ -1,4 +1,4 @@
-import { IDbRecord } from "./typings";
+import { IDbRecord } from "../types/entity-types";
 
 interface IValidationResult<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
     propertyName: keyof TEntity;

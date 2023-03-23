@@ -1,13 +1,14 @@
-import { EntitySelector, IDbRecord, IDbRecordBase, IDbSet, OmittedEntity, IDbSetProps, IDbSetEnumerable } from './typings';
-import { AdapterFactory } from './adapters/AdapterFactory';
-import { IDbSetDestructionAdapter, IDbSetFetchAdapter, IDbSetGeneralAdapter, IDbSetIndexAdapter, IDbSetModificationAdapter } from './adapters/types';
+import { AdapterFactory } from '../../adapters/AdapterFactory';
+import { IDbSetFetchAdapter, IDbSetGeneralAdapter, IDbSetIndexAdapter, IDbSetModificationAdapter } from '../../types/adapter-types';
+import { EntitySelector } from '../../types/common-types';
+import { IDbSet, IDbSetProps, IDbSetEnumerable } from '../../types/dbset-types';
+import { IDbRecord, OmittedEntity, IDbRecordBase } from '../../types/entity-types';
 
 /**
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
-export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
 
-    private readonly _destructionAdapter: IDbSetDestructionAdapter<TDocumentType, TEntity, TExtraExclusions>;
     private readonly _fetchAdapter: IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions>;
     private readonly _generalAdapter: IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions>;
     private readonly _indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>;
@@ -20,7 +21,6 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         const adapterFactory = new AdapterFactory<TDocumentType, TEntity, TExtraExclusions>(props);
 
-        this._destructionAdapter = adapterFactory.createDestructionAdapter();
         this._fetchAdapter = adapterFactory.createFetchAdapter();
         this._generalAdapter = adapterFactory.createGeneralAdapter();
         this._indexAdapter = adapterFactory.createIndexAdapter();
@@ -46,16 +46,16 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     async remove(...ids: string[]): Promise<void>;
     async remove(...entities: TEntity[]): Promise<void>;
     async remove(...entities: any[]) {
-        return await this._destructionAdapter.remove(...entities);
+        return await this._modificationAdapter.remove(...entities);
     }
 
-    useIndex(name: string): IDbSetEnumerable<TDocumentType, TEntity, TExtraExclusions> {
+    useIndex(name: string): IDbSetEnumerable<TDocumentType, TEntity> {
         this._indexAdapter.useIndex(name);
         return this;
     }
 
     async empty() {
-        await this._destructionAdapter.empty();
+        await this._modificationAdapter.empty();
     }
 
     async all() {

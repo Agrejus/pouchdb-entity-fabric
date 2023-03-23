@@ -1,8 +1,10 @@
-import { EntitySelector, IDbRecord, IDbSetProps } from '../typings';
+import { IDbSetFetchAdapter } from '../types/adapter-types';
+import { EntitySelector } from '../types/common-types';
+import { IDbSetProps } from '../types/dbset-types';
+import { IDbRecord } from '../types/entity-types';
 import { DbSetBaseAdapter } from './DbSetBaseAdapter';
-import { IDbSetFetchAdapter } from './types';
 
-export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> {
+export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         super(props);
@@ -13,15 +15,18 @@ export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDb
 
         const result = [...data].filter(selector);
 
+        await this.onAfterDataFetched(result);
+
         this.api.send(result)
 
         return result;
     }
 
-
     async get(...ids: string[]) {
         const entities = await this.api.getStrict(...ids);
         const result = entities.map(w => this.api.makeTrackable(w, this.defaults.retrieve, this.isReadonly, this.map) as TEntity);
+
+        await this.onAfterDataFetched(result);
 
         if (result.length > 0) {
             this.api.send(result)
@@ -37,6 +42,9 @@ export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDb
         const result = [...data].find(selector);
 
         if (result) {
+
+            await this.onAfterDataFetched([result]);
+
             this.api.send([result])
         }
 
@@ -48,6 +56,9 @@ export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDb
         const result = data[0];
 
         if (result) {
+
+            await this.onAfterDataFetched([result]);
+
             this.api.send([result])
         }
 

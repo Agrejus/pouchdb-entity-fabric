@@ -1,10 +1,11 @@
-import { DataContext } from '../DataContext';
-import { IDbRecord, IDbRecordBase, IDbSetInfo, IDbSetProps, IIndexableEntity } from '../typings';
-import { validateAttachedEntity } from '../Validation';
+import { DataContext } from '../context/DataContext';
+import { IDbSetGeneralAdapter } from '../types/adapter-types';
+import { IDbSetProps, IDbSetInfo } from '../types/dbset-types';
+import { IDbRecord, IDbRecordBase, IIndexableEntity } from '../types/entity-types';
+import { validateAttachedEntity } from '../validation/Validation';
 import { DbSetBaseAdapter } from './DbSetBaseAdapter';
-import { IDbSetGeneralAdapter } from './types';
 
-export class DbSetGeneralAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions> {
+export class DbSetGeneralAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         super(props);

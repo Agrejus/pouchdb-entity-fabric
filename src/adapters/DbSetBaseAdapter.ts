@@ -1,9 +1,12 @@
-import { DbSetKeyType, PropertyMap } from '../DbSetBuilder';
-import { DbSetPickDefaultActionRequired, DocumentKeySelector, EntityIdKeys, IDbRecord, IDbSetApi, IDbSetProps, IIndexableEntity, IPrivateContext } from '../typings';
+import { DbSetKeyType, PropertyMap } from '../context/dbset/DbSetBuilder';
 import { v4 as uuidv4 } from 'uuid';
-import { IndexStore } from '../IndexStore';
+import { IndexStore } from '../indexing/IndexStore';
+import { EntityIdKeys, IDbRecord, IIndexableEntity } from '../types/entity-types';
+import { DbSetPickDefaultActionRequired, DocumentKeySelector } from '../types/common-types';
+import { IPrivateContext } from '../types/context-types';
+import { IDbSetApi, IDbSetProps } from '../types/dbset-types';
 
-export abstract class DbSetBaseAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> {
+export abstract class DbSetBaseAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> {
 
     protected indexStore: IndexStore;
     protected defaults: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
@@ -37,8 +40,14 @@ export abstract class DbSetBaseAdapter<TDocumentType extends string, TEntity ext
         return data.map(w => this.api.makeTrackable(w, this.defaults.retrieve, this.isReadonly, this.map) as TEntity);
     }
 
+    protected async onAfterDataFetched(data: TEntity[]) {
+
+    }
+
     async all() {
         const result = await this.allDataAndMakeTrackable();
+
+        await this.onAfterDataFetched(result);
 
         this.api.send(result);
 

@@ -1,4 +1,4 @@
-import { Work } from './typings';
+import { Work } from "../types/context-types";
 
 export interface IIndexApi {
     all(): Promise<PouchDB.Find.Index[]>;

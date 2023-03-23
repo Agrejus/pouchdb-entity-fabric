@@ -1,4 +1,4 @@
-import { IIndexableEntity } from "./typings";
+import { IIndexableEntity } from '../types/entity-types';
 
 export class AdvancedDictionary<T> {
 

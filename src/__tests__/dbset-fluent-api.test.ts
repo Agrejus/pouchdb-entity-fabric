@@ -1,10 +1,11 @@
-import { DataContext } from "../DataContext";
-import { IDbRecord, IDbRecordBase, IDbSet } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { faker } from '@faker-js/faker';
 import { v4 as uuidv4 } from 'uuid';
-import { DbSetBuilder } from "../DbSetBuilder";
+import { DataContext } from '../context/DataContext';
+import { DbSetBuilder } from '../context/dbset/DbSetBuilder';
+import { IDbSet } from '../types/dbset-types';
+import { IDbRecord, IDbRecordBase } from '../types/entity-types';
 
 describe('dbset - fluent api', () => {
 

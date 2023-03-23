@@ -1,15 +1,16 @@
-import { DataContext } from '../DataContext';
-import { IDbRecord, IDbSetProps, IIndexableEntity, OmittedEntity } from '../typings';
+import { DataContext } from '../context/DataContext';
+import { IDbSetModificationAdapter } from '../types/adapter-types';
+import { IDbSetProps } from '../types/dbset-types';
+import { IDbRecord, OmittedEntity, IIndexableEntity } from '../types/entity-types';
 import { DbSetBaseAdapter } from './DbSetBaseAdapter';
-import { IDbSetModificationAdapter } from './types';
 
-export class DbSetModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
+export class DbSetModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         super(props);
     }
 
-    private _processAddition(entity: OmittedEntity<TEntity, TExtraExclusions>) {
+    protected processAddition(entity: OmittedEntity<TEntity, TExtraExclusions>) {
         const addItem: IDbRecord<TDocumentType> = entity as any;
         (addItem as any).DocumentType = this.documentType;
         const id = this.getKeyFromEntity(entity as any);
@@ -18,15 +19,17 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
             (addItem as any)._id = id;
         }
 
-        // if (this._events["add"].length > 0) {
-        //     this._events["add"].forEach(w => w(entity as any));
-        // }
+        return addItem
+    }
+
+    protected processAdditionAndMakeTrackable(entity: OmittedEntity<TEntity, TExtraExclusions>) {
+        const addItem = this.processAddition(entity);
 
         return this.api.makeTrackable(addItem, this.defaults.add, this.isReadonly, this.map) as TEntity;
     }
 
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
-        return entities.map(entity => ({ ...this._processAddition(entity) }));
+        return entities.map(entity => ({ ...this.processAdditionAndMakeTrackable(entity) }));
     }
 
     async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
@@ -40,7 +43,7 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
                 throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
 
-            const trackableEntity = this._processAddition(entity);
+            const trackableEntity = this.processAdditionAndMakeTrackable(entity);
 
             add.push(trackableEntity);
 
@@ -61,7 +64,7 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
         const result: TEntity[] = [];
 
         for (let entity of entities as any[]) {
-            const instance = entity._id != null ? entity as TEntity : { ...this._processAddition(entity) } as TEntity;
+            const instance = entity._id != null ? entity as TEntity : { ...this.processAdditionAndMakeTrackable(entity) } as TEntity;
             const found = allDictionary[instance._id]
 
             if (found) {
@@ -80,5 +83,61 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
         }
 
         return result;
+    }
+
+    async remove(...ids: string[]): Promise<void>;
+    async remove(...entities: TEntity[]): Promise<void>;
+    async remove(...entities: any[]) {
+
+        // if (this._asyncEvents['remove-invoked'].length > 0) {
+        //     await Promise.all(this._asyncEvents['remove-invoked'].map(w => w(entities as any)))
+        // }
+        
+        await this.onRemove();
+
+        if (entities.some(w => typeof w === "string")) {
+            await Promise.all(entities.map(w => this._removeById(w)))
+            return;
+        }
+
+        await Promise.all(entities.map(w => this._remove(w)))
+    }
+
+    protected async onRemove() {
+
+    }
+
+    async empty() {
+        const items = await this.all();
+        await this.remove(...items);
+    }
+
+    private async _remove(entity: TEntity) {
+        const data = this.api.getTrackedData();
+        const { remove } = data;
+
+        const ids = remove.map(w => w._id);
+        const indexableEntity = entity as IIndexableEntity;
+
+        if (ids.includes(indexableEntity._id)) {
+            throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`)
+        }
+
+        // this._events["remove"].forEach(w => w(entity as any));
+
+        remove.push(entity as any);
+    }
+
+    protected async _removeById(id: string) {
+        const data = this.api.getTrackedData();
+        const { removeById } = data;
+
+        if (removeById.includes(id)) {
+            throw new Error(`Cannot remove entity with same id more than once.  _id: ${id}`)
+        }
+
+        // this._events["remove"].forEach(w => w(id as any));
+
+        removeById.push(id);
     }
 }

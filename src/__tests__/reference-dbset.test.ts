@@ -1,9 +1,8 @@
-import { DataContext } from "../DataContext";
-import { IDbRecord, IDbRecordBase, IDbSet, IReferenceDbRecord } from "../typings";
 import PouchDB from 'pouchdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DbSetBuilder } from "../DbSetBuilder";
-
+import { IDbRecord, IReferenceDbRecord, OmittedEntity } from "../types/entity-types";
+import { DeepOmit } from "../types/common-types";
+import { DataContext } from '../context/DataContext';
 
 describe('Reference DbSet Tests', () => {
 
@@ -17,7 +16,7 @@ describe('Reference DbSet Tests', () => {
         Notes = "Notes",
     }
 
-    interface IComputer extends IReferenceDbRecord<DocumentTypes, ReferenceDocumentTypes, "s", INote> {
+    interface IComputer extends IReferenceDbRecord<DocumentTypes, ReferenceDocumentTypes, INote> {
         name: string;
         cores: number;
         keyboard?: string;
@@ -25,6 +24,7 @@ describe('Reference DbSet Tests', () => {
 
     interface INote extends IDbRecord<ReferenceDocumentTypes> {
         message: string;
+        more: string;
     }
 
     class PouchDbDataContext extends DataContext<DocumentTypes> {
@@ -33,11 +33,6 @@ describe('Reference DbSet Tests', () => {
             super(name);
         }
 
-        test: IComputer = {
-            reference: {
-                _id
-            }
-        }
         computers = this.referenceDbSet<ReferenceDocumentTypes, INote, IComputer>(DocumentTypes.Computers).create();
 
     }
@@ -49,7 +44,8 @@ describe('Reference DbSet Tests', () => {
             cores: 1,
             name: "",
             reference: {
-
+                message: "",
+                more: ""
             }
         })
     })

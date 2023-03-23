@@ -1,22 +1,19 @@
-import { IDbRecord, IDbSetProps } from "../typings";
-import { DbSetDestructionAdapter } from "./DbSetDestructionAdapter";
 import { DbSetFetchAdapter } from "./DbSetFetchAdapter";
 import { DbSetGeneralAdapter } from "./DbSetGeneralAdapter";
 import { DbSetIndexAdapter } from "./DbSetIndexAdapter";
 import { DbSetModificationAdapter } from "./DbSetModificationAdapter";
-import { IDbSetDestructionAdapter, IDbSetFetchAdapter, IDbSetGeneralAdapter, IDbSetIndexAdapter, IDbSetModificationAdapter } from "./types";
 import { DbSetReferenceFetchAdapter } from './reference/DbSetReferenceFetchAdapter';
+import { IDbSetProps } from "../types/dbset-types";
+import { IDbRecord } from "../types/entity-types";
+import { DbSetReferenceModificationAdapter } from './reference/DbSetReferenceModificationAdapter';
+import { IDbSetFetchAdapter, IDbSetGeneralAdapter, IDbSetIndexAdapter, IDbSetModificationAdapter } from "../types/adapter-types";
 
-export class AdapterFactory<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends (keyof TEntity) = never> {
+export class AdapterFactory<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> {
 
     private _props: IDbSetProps<TDocumentType, TEntity>;
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         this._props = props;
-    }
-
-    createDestructionAdapter(): IDbSetDestructionAdapter<TDocumentType, TEntity, TExtraExclusions> {
-        return new DbSetDestructionAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
     }
 
     createFetchAdapter(): IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> {
@@ -37,6 +34,10 @@ export class AdapterFactory<TDocumentType extends string, TEntity extends IDbRec
     }
 
     createModificationAdapter(): IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
+        if (this._props.isRefrenceDbSet) {
+            return new DbSetReferenceModificationAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
+        }
+
         return new DbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
     }
 }

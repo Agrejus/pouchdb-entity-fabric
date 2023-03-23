@@ -1,208 +1,20 @@
 import PouchDB from 'pouchdb';
 import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, DeepPartial, IBulkDocsResponse, IDataContext, IDbRecord, IDbRecordBase, IDbSet, IDbSetApi, IDbSetBase, IPreviewChanges, IIndexableEntity, IPurgeResponse, ITrackedData, OmittedEntity, IQueryParams, IReferenceDbRecord, IReferenceDbSet } from './typings';
-import { AdvancedDictionary } from './AdvancedDictionary';
-import { DbSetBuilder, DbSetReferenceBuilder, PropertyMap } from './DbSetBuilder';
-import { IndexApi, IIndexApi } from './IndexApi';
+import { AdvancedDictionary } from "../common/AdvancedDictionary";
+import { cache } from "../cache/ContextCache";
+import { PropertyMap, DbSetBuilder } from "./dbset/DbSetBuilder";
+import { IIndexApi, IndexApi } from "../indexing/IndexApi";
+import { CacheKeys } from "../types/cache-types";
+import { DeepPartial, DocumentReference, IPreviewChanges, IPurgeResponse } from "../types/common-types";
+import { IDataContext, DatabaseConfigurationAdditionalConfiguration, DataContextEvent, DataContextEventCallback, DataContextOptions, ITrackedData } from "../types/context-types";
+import { IDbSetBase, IDbSet, IDbSetApi } from "../types/dbset-types";
+import { IDbRecordBase, OmittedEntity, IIndexableEntity, IDbRecord, IReferenceDbRecord, ReferenceDocumentPropertyName, ReferencePathPropertyName } from "../types/entity-types";
+import { PouchDbInteractionBase } from "./PouchDbInteractionBase";
+import { parseDocumentReference } from '../common/LinkedDatabase';
 
 PouchDB.plugin(findAdapter);
 PouchDB.plugin(memoryAdapter);
-
-export interface IContextCache {
-    upsert(key: string, value: any): void;
-    remove(key: string): void;
-}
-
-const _PROTOCOL = "pouchdb://";
-
-enum CacheKeys {
-    IsOptimized = "IsOptimized"
-}
-
-class ContextCache implements IContextCache {
-
-    private _data: { [key: string]: any } = {}
-
-    upsert(key: CacheKeys, value: any) {
-        this._data[key] = value
-    }
-
-    remove(key: CacheKeys) {
-        delete this._data[key];
-    }
-
-    get<T extends any>(key: CacheKeys) {
-        return this._data[key] as T
-    }
-
-    contains(key: CacheKeys) {
-        return this._data[key] != null;
-    }
-}
-
-const cache: ContextCache = new ContextCache();
-
-abstract class PouchDbBase {
-
-    protected readonly _dbOptions?: PouchDB.Configuration.DatabaseConfiguration;
-    private readonly _dbName?: string;
-
-    constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
-        this._dbOptions = options;
-        this._dbName = name;
-    }
-
-    protected createDb() {
-        return new PouchDB(this._dbName, this._dbOptions);
-    }
-
-    protected async doWork<T>(action: (db: PouchDB.Database) => Promise<T>, shouldClose: boolean = true) {
-        const db = this.createDb();
-        const result = await action(db);
-
-        if (shouldClose) {
-            await db.close();
-        }
-
-        return result;
-    }
-}
-
-abstract class PouchDbInteractionBase<TDocumentType extends string> extends PouchDbBase {
-
-    constructor(name?: string, options?: PouchDB.Configuration.DatabaseConfiguration) {
-        super(name, options);
-    }
-
-    /**
-     * Does a bulk operation in the data store
-     * @param entities 
-     */
-    protected async bulkDocs(entities: IDbRecordBase[]) {
-
-        const response = await this.doWork(w => w.bulkDocs(entities));
-
-        const result: {
-            errors: { [key: string]: IBulkDocsResponse },
-            errors_count: number,
-            successes: { [key: string]: IBulkDocsResponse },
-            successes_count: number
-        } = {
-            errors: {},
-            successes: {},
-            errors_count: 0,
-            successes_count: 0
-        };
-
-        for (let item of response) {
-            if ('error' in item) {
-                const error = item as PouchDB.Core.Error;
-
-                result.errors_count += 1;
-                result.errors[error.id] = {
-                    id: error.id,
-                    ok: false,
-                    error: error.message,
-                    rev: error.rev
-                } as IBulkDocsResponse;
-                continue;
-            }
-
-            const success = item as PouchDB.Core.Response;
-
-            result.successes_count += 1;
-            result.successes[success.id] = {
-                id: success.id,
-                ok: success.ok,
-                rev: success.rev
-            } as IBulkDocsResponse;
-        }
-
-        return result;
-    }
-
-    /**
-     * Get entity from the data store, this is used by DbSet, will throw when an id is not found, very fast
-     * @param ids 
-     */
-    protected async getStrict(...ids: string[]) {
-
-        if (ids.length === 0) {
-            return [];
-        }
-
-        const result = await this.doWork(w => w.bulkGet({ docs: ids.map(x => ({ id: x })) }));
-
-        return result.results.map(w => {
-            const result = w.docs[0];
-
-            if ('error' in result) {
-                throw new Error(`docid: ${w.id}, error: ${JSON.stringify(result.error, null, 2)}`)
-            }
-
-            return result.ok as IDbRecordBase;
-        });
-    }
-
-    /**
-     * Get entity from the data store, this is used by DbSet, will NOT throw when an id is not found, much slower than strict version
-     * @param ids 
-     */
-    protected async get(...ids: string[]) {
-
-        try {
-
-            const result = await this.doWork(w => w.find({
-                selector: {
-                    _id: {
-                        $in: ids
-                    }
-                }
-            }), false);
-
-            return result.docs as IDbRecordBase[];
-        } catch (e) {
-
-            if ('message' in e && e.message.includes("database is closed")) {
-                throw e;
-            }
-
-            return [] as IDbRecordBase[];
-        }
-    }
-
-    /**
-     * Gets all data from the data store
-     */
-    protected async getAllData(payload?: IQueryParams<TDocumentType>) {
-
-        try {
-            const findOptions: PouchDB.Find.FindRequest<IDbRecordBase> = {
-                selector: {},
-            }
-
-            if (payload?.documentType != null) {
-                findOptions.selector.DocumentType = payload.documentType;
-            }
-
-            if (payload?.index != null) {
-                findOptions.use_index = payload.index;
-            }
-
-            const result = await this.doWork(w => w.find(findOptions));
-
-            return result.docs as IDbRecordBase[];
-        } catch (e) {
-
-            if ('message' in e && e.message.includes("database is closed")) {
-                throw e;
-            }
-
-            return [] as IDbRecordBase[];
-        }
-    }
-}
 
 export class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
 
@@ -216,6 +28,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
+    private _hasReferenceDbSet: boolean = false;
 
     $indexes: IIndexApi;
 
@@ -514,7 +327,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         return {
             add,
-            remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true })),
+            remove: [...remove, ...extraRemovals].map(w => ({ _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true } as IDbRecordBase)),
             updated
         }
     }
@@ -528,8 +341,49 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             // in case are are trying to remove and add the same Id
             const modifications = [...remove, ...add, ...updated];
 
+            if (this._hasReferenceDbSet === true) {
+                const referenceModifications: { [key: string]: { hasRemovals: boolean, documents: IDbRecordBase[] } } = {};
+
+                if (modifications.length > 0) {
+                    // keep the path and tear off the references
+                    for (const item of modifications) {
+                        const castedItem = (item as IReferenceDbRecord<TDocumentType, any, any>);
+                        const document = castedItem[ReferenceDocumentPropertyName] as IDbRecordBase;
+                        const referencePath = castedItem[ReferencePathPropertyName] as string;
+                        const reference = parseDocumentReference(referencePath)
+                        delete castedItem[ReferenceDocumentPropertyName];
+
+                        if (!referenceModifications[reference.databaseName]) {
+                            referenceModifications[reference.databaseName] = {
+                                documents: [],
+                                hasRemovals: false
+                            }
+                        }
+
+                        if (referenceModifications[reference.databaseName].hasRemovals === false && "_deleted" in item) {
+                            referenceModifications[reference.databaseName].hasRemovals = true;
+                        }
+
+                        referenceModifications[reference.databaseName].documents.push(document);
+                    }
+                }
+
+                for (const group in referenceModifications) {
+                    const documents = referenceModifications[group].documents;
+                    const db = new PouchDB(group);
+                    await db.bulkDocs(documents);
+
+                    if (referenceModifications[group].hasRemovals === true) {
+                        const all = await db.allDocs({ include_docs: false });
+                        if (all.rows.length === 0) {
+                            await db.destroy();
+                        }
+                    }
+                }
+            }
+
             // remove pristine entity before we send to bulk docs
-            this._makePristine(...modifications)
+            this._makePristine(...modifications);
 
             const modificationResult = await this.bulkDocs(modifications);
 
@@ -571,15 +425,20 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         return new DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity>>(this._addDbSet.bind(this), {
             documentType,
             context: this,
-            readonly: false
+            readonly: false,
+            isReferenceDbSet: false
         });
     }
 
     protected referenceDbSet<TReferenceDocumentType extends string, TReferenceEntity extends IDbRecord<TReferenceDocumentType>, TEntity extends IReferenceDbRecord<TDocumentType, TReferenceDocumentType, TReferenceEntity>>(documentType: TDocumentType) {
-        return new DbSetReferenceBuilder<TReferenceDocumentType, TReferenceEntity, TDocumentType, TEntity, "__referencePath", IReferenceDbSet<TReferenceDocumentType, TReferenceEntity, TDocumentType, TEntity, "__referencePath">>(this._addDbSet.bind(this), {
+
+        this._hasReferenceDbSet = true;
+
+        return new DbSetBuilder<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType", IDbSet<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType">>(this._addDbSet.bind(this), {
             documentType,
             context: this,
-            readonly: false
+            readonly: false,
+            isReferenceDbSet: true
         });
     }
 
@@ -660,7 +519,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                         loss_count: Math.abs(dbInfo.doc_count - replicationResult.docs_written)
                     } as IPurgeResponse;
                 } catch (e) {
-
+                    throw e;
                 }
             }, closeDestination)
         }, false);
@@ -676,46 +535,6 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     static isDate(value: any) {
         return Object.prototype.toString.call(value) === '[object Date]'
-    }
-
-    static createDocumentLink<T extends IDbRecordBase>(...entities: T[]) {
-
-    }
-
-    static isDocumentLink(value: string) {
-        return this.parseDocumentLink(value) != null
-    }
-
-    static parseDocumentLink(value: string) {
-        if (value.startsWith(_PROTOCOL) === false) {
-            return null
-        }
-
-        const protocolSplit = value.split(_PROTOCOL);
-
-        if (protocolSplit.length <= 1) {
-            return null
-        }
-
-        const [databaseName, selector] = protocolSplit[1].split('/').filter(w => !!w).map(w => decodeURIComponent(w));
-
-        if (!databaseName || !selector) {
-            return null
-        }
-
-        const [selectorProperty, selectorValue] = selector.split(':');
-
-        if (!selectorProperty || !selectorValue) {
-            return null
-        }
-
-        return {
-            databaseName,
-            selector: {
-                property: selectorProperty,
-                value: selectorValue
-            }
-        }
     }
 
     static merge<T extends IDbRecordBase>(to: T, from: T, options?: { skip?: string[]; }) {
