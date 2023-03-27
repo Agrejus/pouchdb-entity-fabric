@@ -302,7 +302,7 @@ const shouldUpdateOneEntity = async () => {
 
     const item = await context.test1.first();
 
-    item.test1 = "Test";
+    item!.test1 = "Test";
 
     await context.saveChanges();
 

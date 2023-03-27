@@ -141,11 +141,13 @@ export interface IDbSetBase<TDocumentType extends string> {
 export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (payload?: IQueryParams<TDocumentType>) => Promise<IDbRecordBase[]>;
+    find: (selector: PouchDB.Find.FindRequest<{}>)  => Promise<IDbRecordBase[]>;
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[]) => void;
     detach: (data: IDbRecordBase[]) => IDbRecordBase[];
     makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T;
+    makePristine(...entities: IDbRecordBase[]): void;
     map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults?: DeepPartial<OmittedEntity<T, never>>): T
     readonly DIRTY_ENTITY_MARKER: string;
     readonly PRISTINE_ENTITY_KEY: string;
@@ -171,7 +173,7 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
     map: PropertyMap<TDocumentType, TEntity, any>[];
     index: string | null;
-    isRefrenceDbSet: boolean;
+    isSplitDbSet: boolean;
 }
 
 export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity) => void;

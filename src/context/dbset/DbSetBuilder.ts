@@ -7,7 +7,7 @@ import { DbSet } from "./DbSet";
 interface IDbSetBuilderParams<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string, TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>> {
     context: IDataContext;
     documentType: TDocumentType;
-    isReferenceDbSet: boolean;
+    isSplitDbSet: boolean;
     idKeys?: EntityIdKeys<TDocumentType, TEntity>;
     defaults?: DbSetPickDefaultActionRequired<TDocumentType, TEntity>;
     exclusions?: string[];
@@ -45,12 +45,12 @@ export class DbSetBuilder<
     protected _onCreate: (dbset: IDbSetBase<string>) => void;
     protected _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
     protected _index: string | null;
-    protected _isReferenceDbSet: boolean;
+    protected _isSplitDbSet: boolean;
 
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
-        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index, isReferenceDbSet } = params;
+        const { context, documentType, idKeys, defaults, exclusions, events, readonly, extend, keyType, asyncEvents, map, index, isSplitDbSet: isReferenceDbSet } = params;
         this._extend = extend ?? [];
         this._documentType = documentType;
         this._context = context;
@@ -69,7 +69,7 @@ export class DbSetBuilder<
         }
         this._map = map ?? [];
         this._index = index;
-        this._isReferenceDbSet = isReferenceDbSet;
+        this._isSplitDbSet = isReferenceDbSet;
 
         this._onCreate = onCreate;
     }
@@ -88,7 +88,7 @@ export class DbSetBuilder<
             asyncEvents: this._asyncEvents,
             map: this._map,
             index: this._index,
-            isReferenceDbSet: this._isReferenceDbSet
+            isSplitDbSet: this._isSplitDbSet
         } as IDbSetBuilderParams<TDocumentType, TEntity, T, any>
     }
 
@@ -237,7 +237,7 @@ export class DbSetBuilder<
             events: this._events,
             map: this._map,
             index: this._index,
-            isRefrenceDbSet: this._isReferenceDbSet
+            isSplitDbSet: this._isSplitDbSet
         }), DbSet);
 
         this._onCreate(result);

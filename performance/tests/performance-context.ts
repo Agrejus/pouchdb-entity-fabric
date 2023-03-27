@@ -1,11 +1,12 @@
 import { performance } from "perf_hooks";
-import { DataContext } from "../../src/DataContext";
-import { DbSet } from "../../src/DbSet";
-import { DataContextOptions, EntityIdKeys, IBulkDocsResponse, IDbRecord, IDbRecordBase, IDbSet } from "../../src/typings";
 import { max, mean, min, uniqBy } from 'lodash';
 import * as fs from 'fs';
 import * as path from 'path'
 import packageJson from '../../package.json';
+import { DataContext } from "../../src/context/DataContext";
+import { DbSet } from "../../src/context/dbset/DbSet";
+import { DataContextOptions } from "../../src/types/context-types";
+import { IDbRecord, IDbRecordBase } from "../../src/types/entity-types";
 
 export enum PerformanceDocumentTypes {
     Test1 = "Test1",

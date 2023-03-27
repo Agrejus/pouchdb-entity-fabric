@@ -1,8 +1,9 @@
 import { faker } from "@faker-js/faker";
 import { v4 as uuidv4 } from 'uuid';
 import { performance } from "perf_hooks";
+import PouchDB from "pouchdb";
 import { DataContext } from "../../src/context/DataContext";
-import { IDbRecord, IReferenceDbRecord } from "../../src/types/entity-types";
+import { IDbRecord, ISplitDbRecord } from "../../src/types/entity-types";
 
 enum DocumentTypes {
     Notes = "Notes",
@@ -12,19 +13,6 @@ enum DocumentTypes {
     Preference = "Preference"
 }
 
-
-interface INote extends IDbRecord<DocumentTypes> {
-    contents: string;
-    createdDate: string;
-    userId: string;
-}
-
-interface IBook extends IReferenceDbRecord<DocumentTypes, DocumentTypes, INote> {
-    author: string;
-    publishDate?: string;
-    rejectedCount: number;
-    status: "pending" | "approved" | "rejected";
-}
 
 interface ICar extends IDbRecord<DocumentTypes> {
     make: string;
@@ -41,18 +29,6 @@ interface IPreference extends IDbRecord<DocumentTypes> {
 interface IBaseEntity extends IDbRecord<DocumentTypes> {
     syncStatus: "pending" | "approved" | "rejected";
     syncRetryCount: 0;
-}
-
-class PouchDbDataContext extends DataContext<DocumentTypes> {
-
-    constructor() {
-        super(`${uuidv4()}-db`);
-    }
-
-
-    books = this.referenceDbSet<DocumentTypes, INote, IBook>(DocumentTypes.Books)
-        .keys(w => w.auto())
-        .create();
 }
 
 // const generateData = async (context: PouchDbDataContext, count: number) => {
@@ -119,26 +95,58 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
 //     }
 // }
 
+interface INote extends IDbRecord<DocumentTypes> {
+    contents: string;
+    createdDate: string;
+    userId: string;
+}
+
+interface IBook extends ISplitDbRecord<DocumentTypes, DocumentTypes, INote> {
+    author: string;
+    publishDate?: string;
+    rejectedCount: number;
+    status: "pending" | "approved" | "rejected";
+}
+
+class PouchDbDataContext extends DataContext<DocumentTypes> {
+
+    // constructor() {
+    //     super(`${uuidv4()}-db`);
+    // }
+    constructor() {
+        super(`test-db`);
+    }
+
+    books = this.splitDbSet<DocumentTypes, INote, IBook>(DocumentTypes.Books)
+        .keys(w => w.auto())
+        .create();
+}
+
 export const run = async () => {
     try {
-        debugger;
+
         const context = new PouchDbDataContext();
-        const [added] = await context.books.add({
-            author: "James",
-            reference: {
-                contents: "Note Contents",
-                createdDate: "some date",
-                userId: "some user id"
-            },
-            rejectedCount: 1,
-            status: "pending"
-        })
+        // const [added] = await context.books.add({
+        //     author: "James",
+        //     reference: {
+        //         contents: "Note Contents",
+        //         createdDate: "some date",
+        //         userId: "some user id"
+        //     },
+        //     rejectedCount: 1,
+        //     status: "pending"
+        // })
 
-        await context.saveChanges();
+        // await context.saveChanges();
 
-        const [found] = await context.books.filter(w => w._id === added._id);
-        debugger;
-        console.log(found)
+        const [found] = await context.books.filter(w => w._id === ""
+            && (w.DocumentType === DocumentTypes.Books || w.author === "James" || (w.status === "approved" || w.author === "Megan"))
+            && (w.DocumentType === DocumentTypes.Books || w.author === "James")
+        );
+        // await context.books.remove(found);
+        // await context.saveChanges();
+        // debugger;
+        // console.log(found)
         // await generateData(context, 10000);
 
         // const s = performance.now();
@@ -151,6 +159,9 @@ export const run = async () => {
         // if (true) {
 
         // }
+
+
+        // Document Splitting
 
     } catch (e) {
         debugger;

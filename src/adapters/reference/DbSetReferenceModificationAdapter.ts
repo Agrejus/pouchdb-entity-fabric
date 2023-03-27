@@ -1,17 +1,18 @@
 import { cache } from '../../cache/ContextCache';
 import { DeepOmit } from '../../types/common-types';
 import { IDbSetProps } from '../../types/dbset-types';
-import { IDbRecord, IDbRecordBase, IIndexableEntity, ReferenceDocumentPropertyName, ReferencePathPropertyName } from '../../types/entity-types';
+import { IDbRecord, IDbRecordBase, IIndexableEntity, SplitDocumentDocumentPropertyName, SplitDocumentPathPropertyName } from '../../types/entity-types';
 import { DbSetModificationAdapter } from '../DbSetModificationAdapter';
 import { v4 as uuidv4 } from 'uuid';
 import { createDocumentReference } from '../../common/LinkedDatabase';
+import { IDbSetIndexAdapter } from '../../types/adapter-types';
 
 interface Transaction  { transactionId: string, isUse: boolean }
 
 export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>  {
 
-    constructor(props: IDbSetProps<TDocumentType, TEntity>) {
-        super(props);
+    constructor(props: IDbSetProps<TDocumentType, TEntity>, indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>) {
+        super(props, indexAdapter);
     }
 
     private get _getCacheKey() {
@@ -77,21 +78,21 @@ export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEn
                 throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
 
-            if (!!indexableEntity[ReferenceDocumentPropertyName]["_id"] || !!indexableEntity[ReferenceDocumentPropertyName]["_rev"] || !!indexableEntity[ReferenceDocumentPropertyName]["DocumentType"]) {
+            if (!!indexableEntity[SplitDocumentDocumentPropertyName]["_id"] || !!indexableEntity[SplitDocumentDocumentPropertyName]["_rev"] || !!indexableEntity[SplitDocumentDocumentPropertyName]["DocumentType"]) {
                 throw new Error('Reference entity cannot have an _id, _rev, or DocumentType when adding')
             }
 
             const processedEntity = this.processAddition(entity) as IIndexableEntity;
 
             // attach id and document type to reference
-            processedEntity[ReferenceDocumentPropertyName] = {
-                ...indexableEntity[ReferenceDocumentPropertyName],
+            processedEntity[SplitDocumentDocumentPropertyName] = {
+                ...indexableEntity[SplitDocumentDocumentPropertyName],
                 _id: this._createReferenceDocumentId(),
                 DocumentType: this._getReferenceDocumentType
             };
 
             // create link to document
-            processedEntity[ReferencePathPropertyName] = createDocumentReference(indexableEntity[ReferenceDocumentPropertyName], currentTransaction);
+            processedEntity[SplitDocumentPathPropertyName] = createDocumentReference(indexableEntity[SplitDocumentDocumentPropertyName], currentTransaction);
 
             const trackableEntity = this.api.makeTrackable(processedEntity, this.defaults.add, this.isReadonly, this.map) as TEntity;
 
@@ -99,10 +100,6 @@ export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEn
 
             return trackableEntity;
         });
-
-        // if (this._asyncEvents['add-invoked'].length > 0) {
-        //     await Promise.all(this._asyncEvents['add-invoked'].map(w => w(result as any)))
-        // }
 
         return result
     }

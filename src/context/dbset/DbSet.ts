@@ -21,10 +21,10 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         const adapterFactory = new AdapterFactory<TDocumentType, TEntity, TExtraExclusions>(props);
 
-        this._fetchAdapter = adapterFactory.createFetchAdapter();
-        this._generalAdapter = adapterFactory.createGeneralAdapter();
         this._indexAdapter = adapterFactory.createIndexAdapter();
-        this._modificationAdapter = adapterFactory.createModificationAdapter();
+        this._fetchAdapter = adapterFactory.createFetchAdapter(this._indexAdapter);
+        this._generalAdapter = adapterFactory.createGeneralAdapter();
+        this._modificationAdapter = adapterFactory.createModificationAdapter(this._indexAdapter);
     }
 
     info() {

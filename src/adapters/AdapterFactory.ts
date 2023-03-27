@@ -16,13 +16,13 @@ export class AdapterFactory<TDocumentType extends string, TEntity extends IDbRec
         this._props = props;
     }
 
-    createFetchAdapter(): IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> {
+    createFetchAdapter(indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>): IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
-        if (this._props.isRefrenceDbSet) {
-            return new DbSetReferenceFetchAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
+        if (this._props.isSplitDbSet) {
+            return new DbSetReferenceFetchAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props, indexAdapter)
         }
 
-        return new DbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
+        return new DbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props, indexAdapter)
     }
 
     createGeneralAdapter(): IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions> {
@@ -33,11 +33,11 @@ export class AdapterFactory<TDocumentType extends string, TEntity extends IDbRec
         return new DbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
     }
 
-    createModificationAdapter(): IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
-        if (this._props.isRefrenceDbSet) {
-            return new DbSetReferenceModificationAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
+    createModificationAdapter(indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>): IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
+        if (this._props.isSplitDbSet) {
+            return new DbSetReferenceModificationAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props, indexAdapter)
         }
 
-        return new DbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props)
+        return new DbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props, indexAdapter)
     }
 }

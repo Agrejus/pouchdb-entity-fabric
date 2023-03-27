@@ -1,13 +1,16 @@
 import { DataContext } from '../context/DataContext';
-import { IDbSetModificationAdapter } from '../types/adapter-types';
+import { IDbSetIndexAdapter, IDbSetModificationAdapter } from '../types/adapter-types';
 import { IDbSetProps } from '../types/dbset-types';
 import { IDbRecord, OmittedEntity, IIndexableEntity } from '../types/entity-types';
 import { DbSetBaseAdapter } from './DbSetBaseAdapter';
 
 export class DbSetModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
-    constructor(props: IDbSetProps<TDocumentType, TEntity>) {
+    protected indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>;
+
+    constructor(props: IDbSetProps<TDocumentType, TEntity>, indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>) {
         super(props);
+        this.indexAdapter = indexAdapter;
     }
 
     protected processAddition(entity: OmittedEntity<TEntity, TExtraExclusions>) {
@@ -50,16 +53,13 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
             return trackableEntity;
         });
 
-        // if (this._asyncEvents['add-invoked'].length > 0) {
-        //     await Promise.all(this._asyncEvents['add-invoked'].map(w => w(result as any)))
-        // }
-
         return result
     }
 
     async upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]) {
         // build the id's
-        const all = await this.getAllData();
+        const getIndex = this.indexAdapter.get.bind(this.indexAdapter);
+        const all = await this.getAllData(getIndex);
         const allDictionary: { [key: string]: TEntity } = all.reduce((a, v) => ({ ...a, [v._id]: v }), {})
         const result: TEntity[] = [];
 
@@ -88,10 +88,6 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
     async remove(...ids: string[]): Promise<void>;
     async remove(...entities: TEntity[]): Promise<void>;
     async remove(...entities: any[]) {
-
-        // if (this._asyncEvents['remove-invoked'].length > 0) {
-        //     await Promise.all(this._asyncEvents['remove-invoked'].map(w => w(entities as any)))
-        // }
         
         await this.onRemove();
 
@@ -108,7 +104,8 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
     }
 
     async empty() {
-        const items = await this.all();
+        const getIndex = this.indexAdapter.get.bind(this.indexAdapter);
+        const items = await this._all(getIndex);
         await this.remove(...items);
     }
 
@@ -123,8 +120,6 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`)
         }
 
-        // this._events["remove"].forEach(w => w(entity as any));
-
         remove.push(entity as any);
     }
 
@@ -135,8 +130,6 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
         if (removeById.includes(id)) {
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${id}`)
         }
-
-        // this._events["remove"].forEach(w => w(id as any));
 
         removeById.push(id);
     }

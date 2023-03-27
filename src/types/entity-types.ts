@@ -8,11 +8,11 @@ export interface IDbRecord<TDocumentType extends string> extends IDbAdditionReco
 }
 
 
-export const ReferencePathPropertyName = "referencePath";
-export const ReferenceDocumentPropertyName = "reference";
-export interface IReferenceDbRecord<TDocumentType extends string, TReferenceDocumentType extends string, TReferenceEntity extends IDbRecord<TReferenceDocumentType>> extends IDbRecord<TDocumentType> {
-    [ReferencePathPropertyName]: PouchDbReference;
-    [ReferenceDocumentPropertyName]: TReferenceEntity;
+export const SplitDocumentPathPropertyName = "referencePath";
+export const SplitDocumentDocumentPropertyName = "reference";
+export interface ISplitDbRecord<TDocumentType extends string, TReferenceDocumentType extends string, TReferenceEntity extends IDbRecord<TReferenceDocumentType>> extends IDbRecord<TDocumentType> {
+    [SplitDocumentPathPropertyName]: PouchDbReference;
+    [SplitDocumentDocumentPropertyName]: TReferenceEntity;
 }
 
 export interface IDbAdditionRecord<TDocumentType extends string> {
@@ -31,3 +31,11 @@ export interface IIndexableEntity<T extends any = any> {
 
 export type EntityIdKeys<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = EntityIdKey<TDocumentType, TEntity>[];
 export type EntityIdKey<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = IdKey<Omit<TEntity, "_id" | "_rev" | "DocumentType">>;
+
+export interface ICacheDocumentBase {
+    _id: string
+}
+
+export interface ICachedDatabases extends ICacheDocumentBase {
+    list: string[];
+}

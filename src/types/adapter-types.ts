@@ -21,6 +21,7 @@ export interface IDbSetGeneralAdapter<TDocumentType extends string, TEntity exte
 
 export interface IDbSetIndexAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> {
     useIndex(name: string): void;
+    get(): string | null
 }
 
 export interface IDbSetModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> {

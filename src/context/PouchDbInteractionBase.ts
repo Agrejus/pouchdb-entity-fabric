@@ -110,6 +110,22 @@ export abstract class PouchDbInteractionBase<TDocumentType extends string> exten
         }
     }
 
+    protected async find(selector: PouchDB.Find.FindRequest<{}>) {
+        try {
+
+            const result = await this.doWork(w => w.find(selector));
+
+            return result.docs as IDbRecordBase[];
+        } catch (e) {
+
+            if ('message' in e && e.message.includes("database is closed")) {
+                throw e;
+            }
+
+            return [] as IDbRecordBase[];
+        }
+    }
+
     /**
      * Gets all data from the data store
      */
@@ -128,9 +144,9 @@ export abstract class PouchDbInteractionBase<TDocumentType extends string> exten
                 findOptions.use_index = payload.index;
             }
 
-            const result = await this.doWork(w => w.find(findOptions));
+            const result = await this.find(findOptions);
 
-            return result.docs as IDbRecordBase[];
+            return result;
         } catch (e) {
 
             if ('message' in e && e.message.includes("database is closed")) {
