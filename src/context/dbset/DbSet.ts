@@ -97,18 +97,4 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     async first() {
         return await this._fetchAdapter.first();
     }
-
-    // on(event: "add", callback: DbSetEventCallback<TDocumentType, TEntity>): void;
-    // on(event: "remove", callback: DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback): void;
-    // on(event: "remove-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync): void;
-    // on(event: "add-invoked", callback: DbSetEventCallbackAsync<TDocumentType, TEntity>): void;
-    // on(event: DbSetEvent | DbSetAsyncEvent, callback: any) {
-
-    //     if (event === 'add-invoked' || event === "remove-invoked") {
-    //         this._asyncEvents[event].push(callback)
-    //         return;
-    //     }
-
-    //     this._events[event].push(callback);
-    // }
 }

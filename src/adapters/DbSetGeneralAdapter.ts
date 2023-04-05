@@ -26,7 +26,8 @@ export class DbSetGeneralAdapter<TDocumentType extends string, TEntity extends I
             Defaults: this.defaults,
             KeyType: this.keyType,
             Readonly: this.isReadonly,
-            Map: this.map
+            Map: this.map,
+            SplitDbSetOptions: this.splitDbSetOptions
         }
 
         return info;

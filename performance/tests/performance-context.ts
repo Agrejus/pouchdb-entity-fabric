@@ -179,7 +179,7 @@ const overrideWithPerformance = (instance: any, propertiesToIgnore: string[], pr
 
         instance.writePerformance = (name: string) => {
 
-            const result = {};
+            const result: any = {};
 
             const metric = uniqBy(instance.metrics, (w: any) => w.name)
 
@@ -272,7 +272,7 @@ export class PerformanceDbDataContext extends DataContext<PerformanceDocumentTyp
             'constructor',
             'IdKeys',
             'DocumentType',
-            'info', 
+            'info',
             'instance'
         ];
 

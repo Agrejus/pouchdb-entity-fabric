@@ -49,8 +49,7 @@ export class DbSetReferenceFetchAdapter<TDocumentType extends string, TEntity ex
             mods.push({ databaseName: referenceModification, ids: referenceModifications[referenceModification] })
         }
 
-        const referencedDocuments = await Promise.all(mods.map(w => this._getMany(w.databaseName, ...w.ids)))
-
+        const referencedDocuments = await Promise.all(mods.map(async w => await this._getMany(w.databaseName, ...w.ids)))
         for(const referencedDocument of referencedDocuments.reduce((a, v) => a.concat(v), [])) {
             referenceIdToMainIdLinks[referencedDocument._id].reference = referencedDocument;
             this.api.makePristine(referenceIdToMainIdLinks[referencedDocument._id]);

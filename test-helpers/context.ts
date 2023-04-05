@@ -1,11 +1,11 @@
 import PouchDB from "pouchdb";
 import { DataContext } from "../src/context/DataContext";
-import { DbSetBuilder } from "../src/context/dbset/DbSetBuilder";
 import { IDbSet } from "../src/types/dbset-types";
 import { IDbRecordBase } from "../src/types/entity-types";
-import { DocumentTypes, ISyncDocument, ISetStatus, IComputer, IBook, IBookV4, INote, IContact, IBookV3, ICar, IPreference } from "./types";
+import { DocumentTypes, ISyncDocument, ISetStatus, IComputer, IBook, IBookV4, INote, IContact, IBookV3, ICar, IPreference, ISplitComputer, ISplitBook, INoteV2 } from "./types";
 import { v4 as uuidv4 } from 'uuid';
 import memoryAdapter from 'pouchdb-adapter-memory';
+import { DefaultDbSetBuilder } from "../src/context/dbset/builders/DefaultDbSetBuilder";
 
 PouchDB.plugin(memoryAdapter);
 
@@ -17,9 +17,9 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 
     private _setupSyncDbSet<T extends ISyncDocument<DocumentTypes>>(documentType: DocumentTypes) {
 
-        const dbset = (this.dbset<ISyncDocument<DocumentTypes>>(documentType)
+        const dbset = (this.dbset().default<ISyncDocument<DocumentTypes>>(documentType)
             .defaults({ SyncStatus: "Pending", SyncRetryCount: 0 })
-            .exclude("SyncStatus", "SyncRetryCount") as any) as DbSetBuilder<DocumentTypes, T, "SyncStatus" | "SyncRetryCount", IDbSet<DocumentTypes, T, "SyncStatus" | "SyncRetryCount">>;
+            .exclude("SyncStatus", "SyncRetryCount") as any) as DefaultDbSetBuilder<DocumentTypes, T, "SyncStatus" | "SyncRetryCount", IDbSet<DocumentTypes, T, "SyncStatus" | "SyncRetryCount">>;
 
         return dbset.extend((Instance, props) => {
             return new class extends Instance {
@@ -48,26 +48,26 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
         });
     }
 
-    computers = this.dbset<IComputer>(DocumentTypes.Computers).create();
+    computers = this.dbset().default<IComputer>(DocumentTypes.Computers).create();
 
-    books = this.dbset<IBook>(DocumentTypes.Books).defaults({ status: "pending" }).exclude("status", "rejectedCount").create();
-    booksWithDateMapped = this.dbset<IBookV4>(DocumentTypes.BooksWithDateMapped)
+    books = this.dbset().default<IBook>(DocumentTypes.Books).defaults({ status: "pending" }).exclude("status", "rejectedCount").create();
+    booksWithDateMapped = this.dbset().default<IBookV4>(DocumentTypes.BooksWithDateMapped)
         .exclude("status", "rejectedCount")
         .defaults({ status: "pending" })
         .map({ property: "publishDate", map: w => !!w ? new Date(w) : undefined })
         .map({ property: "createdDate", map: w => new Date(w) })
         .create();
-    booksWithOn = this.dbset<IBook>(DocumentTypes.BooksWithOn).exclude("status", "rejectedCount").on("add", entity => {
+    booksWithOn = this.dbset().default<IBook>(DocumentTypes.BooksWithOn).exclude("status", "rejectedCount").on("add", entity => {
         entity.status = "pending";
     }).create();
 
-    booksWithOnV2 = this.dbset<IBook>(DocumentTypes.BooksWithOnV2).exclude("status", "rejectedCount").on("add-invoked", async entities => {
+    booksWithOnV2 = this.dbset().default<IBook>(DocumentTypes.BooksWithOnV2).exclude("status", "rejectedCount").on("add-invoked", async entities => {
         entities.forEach(w => w.status = "pending")
     }).create();
 
-    booksNoKey = this.dbset<IBook>(DocumentTypes.BooksNoKey).exclude("status", "rejectedCount").keys(w => w.none()).create();
-    notes = this.dbset<INote>(DocumentTypes.Notes).create();
-    contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
+    booksNoKey = this.dbset().default<IBook>(DocumentTypes.BooksNoKey).exclude("status", "rejectedCount").keys(w => w.none()).create();
+    notes = this.dbset().default<INote>(DocumentTypes.Notes).create();
+    contacts = this.dbset().default<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
     booksV3 = this._setupSyncDbSet<IBookV3>(DocumentTypes.BooksV3).create();
     booksV4 = this._setupSyncDbSet<IBookV3>(DocumentTypes.BooksV4).extend((Instance, props) => {
         return new class extends Instance {
@@ -80,12 +80,12 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
             }
         }
     }).create();
-    cars = this.dbset<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
-    preference = this.dbset<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
-    preferencev2 = this.dbset<IPreference>(DocumentTypes.PreferenceV2).keys(w => w.add(() => "")).create();
-    readonlyPreference = this.dbset<IPreference>(DocumentTypes.ReadonlyPreference).keys(w => w.add(_ => "static")).readonly().create();
+    cars = this.dbset().default<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
+    preference = this.dbset().default<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
+    preferencev2 = this.dbset().default<IPreference>(DocumentTypes.PreferenceV2).keys(w => w.add(() => "")).create();
+    readonlyPreference = this.dbset().default<IPreference>(DocumentTypes.ReadonlyPreference).keys(w => w.add(_ => "static")).readonly().create();
 
-    overrideContactsV2 = this.dbset<IContact>(DocumentTypes.OverrideContactsV2).keys(w => w.add("firstName").add("lastName")).extend((Instance, props) => {
+    overrideContactsV2 = this.dbset().default<IContact>(DocumentTypes.OverrideContactsV2).keys(w => w.add("firstName").add("lastName")).extend((Instance, props) => {
         return new class extends Instance {
             constructor() {
                 super(props)
@@ -97,7 +97,7 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
         }
     }).create();
 
-    overrideContactsV3 = this.dbset<IContact>(DocumentTypes.OverrideContactsV3).keys(w => w.add("firstName").add("lastName")).extend((Instance, props) => {
+    overrideContactsV3 = this.dbset().default<IContact>(DocumentTypes.OverrideContactsV3).keys(w => w.add("firstName").add("lastName")).extend((Instance, props) => {
         return new class extends Instance {
             constructor() {
                 super(props)
@@ -119,22 +119,25 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
         }
     }).create();
 
-    booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
-    booksWithDefaultsV2 = this.dbset<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
+    booksWithDefaults = this.dbset().default<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").defaults({ status: "pending", rejectedCount: 0 }).create();
+    booksWithDefaultsV2 = this.dbset().default<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
         return new class extends Instance {
             constructor() {
                 super(props)
             }
         }
     }).defaults({ status: "pending", rejectedCount: 0 }).create();
-    booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
-    booksNoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithNoDefaults).exclude("status", "rejectedCount").create();
+    booksWithTwoDefaults = this.dbset().default<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").defaults({ add: { status: "pending", rejectedCount: 0 }, retrieve: { status: "approved", rejectedCount: -1 } }).create();
+    booksNoDefaults = this.dbset().default<IBook>(DocumentTypes.BooksWithNoDefaults).exclude("status", "rejectedCount").create();
 
-    booksWithIndex = this.dbset<IBook>(DocumentTypes.BooksWithIndex).exclude("status", "rejectedCount").useIndex('some-default-index').create();
+    booksWithIndex = this.dbset().default<IBook>(DocumentTypes.BooksWithIndex).exclude("status", "rejectedCount").useIndex('some-default-index').create();
 
 
 
-    notesWithMapping = this.dbset<INote>(DocumentTypes.NotesWithMapping).map({ property: "createdDate", map: w => new Date(w) }).create();
+    notesWithMapping = this.dbset().default<INote>(DocumentTypes.NotesWithMapping).map({ property: "createdDate", map: w => new Date(w) }).create();
+
+    splitComputers = this.dbset().split<DocumentTypes, INoteV2, ISplitComputer>(DocumentTypes.SplitComputers).keys(w => w.auto()).create();
+    splitBooks = this.dbset().unmanagedSplit<DocumentTypes, INoteV2, ISplitBook>(DocumentTypes.SplitBooks).keys(w => w.auto()).create();
 }
 
 export class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
@@ -143,8 +146,8 @@ export class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
         super(name);
     }
 
-    booksWithDefaults = this.dbset<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").create();
-    booksWithDefaultsV2 = this.dbset<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
+    booksWithDefaults = this.dbset().default<IBook>(DocumentTypes.BooksWithDefaults).exclude("status", "rejectedCount").create();
+    booksWithDefaultsV2 = this.dbset().default<IBook>(DocumentTypes.BooksWithDefaultsV2).exclude("status", "rejectedCount").extend((Instance, props) => {
         return new class extends Instance {
             constructor() {
                 super(props)
@@ -160,7 +163,7 @@ export class BooksWithTwoDefaultContext extends DataContext<DocumentTypes> {
         super(name);
     }
 
-    booksWithTwoDefaults = this.dbset<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").create();
+    booksWithTwoDefaults = this.dbset().default<IBook>(DocumentTypes.BooksWithTwoDefaults).exclude("status", "rejectedCount").create();
 }
 
 export class DbContextFactory {

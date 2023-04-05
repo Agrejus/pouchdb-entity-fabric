@@ -11,8 +11,13 @@ export interface IDbRecord<TDocumentType extends string> extends IDbAdditionReco
 export const SplitDocumentPathPropertyName = "referencePath";
 export const SplitDocumentDocumentPropertyName = "reference";
 export interface ISplitDbRecord<TDocumentType extends string, TReferenceDocumentType extends string, TReferenceEntity extends IDbRecord<TReferenceDocumentType>> extends IDbRecord<TDocumentType> {
-    [SplitDocumentPathPropertyName]: PouchDbReference;
-    [SplitDocumentDocumentPropertyName]: TReferenceEntity;
+    referencePath: PouchDbReference;
+    reference: TReferenceEntity;
+}
+
+export interface IUnmanagedSplitDbRecord<TDocumentType extends string, TReferenceDocumentType extends string, TReferenceEntity extends IDbRecord<TReferenceDocumentType>> extends IDbRecord<TDocumentType> {
+    referencePath?: PouchDbReference;
+    reference?: TReferenceEntity;
 }
 
 export interface IDbAdditionRecord<TDocumentType extends string> {

@@ -1,6 +1,6 @@
-import { PropertyMap, DbSetKeyType } from "../context/dbset/DbSetBuilder";
 import { IQueryParams, DeepPartial, DbSetPickDefaultActionRequired } from "./common-types";
 import { ITrackedData, IDataContext } from "./context-types";
+import { DbSetKeyType, ISplitDbSetOptions, PropertyMap } from "./dbset-builder-types";
 import { IDbRecord, OmittedEntity, IDbRecordBase, EntityIdKeys } from "./entity-types";
 
 export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> extends IDbSetBase<TDocumentType> {
@@ -160,6 +160,7 @@ export interface IDbSetInfo<TDocumentType extends string, TEntity extends IDbRec
     KeyType: DbSetKeyType;
     Map: PropertyMap<TDocumentType, TEntity, any>[];
     Readonly: boolean;
+    SplitDbSetOptions: ISplitDbSetOptions;
 }
 
 export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> {
@@ -169,11 +170,9 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     idKeys: EntityIdKeys<TDocumentType, TEntity>;
     readonly: boolean;
     keyType: DbSetKeyType;
-    events: { [key in DbSetEvent]: (DbSetEventCallback<TDocumentType, TEntity> | DbSetIdOnlyEventCallback)[] };
-    asyncEvents: { [key in DbSetAsyncEvent]: (DbSetEventCallbackAsync<TDocumentType, TEntity> | DbSetIdOnlyEventCallbackAsync)[] };
     map: PropertyMap<TDocumentType, TEntity, any>[];
     index: string | null;
-    isSplitDbSet: boolean;
+    splitDbSetOptions: ISplitDbSetOptions;
 }
 
 export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity) => void;
@@ -181,6 +180,3 @@ export type DbSetIdOnlyEventCallback = (entity: string) => void;
 
 export type DbSetEventCallbackAsync<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entities: TEntity[]) => Promise<void>;
 export type DbSetIdOnlyEventCallbackAsync = (entities: string[]) => Promise<void>;
-
-export type DbSetEvent = "add" | "remove";
-export type DbSetAsyncEvent = "add-invoked" | "remove-invoked";

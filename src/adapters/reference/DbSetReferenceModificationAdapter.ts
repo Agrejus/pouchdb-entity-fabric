@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createDocumentReference } from '../../common/LinkedDatabase';
 import { IDbSetIndexAdapter } from '../../types/adapter-types';
 
-interface Transaction  { transactionId: string, isUse: boolean }
+interface Transaction { transactionId: string, isUse: boolean }
 
 export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>  {
 
@@ -78,21 +78,25 @@ export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEn
                 throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
 
-            if (!!indexableEntity[SplitDocumentDocumentPropertyName]["_id"] || !!indexableEntity[SplitDocumentDocumentPropertyName]["_rev"] || !!indexableEntity[SplitDocumentDocumentPropertyName]["DocumentType"]) {
-                throw new Error('Reference entity cannot have an _id, _rev, or DocumentType when adding')
+            if (this.splitDbSetOptions.isManaged === true) {
+                if (!!indexableEntity[SplitDocumentDocumentPropertyName]["_id"] || !!indexableEntity[SplitDocumentDocumentPropertyName]["_rev"] || !!indexableEntity[SplitDocumentDocumentPropertyName]["DocumentType"]) {
+                    throw new Error('Reference entity cannot have an _id, _rev, or DocumentType when adding')
+                }
             }
 
             const processedEntity = this.processAddition(entity) as IIndexableEntity;
 
-            // attach id and document type to reference
-            processedEntity[SplitDocumentDocumentPropertyName] = {
-                ...indexableEntity[SplitDocumentDocumentPropertyName],
-                _id: this._createReferenceDocumentId(),
-                DocumentType: this._getReferenceDocumentType
-            };
+            if (this.splitDbSetOptions.isManaged === true) {
+                // attach id and document type to reference
+                processedEntity[SplitDocumentDocumentPropertyName] = {
+                    ...indexableEntity[SplitDocumentDocumentPropertyName],
+                    _id: this._createReferenceDocumentId(),
+                    DocumentType: this._getReferenceDocumentType
+                };
 
-            // create link to document
-            processedEntity[SplitDocumentPathPropertyName] = createDocumentReference(indexableEntity[SplitDocumentDocumentPropertyName], currentTransaction);
+                // create link to document
+                processedEntity[SplitDocumentPathPropertyName] = createDocumentReference(indexableEntity[SplitDocumentDocumentPropertyName], currentTransaction);
+            }
 
             const trackableEntity = this.api.makeTrackable(processedEntity, this.defaults.add, this.isReadonly, this.map) as TEntity;
 

@@ -3,7 +3,6 @@ import findAdapter from 'pouchdb-find';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { AdvancedDictionary } from "../common/AdvancedDictionary";
 import { cache } from "../cache/ContextCache";
-import { PropertyMap, DbSetBuilder } from "./dbset/DbSetBuilder";
 import { IIndexApi, IndexApi } from "../indexing/IndexApi";
 import { CacheKeys } from "../types/cache-types";
 import { DeepPartial, IPreviewChanges, IPurgeResponse } from "../types/common-types";
@@ -13,6 +12,8 @@ import { IDbRecordBase, OmittedEntity, IIndexableEntity, IDbRecord, ISplitDbReco
 import { PouchDbInteractionBase } from "./PouchDbInteractionBase";
 import { parseDocumentReference } from '../common/LinkedDatabase';
 import { AsyncCache } from '../cache/AsyncCache';
+import { PropertyMap } from '../types/dbset-builder-types';
+import { DbSetInitializer } from './dbset/builders/DbSetInitializer';
 
 PouchDB.plugin(findAdapter);
 PouchDB.plugin(memoryAdapter);
@@ -29,8 +30,8 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
-    private _hasReferenceDbSet: boolean = false;
     private _asyncCache: AsyncCache = new AsyncCache();
+    private _hasSplitDbSet: boolean | null = null;
 
     $indexes: IIndexApi;
 
@@ -304,7 +305,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     private async _getModifications() {
         const { add, remove, removeById, updated } = this._getPendingChanges();
 
-        const extraRemovals = await this.getStrict(...removeById);
+        const extraRemovals = await this.getStrict(undefined, ...removeById);
 
         return {
             add,
@@ -364,6 +365,24 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         return false;
     }
 
+    private _getHasSplitDbSet() {
+
+        if (this._hasSplitDbSet != null) {
+            return this._hasSplitDbSet;
+        }
+
+        for (const dbset of this) {
+            if ((dbset as IDbSet<TDocumentType, any>).info().SplitDbSetOptions.enabled === true) {
+                this._hasSplitDbSet = true;
+                return true
+            }
+        }
+
+        this._hasSplitDbSet = false;
+
+        return false;
+    }
+
     async saveChanges() {
         try {
             const { add, remove, updated } = await this._getModifications();
@@ -371,23 +390,42 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             // Process removals first, so we can remove items first and then add.  Just
             // in case are are trying to remove and add the same Id
             const modifications = [...remove, ...add, ...updated];
+            const remappings: { [key: string]: { reference: IDbRecordBase, parent: IDbRecordBase } } = {}
 
-            if (this._hasReferenceDbSet === true) {
+            if (this._getHasSplitDbSet() === true) {
+
                 const referenceModifications: { [key: string]: { hasRemovals: boolean, documents: IDbRecordBase[] } } = {};
 
                 if (modifications.length > 0) {
                     // keep the path and tear off the references
                     for (const item of modifications) {
+
+                        const dbSet = this._dbSets[item.DocumentType] as IDbSet<TDocumentType, any>;
+
+                        if (dbSet.info().SplitDbSetOptions.enabled === false) {
+                            // Skip changes on disabled db sets
+                            continue;
+                        }
+
                         const castedItem = (item as ISplitDbRecord<TDocumentType, any, any>);
                         const document = castedItem[SplitDocumentDocumentPropertyName] as IDbRecordBase;
                         const referencePath = castedItem[SplitDocumentPathPropertyName] as string;
 
+                        remappings[item._id] = { parent: item, reference: document }
+
                         const reference = parseDocumentReference(referencePath)
                         const isDeletion = "_deleted" in castedItem
+
+                        if (dbSet.info().SplitDbSetOptions.isManaged === false) {
+                            // Skip changes on dbset if unmanaged
+                            delete castedItem[SplitDocumentDocumentPropertyName];
+                            continue;
+                        }
 
                         if (isDeletion) {
                             delete castedItem[SplitDocumentPathPropertyName];
                         }
+
                         delete castedItem[SplitDocumentDocumentPropertyName];
 
                         if (!referenceModifications[reference.databaseName]) {
@@ -445,6 +483,11 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                     const indexableEntity = modification as IIndexableEntity;
                     indexableEntity._rev = found.rev;
 
+                    // Remap Reference because we deleted it on save
+                    if (remappings[indexableEntity._id]) {
+                        (remappings[indexableEntity._id].parent as ISplitDbRecord<any, any, any>).reference = remappings[indexableEntity._id].reference
+                    }
+
                     // make pristine again because we set the _rev above
                     this._makePristine(modification);
                 }
@@ -467,28 +510,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional
-     * @param documentType Document Type for the entity
-     * @returns {DbSetBuilder}
+     * @returns {DbSetInitializer}
      */
-    protected dbset<TEntity extends IDbRecord<TDocumentType>>(documentType: TDocumentType) {
-        return new DbSetBuilder<TDocumentType, TEntity, never, IDbSet<TDocumentType, TEntity>>(this._addDbSet.bind(this), {
-            documentType,
-            context: this,
-            readonly: false,
-            isSplitDbSet: false
-        });
-    }
-
-    protected splitDbSet<TSplitDocumentType extends string, TSplitEntity extends IDbRecord<TSplitDocumentType>, TEntity extends ISplitDbRecord<TDocumentType, TSplitDocumentType, TSplitEntity>>(documentType: TDocumentType) {
-
-        this._hasReferenceDbSet = true;
-
-        return new DbSetBuilder<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType", IDbSet<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType">>(this._addDbSet.bind(this), {
-            documentType,
-            context: this,
-            readonly: false,
-            isSplitDbSet: true
-        });
+    protected dbset(): DbSetInitializer<TDocumentType> {
+        return new DbSetInitializer<TDocumentType>(this._addDbSet.bind(this), this);
     }
 
     async query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>) {

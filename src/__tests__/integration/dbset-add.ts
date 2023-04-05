@@ -1,5 +1,7 @@
 import { BooksWithTwoDefaultContext, DbContextFactory, PouchDbDataContext } from "../../../test-helpers/context";
 import { DocumentTypes } from "../../../test-helpers/types";
+import { parseDocumentReference } from "../../common/LinkedDatabase";
+import PouchDB from 'pouchdb';
 
 describe('DbSet Add Tests', () => {
 
@@ -476,5 +478,135 @@ describe('DbSet Add Tests', () => {
         } catch (e) {
             expect(e).not.toBeDefined()
         }
+    });
+
+    it('should create split record and have no reference', async () => {
+        const dbName = contextFactory.getRandomDbName();
+        const context = contextFactory.createContext(PouchDbDataContext, dbName);
+
+        const [added] = await context.splitComputers.add({
+            cores: 1,
+            name: "some pc",
+            reference: {
+                contents: "Some Note",
+                createdDate: "some date",
+                userId: "jdemeuse"
+            }
+        });
+
+        await context.saveChanges();
+
+        expect(added.reference).toBeDefined();
+        expect(added.referencePath).toBeDefined();
+
+        const reference = parseDocumentReference(added.referencePath)
+
+        const db = new PouchDB(dbName);
+        const doc: any = await db.get(added._id);
+
+        expect(doc.reference).not.toBeDefined();
+        expect(doc.referencePath).toBeDefined();
+
+        const refDb = new PouchDB(reference?.databaseName);
+        const refDoc = await refDb.get(reference?.selector?.value ?? "");
+
+        expect(refDoc._id).toBe(reference?.selector?.value)
+    });
+
+    it('should create split record and the unmanaged record should not have a reference to it', async () => {
+        const dbName = contextFactory.getRandomDbName();
+        const context = contextFactory.createContext(PouchDbDataContext, dbName);
+
+        const [added] = await context.splitComputers.add({
+            cores: 1,
+            name: "some pc",
+            reference: {
+                contents: "Some Note",
+                createdDate: "some date",
+                userId: "jdemeuse"
+            }
+        });
+
+        await context.saveChanges();
+
+        const [addedBook] = await context.splitBooks.add({
+            author: "James",
+            rejectedCount: 1,
+            status: "approved",
+            publishDate: "some date",
+            referencePath: added.referencePath
+        });
+
+        await context.saveChanges();
+
+        expect(addedBook.reference).not.toBeDefined();
+        expect(addedBook.referencePath).toBeDefined();
+
+        const foundBook = await context.splitBooks.find(w => w._id === addedBook._id);
+
+        expect(foundBook?.reference).toBeDefined();
+        expect(foundBook?.referencePath).toBeDefined();
+
+        const db = new PouchDB(dbName);
+        const doc: any = await db.get(foundBook!._id);
+
+        expect(doc.reference).not.toBeDefined();
+        expect(doc.referencePath).toBeDefined();
+
+        const reference = parseDocumentReference(addedBook.referencePath!)
+
+        const refDb = new PouchDB(reference?.databaseName);
+        const refDoc = await refDb.get(reference?.selector?.value ?? "");
+
+        expect(refDoc._id).toBe(reference?.selector?.value)
+    });
+
+    it('should create split record and the unmanaged record should not have a reference to it and should save properly', async () => {
+        const dbName = contextFactory.getRandomDbName();
+        const context = contextFactory.createContext(PouchDbDataContext, dbName);
+
+        const [added] = await context.splitComputers.add({
+            cores: 1,
+            name: "some pc",
+            reference: {
+                contents: "Some Note",
+                createdDate: "some date",
+                userId: "jdemeuse"
+            }
+        });
+
+        await context.saveChanges();
+
+        const [addedBook] = await context.splitBooks.add({
+            author: "James",
+            rejectedCount: 1,
+            status: "approved",
+            publishDate: "some date",
+            referencePath: added.referencePath
+        });
+
+        await context.saveChanges();
+
+        const foundBook = await context.splitBooks.find(w => w._id === addedBook._id);
+
+        foundBook!.author = "Megan";
+
+        await context.saveChanges();
+
+        expect(foundBook?.reference).toBeDefined();
+        expect(foundBook?.referencePath).toBeDefined();
+
+        const db = new PouchDB(dbName);
+        const doc: any = await db.get(foundBook!._id);
+
+        expect(doc.reference).not.toBeDefined();
+        expect(doc.referencePath).toBeDefined();
+
+        const reference = parseDocumentReference(addedBook.referencePath!)
+
+        const refDb = new PouchDB(reference?.databaseName);
+        const refDoc = await refDb.get(reference?.selector?.value ?? "");
+
+        expect(refDoc._id).toBe(reference?.selector?.value)
     });
 });

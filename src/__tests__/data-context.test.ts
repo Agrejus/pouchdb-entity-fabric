@@ -60,9 +60,9 @@ describe('data context', () => {
             await this.saveChanges();
         }
 
-        notes = this.dbset<INote>(DocumentTypes.Notes).create();
-        contacts = this.dbset<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
-        books = this.dbset<IBook>(DocumentTypes.Books).exclude("status").create();
+        notes = this.dbset().default<INote>(DocumentTypes.Notes).create();
+        contacts = this.dbset().default<IContact>(DocumentTypes.Contacts).keys(w => w.add("firstName").add("lastName")).create();
+        books = this.dbset().default<IBook>(DocumentTypes.Books).exclude("status").create();
     }
 
     class CreateDbOverrideContext extends PouchDbDataContext {
@@ -457,7 +457,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ contents: "some contents" });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ contents: "some contents" });
         }
 
         const context = dbFactory(FluentContext) as FluentContext;
@@ -473,7 +473,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -489,7 +489,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -505,7 +505,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" }, add: { contents: "other contents" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" }, add: { contents: "other contents" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -522,7 +522,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ contents: "some contents", createdDate: date, userId: "jdemeuse" });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ contents: "some contents", createdDate: date, userId: "jdemeuse" });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -539,7 +539,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -556,7 +556,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents", createdDate: date, userId: "jdemeuse" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -573,7 +573,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ contents: "some contents" }).defaults({ createdDate: date }).defaults({ userId: "jdemeuse" });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ contents: "some contents" }).defaults({ createdDate: date }).defaults({ userId: "jdemeuse" });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -590,7 +590,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } }).defaults({ add: { createdDate: date } }).defaults({ add: { userId: "jdemeuse" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } }).defaults({ add: { createdDate: date } }).defaults({ add: { userId: "jdemeuse" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -607,7 +607,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" } }).defaults({ retrieve: { createdDate: date } }).defaults({ retrieve: { userId: "jdemeuse" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ retrieve: { contents: "some contents" } }).defaults({ retrieve: { createdDate: date } }).defaults({ retrieve: { userId: "jdemeuse" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -624,7 +624,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } }).defaults({ add: { userId: "other" } }).defaults({ retrieve: { createdDate: date } }).defaults({ retrieve: { userId: "jdemeuse" } });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).defaults({ add: { contents: "some contents" } }).defaults({ add: { userId: "other" } }).defaults({ retrieve: { createdDate: date } }).defaults({ retrieve: { userId: "jdemeuse" } });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -640,7 +640,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).exclude("contents");
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).exclude("contents");
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -656,7 +656,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).exclude("contents", "createdDate");
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).exclude("contents", "createdDate");
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -672,7 +672,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).exclude("contents").exclude("createdDate");
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).exclude("contents").exclude("createdDate");
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -688,7 +688,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).keys(w => w.add("contents"));
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).keys(w => w.add("contents"));
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -704,7 +704,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).keys(w => w.add("contents").add("userId"));
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).keys(w => w.add("contents").add("userId"));
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -720,7 +720,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).keys(w => w.add("contents")).keys(w => w.add("userId"));
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).keys(w => w.add("contents")).keys(w => w.add("userId"));
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -736,7 +736,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).on("add", _ => { });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).on("add", _ => { });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -752,7 +752,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).on("add", _ => { }).on("remove", _ => { });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).on("add", _ => { }).on("remove", _ => { });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -769,7 +769,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.Notes).on("add", _ => { }).on("add", _ => { }).on("remove", _ => { }).on("remove", _ => { }).on("remove", _ => { });
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).on("add", _ => { }).on("add", _ => { }).on("remove", _ => { }).on("remove", _ => { }).on("remove", _ => { });
         }
 
         const context = dbFactory(FluentContext) as FluentContext
@@ -786,7 +786,7 @@ describe('data context', () => {
                 super(name);
             }
 
-            dbsetTest = this.dbset<INote>(DocumentTypes.NotesTest).create();
+            dbsetTest = this.dbset().default<INote>(DocumentTypes.NotesTest).create();
         }
 
         const context = dbFactory(FluentContext) as FluentContext

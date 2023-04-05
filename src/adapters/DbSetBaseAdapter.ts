@@ -3,13 +3,12 @@ import findAdapter from 'pouchdb-find';
 
 PouchDB.plugin(findAdapter);
 
-
-import { DbSetKeyType, PropertyMap } from '../context/dbset/DbSetBuilder';
 import { v4 as uuidv4 } from 'uuid';
 import { EntityIdKeys, IDbRecord, IIndexableEntity } from '../types/entity-types';
 import { DbSetPickDefaultActionRequired, DocumentKeySelector, EntitySelector } from '../types/common-types';
 import { IPrivateContext } from '../types/context-types';
 import { IDbSetApi, IDbSetProps } from '../types/dbset-types';
+import { DbSetKeyType, ISplitDbSetOptions, PropertyMap } from '../types/dbset-builder-types';
 
 export abstract class DbSetBaseAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> {
 
@@ -21,7 +20,7 @@ export abstract class DbSetBaseAdapter<TDocumentType extends string, TEntity ext
     protected isReadonly: boolean;
     protected keyType: DbSetKeyType;
     protected map: PropertyMap<TDocumentType, TEntity, any>[];
-    protected isReferenceDbSet: boolean;
+    protected splitDbSetOptions: ISplitDbSetOptions;
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>) {
         this.documentType = props.documentType;
@@ -31,7 +30,7 @@ export abstract class DbSetBaseAdapter<TDocumentType extends string, TEntity ext
         this.isReadonly = props.readonly;
         this.keyType = props.keyType;
         this.map = props.map;
-        this.isReferenceDbSet = props.isSplitDbSet
+        this.splitDbSetOptions = props.splitDbSetOptions
 
         this.api = this.context._getApi();
     }

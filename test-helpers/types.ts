@@ -1,4 +1,4 @@
-import { IDbRecord } from "../src/types/entity-types";
+import { IDbRecord, ISplitDbRecord, IUnmanagedSplitDbRecord } from "../src/types/entity-types";
 
 export enum DocumentTypes {
     Notes = "Notes",
@@ -25,6 +25,9 @@ export enum DocumentTypes {
     BooksWithIndex = "BooksWithIndex",
 
     Computers = "Computers",
+
+    SplitComputers = "SplitComputers",
+    SplitBooks = "SplitBooks",
 }
 
 export interface IContact extends IDbRecord<DocumentTypes> {
@@ -45,6 +48,13 @@ export interface INote extends IDbRecord<DocumentTypes> {
     createdDate: Date;
     userId: string;
 }
+
+export interface INoteV2 extends IDbRecord<DocumentTypes> {
+    contents: string;
+    createdDate: string;
+    userId: string;
+}
+
 
 export interface IBook extends IDbRecord<DocumentTypes> {
     author: string;
@@ -88,4 +98,17 @@ export interface IBookV3 extends ISyncDocument<DocumentTypes> {
     author: string;
     publishDate?: Date;
     rejectedCount: number;
+}
+
+export interface ISplitComputer extends ISplitDbRecord<DocumentTypes, DocumentTypes, INoteV2> {
+    name: string;
+    cores: number;
+    keyboard?: string;
+}
+
+export interface ISplitBook extends IUnmanagedSplitDbRecord<DocumentTypes, DocumentTypes, INoteV2> {
+    author: string;
+    publishDate?: string;
+    rejectedCount: number;
+    status: "pending" | "approved" | "rejected";
 }

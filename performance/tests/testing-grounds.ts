@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { performance } from "perf_hooks";
 import PouchDB from "pouchdb";
 import { DataContext } from "../../src/context/DataContext";
-import { IDbRecord, ISplitDbRecord } from "../../src/types/entity-types";
+import { IDbRecord, ISplitDbRecord, IUnmanagedSplitDbRecord, SplitDocumentPathPropertyName } from "../../src/types/entity-types";
 
 enum DocumentTypes {
     Notes = "Notes",
@@ -11,14 +11,6 @@ enum DocumentTypes {
     Books = "Books",
     Cars = "Cars",
     Preference = "Preference"
-}
-
-
-interface ICar extends IDbRecord<DocumentTypes> {
-    make: string;
-    model: string;
-    year: number;
-    manufactureDate: Date;
 }
 
 interface IPreference extends IDbRecord<DocumentTypes> {
@@ -108,6 +100,14 @@ interface IBook extends ISplitDbRecord<DocumentTypes, DocumentTypes, INote> {
     status: "pending" | "approved" | "rejected";
 }
 
+interface ICar extends IUnmanagedSplitDbRecord<DocumentTypes, DocumentTypes, INote> {
+    make: string;
+    model: string;
+    year: number;
+    manufactureDate: string;
+}
+
+
 class PouchDbDataContext extends DataContext<DocumentTypes> {
 
     // constructor() {
@@ -117,7 +117,11 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
         super(`test-db`);
     }
 
-    books = this.splitDbSet<DocumentTypes, INote, IBook>(DocumentTypes.Books)
+    books = this.dbset().split<DocumentTypes, INote, IBook>(DocumentTypes.Books)
+        .keys(w => w.auto())
+        .create();
+
+    cars = this.dbset().unmanagedSplit<DocumentTypes, INote, ICar>(DocumentTypes.Cars)
         .keys(w => w.auto())
         .create();
 }
@@ -126,18 +130,32 @@ export const run = async () => {
     try {
 
         const context = new PouchDbDataContext();
-        // const [added] = await context.books.add({
-        //     author: "James",
-        //     reference: {
-        //         contents: "Note Contents",
-        //         createdDate: "some date",
-        //         userId: "some user id"
-        //     },
-        //     rejectedCount: 1,
-        //     status: "pending"
-        // })
+        const [added] = await context.books.add({
+            author: "James",
+            reference: {
+                contents: "Note Contents",
+                createdDate: "some date",
+                userId: "some user id"
+            },
+            rejectedCount: 1,
+            status: "pending"
+        });
+        const [addedCar] = await context.cars.add({
+            make: "some make",
+            model: "some model",
+            manufactureDate: "date",
+            year: 1,
+            referencePath: added.referencePath
+        })
 
-        // await context.saveChanges();
+        await context.saveChanges();
+
+        const book = await context.books.find(w => w._id === added._id);
+        const car = await context.cars.find(w => w._id === addedCar._id);
+
+        const all = await context.getAllDocs();
+        debugger;
+        console.log(book, car, all)
 
         const [found] = await context.books.filter(w => w._id === ""
             && (w.DocumentType === DocumentTypes.Books || w.author === "James" || (w.status === "approved" || w.author === "Megan"))
