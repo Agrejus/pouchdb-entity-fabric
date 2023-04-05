@@ -305,7 +305,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     private async _getModifications() {
         const { add, remove, removeById, updated } = this._getPendingChanges();
 
-        const extraRemovals = await this.getStrict(undefined, ...removeById);
+        const extraRemovals = await this.getStrict(...removeById);
 
         return {
             add,

@@ -57,13 +57,9 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
         .map({ property: "publishDate", map: w => !!w ? new Date(w) : undefined })
         .map({ property: "createdDate", map: w => new Date(w) })
         .create();
-    booksWithOn = this.dbset().default<IBook>(DocumentTypes.BooksWithOn).exclude("status", "rejectedCount").on("add", entity => {
-        entity.status = "pending";
-    }).create();
+    booksWithOn = this.dbset().default<IBook>(DocumentTypes.BooksWithOn).exclude("status", "rejectedCount").create();
 
-    booksWithOnV2 = this.dbset().default<IBook>(DocumentTypes.BooksWithOnV2).exclude("status", "rejectedCount").on("add-invoked", async entities => {
-        entities.forEach(w => w.status = "pending")
-    }).create();
+    booksWithOnV2 = this.dbset().default<IBook>(DocumentTypes.BooksWithOnV2).exclude("status", "rejectedCount").create();
 
     booksNoKey = this.dbset().default<IBook>(DocumentTypes.BooksNoKey).exclude("status", "rejectedCount").keys(w => w.none()).create();
     notes = this.dbset().default<INote>(DocumentTypes.Notes).create();

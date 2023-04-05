@@ -149,8 +149,9 @@ export const run = async () => {
         })
 
         await context.saveChanges();
-
-        const book = await context.books.find(w => w._id === added._id);
+debugger;
+        const book = await context.books.withoutReference().find(w => w._id === added._id);
+        const book2 = await context.books.find(w => w._id === added._id);
         const car = await context.cars.find(w => w._id === addedCar._id);
 
         const all = await context.getAllDocs();

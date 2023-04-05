@@ -31,6 +31,14 @@ export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends 
     first(): Promise<TEntity | undefined>;
 }
 
+export interface ISplitDbSet<
+    TDocumentType extends string,
+    TEntity extends IDbRecord<TDocumentType>,
+    TExtraExclusions extends string = never,
+> extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
+    withoutReference(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+}
+
 export interface IDbSet<
     TDocumentType extends string,
     TEntity extends IDbRecord<TDocumentType>,
@@ -57,7 +65,7 @@ export interface IDbSet<
      * @returns {Promise<TEntity[]>}
      */
     get(...ids: string[]): Promise<TEntity[]>;
-    
+
     /**
      * Add one or more entities from the underlying data context, saveChanges must be called to persist these items to the store
      * @param entities Entity or entities to add to the data context
@@ -141,7 +149,7 @@ export interface IDbSetBase<TDocumentType extends string> {
 export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (payload?: IQueryParams<TDocumentType>) => Promise<IDbRecordBase[]>;
-    find: (selector: PouchDB.Find.FindRequest<{}>)  => Promise<IDbRecordBase[]>;
+    find: (selector: PouchDB.Find.FindRequest<{}>) => Promise<IDbRecordBase[]>;
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[]) => void;

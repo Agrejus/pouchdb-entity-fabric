@@ -8,10 +8,13 @@ import { DocumentReference } from '../../types/common-types';
 
 export class DbSetReferenceFetchAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions>  {
 
+    private _withoutReference: boolean = false;
+
     constructor(props: IDbSetProps<TDocumentType, TEntity>, indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>) {
         super(props, indexAdapter);
     }
 
+    
     private async _getMany(databaseName: string, ...ids: string[]) {
         const database = new PouchDB(databaseName);
 
@@ -22,7 +25,17 @@ export class DbSetReferenceFetchAdapter<TDocumentType extends string, TEntity ex
         return response.docs as IDbRecordBase[];
     }
 
+    setNextWithoutReference() {
+        this._withoutReference = true;
+    }
+
     protected override async onAfterDataFetched(data: TEntity[]) {
+
+        if (this._withoutReference === true) {
+            this._withoutReference = false;
+            return;
+        }
+        
         const documentsWithReferences = data.filter(w => !!(w as any)[SplitDocumentPathPropertyName]);
         const documentReferenceMap: { [key: string]: DocumentReference } = {};
         const referenceModifications: { [key: string]: string[] } = {};

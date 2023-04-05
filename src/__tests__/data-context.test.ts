@@ -728,56 +728,6 @@ describe('data context', () => {
         expect((context.dbsetTest as any)._idKeys).toEqual(["contents", "userId"]);
     });
 
-    it('should add event using fluent dbset builder', async () => {
-
-        class FluentContext extends PouchDbDataContext {
-
-            constructor(name: string) {
-                super(name);
-            }
-
-            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).on("add", _ => { });
-        }
-
-        const context = dbFactory(FluentContext) as FluentContext
-
-        expect((context.dbsetTest as any)._events["add"].length).toBe(1);
-    });
-
-    it('should add event of each type using fluent dbset builder', async () => {
-
-        class FluentContext extends PouchDbDataContext {
-
-            constructor(name: string) {
-                super(name);
-            }
-
-            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).on("add", _ => { }).on("remove", _ => { });
-        }
-
-        const context = dbFactory(FluentContext) as FluentContext
-
-        expect((context.dbsetTest as any)._events["add"].length).toBe(1);
-        expect((context.dbsetTest as any)._events["remove"].length).toBe(1);
-    });
-
-    it('should add more than one event of each type using fluent dbset builder', async () => {
-
-        class FluentContext extends PouchDbDataContext {
-
-            constructor(name: string) {
-                super(name);
-            }
-
-            dbsetTest = this.dbset().default<INote>(DocumentTypes.Notes).on("add", _ => { }).on("add", _ => { }).on("remove", _ => { }).on("remove", _ => { }).on("remove", _ => { });
-        }
-
-        const context = dbFactory(FluentContext) as FluentContext
-
-        expect((context.dbsetTest as any)._events["add"].length).toBe(2);
-        expect((context.dbsetTest as any)._events["remove"].length).toBe(3);
-    });
-
     it('should create dbset using fluent dbset builder', async () => {
 
         class FluentContext extends PouchDbDataContext {

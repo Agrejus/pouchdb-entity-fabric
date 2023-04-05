@@ -1,7 +1,7 @@
 import { AdapterFactory } from '../../adapters/AdapterFactory';
 import { IDbSetFetchAdapter, IDbSetGeneralAdapter, IDbSetIndexAdapter, IDbSetModificationAdapter } from '../../types/adapter-types';
 import { EntitySelector } from '../../types/common-types';
-import { IDbSet, IDbSetProps, IDbSetEnumerable } from '../../types/dbset-types';
+import { IDbSetProps, IDbSetEnumerable, IDbSet } from '../../types/dbset-types';
 import { IDbRecord, OmittedEntity, IDbRecordBase } from '../../types/entity-types';
 
 /**
@@ -9,10 +9,10 @@ import { IDbRecord, OmittedEntity, IDbRecordBase } from '../../types/entity-type
  */
 export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> implements IDbSet<TDocumentType, TEntity, TExtraExclusions> {
 
-    private readonly _fetchAdapter: IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions>;
-    private readonly _generalAdapter: IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions>;
-    private readonly _indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>;
-    private readonly _modificationAdapter: IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>;
+    protected readonly _fetchAdapter: IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions>;
+    protected readonly _generalAdapter: IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions>;
+    protected readonly _indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>;
+    protected readonly _modificationAdapter: IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>;
 
     /**
      * Constructor

@@ -1,7 +1,8 @@
-import { IDbSet, IDbSetBase } from "../../../types/dbset-types";
+import { IDbSet, ISplitDbSet, IDbSetBase } from "../../../types/dbset-types";
 import { IDbRecord, ISplitDbRecord, IUnmanagedSplitDbRecord } from "../../../types/entity-types";
 import { DataContext } from "../../DataContext";
 import { DefaultDbSetBuilder } from "./DefaultDbSetBuilder";
+import { SplitDbSetBuilder } from "./SplitDbSetBuilder";
 
 export class DbSetInitializer<TDocumentType extends string> {
 
@@ -26,7 +27,7 @@ export class DbSetInitializer<TDocumentType extends string> {
     }
 
     split<TSplitDocumentType extends string, TSplitEntity extends IDbRecord<TSplitDocumentType>, TEntity extends ISplitDbRecord<TDocumentType, TSplitDocumentType, TSplitEntity>>(documentType: TEntity["DocumentType"]) {
-        return new DefaultDbSetBuilder<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType", IDbSet<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType">>(this._onAddDbSet, {
+        return new SplitDbSetBuilder<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType", ISplitDbSet<TDocumentType, TEntity, "referencePath" | "reference._id" | "reference._rev" | "reference.DocumentType">>(this._onAddDbSet, {
             documentType,
             context: this._context,
             readonly: false,
@@ -38,7 +39,7 @@ export class DbSetInitializer<TDocumentType extends string> {
     }
 
     unmanagedSplit<TSplitDocumentType extends string, TSplitEntity extends IDbRecord<TSplitDocumentType>, TEntity extends IUnmanagedSplitDbRecord<TDocumentType, TSplitDocumentType, TSplitEntity>>(documentType: TEntity["DocumentType"]) {
-        return new DefaultDbSetBuilder<TDocumentType, TEntity, "reference" | "reference._id" | "reference._rev" | "reference.DocumentType", IDbSet<TDocumentType, TEntity, "reference" | "reference._id" | "reference._rev" | "reference.DocumentType">>(this._onAddDbSet, {
+        return new SplitDbSetBuilder<TDocumentType, TEntity, "reference" | "reference._id" | "reference._rev" | "reference.DocumentType", ISplitDbSet<TDocumentType, TEntity, "reference" | "reference._id" | "reference._rev" | "reference.DocumentType">>(this._onAddDbSet, {
             documentType,
             context: this._context,
             readonly: false,
