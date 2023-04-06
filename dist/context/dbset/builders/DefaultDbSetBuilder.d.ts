@@ -19,7 +19,6 @@ export declare class DefaultDbSetBuilder<TDocumentType extends string, TEntity e
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>);
     protected _buildParams<T extends string>(): IDbSetBuilderParams<TDocumentType, TEntity, T, any>;
-    protected createBuilderInstance<KDocumentType extends string, KEntity extends IDbRecord<KDocumentType>, KExtraExclusions extends string, KResult extends IDbSet<KDocumentType, KEntity, KExtraExclusions>>(): DefaultDbSetBuilder<KDocumentType, KEntity, KExtraExclusions, KResult>;
     /**
      * Makes all entities returned from the underlying database readonly.  Entities cannot be updates, only adding or removing is available.
      * @returns DbSetBuilder
@@ -64,7 +63,6 @@ export declare class DefaultDbSetBuilder<TDocumentType extends string, TEntity e
      */
     useIndex(name: string): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult, args: IDbSetProps<TDocumentType, TEntity>) => TExtension): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>;
-    protected createDbSetInstance(Initializer: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult): any;
     /**
      * Must call to fully create the DbSet.
      * @returns new DbSet

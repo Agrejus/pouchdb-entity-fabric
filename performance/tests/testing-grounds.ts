@@ -119,6 +119,7 @@ class PouchDbDataContext extends DataContext<DocumentTypes> {
 
     books = this.dbset().split<DocumentTypes, INote, IBook>(DocumentTypes.Books)
         .keys(w => w.auto())
+        .exclude('t')
         .create();
 
     cars = this.dbset().unmanagedSplit<DocumentTypes, INote, ICar>(DocumentTypes.Cars)

@@ -38,15 +38,12 @@ class DefaultDbSetBuilder {
         };
         return params;
     }
-    createBuilderInstance() {
-        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
-    }
     /**
      * Makes all entities returned from the underlying database readonly.  Entities cannot be updates, only adding or removing is available.
      * @returns DbSetBuilder
      */
     readonly() {
-        return this.createBuilderInstance();
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
      * Fluent API for building the documents key.  Key will be built in the order
@@ -59,7 +56,7 @@ class DefaultDbSetBuilder {
         builder(idBuilder);
         this._idKeys.push(...idBuilder.Ids);
         this._keyType = idBuilder.KeyType;
-        return this.createBuilderInstance();
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
     defaults(value) {
         if ("add" in value) {
@@ -71,7 +68,7 @@ class DefaultDbSetBuilder {
         if (!("retrieve" in value) && !("add" in value)) {
             this._defaults = Object.assign(Object.assign({}, this._defaults), { add: Object.assign(Object.assign({}, this._defaults.add), value), retrieve: Object.assign(Object.assign({}, this._defaults.retrieve), value) });
         }
-        return this.createBuilderInstance();
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
      * Exclude properties from the DbSet.add(). This is useful for defaults.  Properties can be excluded
@@ -82,11 +79,11 @@ class DefaultDbSetBuilder {
      */
     exclude(...exclusions) {
         this._exclusions.push(...exclusions);
-        return this.createBuilderInstance();
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
     map(propertyMap) {
         this._map.push(propertyMap);
-        return this.createBuilderInstance();
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
      * Specify the name of the index to use for all queries
@@ -95,13 +92,17 @@ class DefaultDbSetBuilder {
      */
     useIndex(name) {
         this._index = name;
-        return this.createBuilderInstance();
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
     extend(extend) {
         this._extend.push(extend);
-        return this.createBuilderInstance();
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
-    createDbSetInstance(Initializer) {
+    /**
+     * Must call to fully create the DbSet.
+     * @returns new DbSet
+     */
+    create() {
         if (this._extend.length === 0) {
             this._extend.push(this._defaultExtend);
         }
@@ -115,16 +116,9 @@ class DefaultDbSetBuilder {
             map: this._map,
             index: this._index,
             splitDbSetOptions: this._isSplitDbSet
-        }), Initializer);
+        }), DbSet_1.DbSet);
         this._onCreate(result);
         return result;
-    }
-    /**
-     * Must call to fully create the DbSet.
-     * @returns new DbSet
-     */
-    create() {
-        return this.createDbSetInstance(DbSet_1.DbSet);
     }
 }
 exports.DefaultDbSetBuilder = DefaultDbSetBuilder;

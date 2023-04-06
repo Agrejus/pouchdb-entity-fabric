@@ -11,7 +11,6 @@ export class DefaultDbSetBuilder<
     TExtraExclusions extends string,
     TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>
 > {
-
     protected _context: IDataContext;
     protected _documentType: TDocumentType;
     protected _idKeys: EntityIdKeys<TDocumentType, TEntity>;
@@ -62,18 +61,13 @@ export class DefaultDbSetBuilder<
         return params
     }
 
-    protected createBuilderInstance<KDocumentType extends string, KEntity extends IDbRecord<KDocumentType>, KExtraExclusions extends string, KResult extends IDbSet<KDocumentType, KEntity, KExtraExclusions>>() {
-        return new DefaultDbSetBuilder<KDocumentType, KEntity, KExtraExclusions, KResult>(this._onCreate, this._buildParams<KExtraExclusions>() as any);
-    }
-
     /**
      * Makes all entities returned from the underlying database readonly.  Entities cannot be updates, only adding or removing is available.
      * @returns DbSetBuilder
      */
     readonly() {
-        return this.createBuilderInstance<TDocumentType, Readonly<TEntity>, TExtraExclusions, IDbSet<TDocumentType, Readonly<TEntity>, TExtraExclusions>>();
+        return new DefaultDbSetBuilder<TDocumentType, Readonly<TEntity>, TExtraExclusions, IDbSet<TDocumentType, Readonly<TEntity>, TExtraExclusions>>(this._onCreate, this._buildParams<TExtraExclusions>());
     }
-
     /**
      * Fluent API for building the documents key.  Key will be built in the order
      * keys are added
@@ -87,7 +81,7 @@ export class DefaultDbSetBuilder<
 
         this._idKeys.push(...idBuilder.Ids);
         this._keyType = idBuilder.KeyType;
-        return this.createBuilderInstance<TDocumentType, TEntity, TExtraExclusions, TResult>();
+        return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
     /**
@@ -131,7 +125,7 @@ export class DefaultDbSetBuilder<
             };
         }
 
-        return this.createBuilderInstance<TDocumentType, TEntity, TExtraExclusions, TResult>();
+        return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
     /**
@@ -143,12 +137,12 @@ export class DefaultDbSetBuilder<
      */
     exclude<T extends string>(...exclusions: T[]) {
         this._exclusions.push(...exclusions);
-        return this.createBuilderInstance<TDocumentType, TEntity, T | TExtraExclusions, IDbSet<TDocumentType, TEntity, T | TExtraExclusions>>();
+        return new DefaultDbSetBuilder<TDocumentType, TEntity, T | TExtraExclusions, IDbSet<TDocumentType, TEntity, T | TExtraExclusions>>(this._onCreate, this._buildParams<T | TExtraExclusions>());
     }
 
     map<T extends keyof TEntity>(propertyMap: PropertyMap<TDocumentType, TEntity, T>) {
         this._map.push(propertyMap);
-        return this.createBuilderInstance<TDocumentType, TEntity, TExtraExclusions, TResult>();
+        return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
     /**
@@ -160,17 +154,22 @@ export class DefaultDbSetBuilder<
 
         this._index = name;
 
-        return this.createBuilderInstance<TDocumentType, TEntity, TExtraExclusions, TResult>();
+        return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
     }
 
     extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult, args: IDbSetProps<TDocumentType, TEntity>) => TExtension) {
 
         this._extend.push(extend as any);
 
-        return this.createBuilderInstance<TDocumentType, TEntity, TExtraExclusions, TExtension>();
+        return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>(this._onCreate, this._buildParams<TExtraExclusions>());
     }
 
-    protected createDbSetInstance(Initializer: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult) {
+    /**
+     * Must call to fully create the DbSet.
+     * @returns new DbSet
+     */
+    create(): TResult {
+
         if (this._extend.length === 0) {
             this._extend.push(this._defaultExtend)
         }
@@ -185,18 +184,10 @@ export class DefaultDbSetBuilder<
             map: this._map,
             index: this._index,
             splitDbSetOptions: this._isSplitDbSet
-        }), Initializer);
+        }), DbSet);
 
         this._onCreate(result);
 
         return result;
-    }
-
-    /**
-     * Must call to fully create the DbSet.
-     * @returns new DbSet
-     */
-    create(): TResult {
-        return this.createDbSetInstance(DbSet as any);
     }
 }
