@@ -6,6 +6,7 @@ import { DocumentTypes, ISyncDocument, ISetStatus, IComputer, IBook, IBookV4, IN
 import { v4 as uuidv4 } from 'uuid';
 import memoryAdapter from 'pouchdb-adapter-memory';
 import { DefaultDbSetBuilder } from "../src/context/dbset/builders/DefaultDbSetBuilder";
+import { ExperimentalDataContext } from "../src/context/ExperimentalDataContext";
 
 PouchDB.plugin(memoryAdapter);
 
@@ -131,9 +132,16 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
 
 
     notesWithMapping = this.dbset().default<INote>(DocumentTypes.NotesWithMapping).map({ property: "createdDate", map: w => new Date(w) }).create();
+}
 
-    splitComputers = this.dbset().split<DocumentTypes, INoteV2, ISplitComputer>(DocumentTypes.SplitComputers).keys(w => w.auto()).create();
-    splitBooks = this.dbset().unmanagedSplit<DocumentTypes, INoteV2, ISplitBook>(DocumentTypes.SplitBooks).keys(w => w.auto()).create();
+export class ExperimentalPouchDbDataContext extends ExperimentalDataContext<DocumentTypes> {
+
+    constructor(name: string) {
+        super(name);
+    }
+
+    splitComputers = this.experimentalDbset().split<DocumentTypes, INoteV2, ISplitComputer>(DocumentTypes.SplitComputers).keys(w => w.auto()).create();
+    splitBooks = this.experimentalDbset().unmanagedSplit<DocumentTypes, INoteV2, ISplitBook>(DocumentTypes.SplitBooks).keys(w => w.auto()).create();
 }
 
 export class BooksWithOneDefaultContext extends DataContext<DocumentTypes> {
@@ -176,6 +184,14 @@ export class DbContextFactory {
         this._dbs[name] = result;
         return result;
     }
+
+    createExperimentalContext<T extends typeof ExperimentalPouchDbDataContext>(Context: T, dbname?: string) {
+        const name = dbname ?? `${uuidv4()}-db`;
+        const result = new Context(name);
+        this._dbs[name] = result;
+        return result;
+    }
+
 
     createDbContexts<T extends DataContext<DocumentTypes>>(factory: (name: string) => T[]) {
         const name = `${uuidv4()}-db`;

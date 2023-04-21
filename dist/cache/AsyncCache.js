@@ -24,8 +24,28 @@ class AsyncCache {
     get(key) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const result = yield this._getDb().get(key);
-                return result;
+                const result = yield this._getDb().find({
+                    selector: {
+                        _id: key
+                    }
+                });
+                if (result.docs.length === 0) {
+                    return null;
+                }
+                return result.docs[0];
+            }
+            catch (_a) {
+                return null;
+            }
+        });
+    }
+    remove(key) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const db = this._getDb();
+                const doc = yield db.get(key);
+                const result = yield db.remove(doc);
+                return result.ok;
             }
             catch (_a) {
                 return null;

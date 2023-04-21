@@ -1,4 +1,5 @@
 import { DbSetReferenceFetchAdapter } from '../../adapters/reference/DbSetReferenceFetchAdapter';
+import { DbSetReferenceModificationAdapter } from '../../adapters/reference/DbSetReferenceModificationAdapter';
 import { ISplitDbSet } from '../../types/dbset-types';
 import { IDbRecord } from '../../types/entity-types';
 import { DbSet } from './DbSet';
@@ -12,4 +13,12 @@ export class SplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<
         (this._fetchAdapter as DbSetReferenceFetchAdapter<TDocumentType, TEntity, TExtraExclusions>).setNextWithoutReference();
         return this;
     }  
+
+    async endTransaction() {
+        await (this._modificationAdapter as DbSetReferenceModificationAdapter<TDocumentType, TEntity, TExtraExclusions>).endTransaction();
+    }
+
+    async startTransaction(transactionId: string) {
+        await (this._modificationAdapter as DbSetReferenceModificationAdapter<TDocumentType, TEntity, TExtraExclusions>).startTransaction(transactionId);
+    }
 }

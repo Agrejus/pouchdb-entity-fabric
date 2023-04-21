@@ -11,13 +11,35 @@ export class AsyncCache {
 
     async get<TDocument extends ICacheDocumentBase>(key: string): Promise<TDocument | null> {
         try {
-            const result = await this._getDb().get(key);
 
-            return result as any;
+            const result = await this._getDb().find({
+                selector: {
+                    _id: key
+                }
+            });
+
+            if (result.docs.length === 0) {
+                return null;
+            }
+
+            return result.docs[0] as any;
         } catch {
             return null
         }
     }
+
+    async remove(key: string): Promise<boolean> {
+        try {
+            const db = this._getDb();
+            const doc = await db.get(key);
+            const result = await db.remove(doc);
+
+            return result.ok;
+        } catch {
+            return null
+        }
+    }
+
 
     async destroy() {
         await this._getDb().destroy();

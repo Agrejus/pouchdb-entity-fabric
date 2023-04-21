@@ -1,5 +1,6 @@
+/// <reference types="pouchdb-find" />
 import { IDbSetFetchAdapter, IDbSetGeneralAdapter, IDbSetIndexAdapter, IDbSetModificationAdapter } from '../../types/adapter-types';
-import { EntitySelector } from '../../types/common-types';
+import { DeepPartial, EntitySelector } from '../../types/common-types';
 import { IDbSetProps, IDbSetEnumerable, IDbSet } from '../../types/dbset-types';
 import { IDbRecord, OmittedEntity, IDbRecordBase } from '../../types/entity-types';
 /**
@@ -10,6 +11,10 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     protected readonly _generalAdapter: IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions>;
     protected readonly _indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>;
     protected readonly _modificationAdapter: IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>;
+    get types(): {
+        modify: import("../../types/common-types").DeepOmit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
+        result: TEntity;
+    };
     /**
      * Constructor
      * @param props Properties for the constructor
@@ -33,4 +38,6 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     markDirty(...entities: TEntity[]): Promise<TEntity[]>;
     link(...entities: TEntity[]): Promise<TEntity[]>;
     first(): Promise<TEntity>;
+    query(request: DeepPartial<PouchDB.Find.FindRequest<TEntity>>): Promise<PouchDB.Find.FindResponse<TEntity>>;
+    private merge;
 }

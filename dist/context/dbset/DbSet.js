@@ -15,6 +15,12 @@ const AdapterFactory_1 = require("../../adapters/AdapterFactory");
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
 class DbSet {
+    get types() {
+        return {
+            modify: {},
+            result: {}
+        };
+    }
     /**
      * Constructor
      * @param props Properties for the constructor
@@ -99,6 +105,29 @@ class DbSet {
         return __awaiter(this, void 0, void 0, function* () {
             return yield this._fetchAdapter.first();
         });
+    }
+    query(request) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const defaultRequest = {
+                selector: {
+                    DocumentType: this.info().DocumentType
+                }
+            };
+            const mergedRequest = this.merge(request, defaultRequest);
+            return yield this._fetchAdapter.query(mergedRequest);
+        });
+    }
+    merge(target, source) {
+        // Iterate through `source` properties and if an `Object` set property to merge of `target` and `source` properties
+        // https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6
+        for (const key of Object.keys(source)) {
+            if (source[key] instanceof Object) {
+                Object.assign(source[key], this.merge(target[key], source[key]));
+            }
+        }
+        // Join `target` and modified `source`
+        Object.assign(target || {}, source);
+        return target;
     }
 }
 exports.DbSet = DbSet;

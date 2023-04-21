@@ -22,7 +22,7 @@ describe('DbSet useIndex Tests', () => {
             const result = await action(db);
             return result;
         }
-debugger;
+
         const all = await context.books.useIndex("some-index").all();
         const filter = await context.books.useIndex("some-index").filter(w => w.author == "");
         const find = await context.books.useIndex("some-index").find(w => w.author == "");

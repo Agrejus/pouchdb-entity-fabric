@@ -22,7 +22,7 @@ export class SplitDbSetBuilder<
     protected _extend: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
     protected _onCreate: (dbset: IDbSetBase<string>) => void;
     protected _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
-    protected _index: string | null;
+    protected _index: string | undefined;
     protected _isSplitDbSet: ISplitDbSetOptions;
 
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;

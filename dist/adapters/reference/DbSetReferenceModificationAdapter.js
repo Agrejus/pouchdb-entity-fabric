@@ -10,41 +10,48 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DbSetReferenceModificationAdapter = void 0;
-const ContextCache_1 = require("../../cache/ContextCache");
 const entity_types_1 = require("../../types/entity-types");
 const DbSetModificationAdapter_1 = require("../DbSetModificationAdapter");
 const uuid_1 = require("uuid");
 const LinkedDatabase_1 = require("../../common/LinkedDatabase");
+const AsyncCache_1 = require("../../cache/AsyncCache");
 class DbSetReferenceModificationAdapter extends DbSetModificationAdapter_1.DbSetModificationAdapter {
     constructor(props, indexAdapter) {
         super(props, indexAdapter);
+        this._asyncCache = new AsyncCache_1.AsyncCache();
     }
     get _getCacheKey() {
         return `${this.documentType}_TransactionId`;
     }
     _getTransactionId() {
-        const currentTransaction = ContextCache_1.cache.get(this._getCacheKey);
-        if (currentTransaction != null) {
-            // mark as in use if started by externally
-            ContextCache_1.cache.upsert(this._getCacheKey, { transactionId: currentTransaction.transactionId, isUse: true });
-            return currentTransaction.transactionId;
-        }
-        return this._getAndStoreAndCreateTransactionId();
+        return __awaiter(this, void 0, void 0, function* () {
+            const currentTransaction = yield this._asyncCache.get(this._getCacheKey);
+            if (currentTransaction != null) {
+                return currentTransaction.transactionId;
+            }
+            return yield this._createAndSaveTransactionId();
+        });
     }
     _formatTransactionId(id) {
-        return `${this.documentType}_${id}`;
+        return `${this.documentType}_PEF-REFERENCE_${id}`;
     }
-    _getAndStoreAndCreateTransactionId() {
-        const id = (0, uuid_1.v4)();
-        const newTransactionId = this._formatTransactionId(id);
-        ContextCache_1.cache.upsert(this._getCacheKey, { transactionId: newTransactionId, isUse: true });
-        return newTransactionId;
+    _createAndSaveTransactionId() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const id = (0, uuid_1.v4)();
+            const newTransactionId = this._formatTransactionId(id);
+            yield this._asyncCache.set({ _id: this._getCacheKey, transactionId: newTransactionId });
+            return newTransactionId;
+        });
     }
     endTransaction() {
-        ContextCache_1.cache.remove(this._getCacheKey);
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this._asyncCache.remove(this._getCacheKey);
+        });
     }
     startTransaction(transactionId) {
-        ContextCache_1.cache.upsert(this._getCacheKey, { transactionId, isUse: false });
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this._asyncCache.set({ _id: this._getCacheKey, transactionId });
+        });
     }
     get _getReferenceDocumentType() {
         return `${this.documentType}_REFERENCE`;
@@ -55,14 +62,14 @@ class DbSetReferenceModificationAdapter extends DbSetModificationAdapter_1.DbSet
     }
     onRemove() {
         return __awaiter(this, void 0, void 0, function* () {
-            this.endTransaction();
+            yield this.endTransaction();
         });
     }
     add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             // Removing data should also end the current transaction, otherwise we might delete a db that has remove all of its data
             // We only need to start a new transaction if the current transaction has added data, we will need to increment this
-            const currentTransaction = this._getTransactionId();
+            const currentTransaction = yield this._getTransactionId();
             const data = this.api.getTrackedData();
             const { add } = data;
             const result = entities.map(entity => {

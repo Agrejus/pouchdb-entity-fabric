@@ -44,11 +44,11 @@ describe('DbSet Update Tests', () => {
 
         const dbname = contextFactory.getRandomDbName();
         const context = contextFactory.createContext(PouchDbDataContext, dbname);
-        debugger;
+
         const all = await context.contacts.all();
 
         expect(all.length).toBe(0);
-        debugger;
+
         const [one] = await context.contacts.upsert({
             firstName: "James",
             lastName: "DeMeuse",

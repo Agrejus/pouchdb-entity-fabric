@@ -9,14 +9,7 @@ export abstract class PouchDbInteractionBase<TDocumentType extends string> exten
         super(name, options);
     }
 
-    /**
-     * Does a bulk operation in the data store
-     * @param entities 
-     */
-    protected async bulkDocs(entities: IDbRecordBase[]) {
-
-        const response = await this.doWork(w => w.bulkDocs(entities));
-
+    protected formatBulkDocsResponse(response: (PouchDB.Core.Response | PouchDB.Core.Error)[]) {
         const result: {
             errors: { [key: string]: IBulkDocsResponse },
             errors_count: number,
@@ -58,6 +51,17 @@ export abstract class PouchDbInteractionBase<TDocumentType extends string> exten
         }
 
         return result;
+    }
+
+    /**
+     * Does a bulk operation in the data store
+     * @param entities 
+     */
+    protected async bulkDocs(entities: IDbRecordBase[]) {
+
+        const response = await this.doWork(w => w.bulkDocs(entities));
+
+        return this.formatBulkDocsResponse(response)
     }
 
     /**
@@ -110,20 +114,27 @@ export abstract class PouchDbInteractionBase<TDocumentType extends string> exten
         }
     }
 
-    protected async find(selector: PouchDB.Find.FindRequest<{}>) {
+    protected async query(selector: PouchDB.Find.FindRequest<{}>) {
         try {
 
-            const result = await this.doWork(w => w.find(selector));
-
-            return result.docs as IDbRecordBase[];
+            return await this.doWork(w => w.find(selector));
         } catch (e) {
 
             if ('message' in e && e.message.includes("database is closed")) {
                 throw e;
             }
 
-            return [] as IDbRecordBase[];
+            return {
+                docs: [],
+                warning: JSON.stringify(e, Object.getOwnPropertyNames(e))
+            }
         }
+    }
+
+    protected async find(selector: PouchDB.Find.FindRequest<{}>) {
+        const result = await this.query(selector)
+
+        return result.docs as IDbRecordBase[];
     }
 
     /**

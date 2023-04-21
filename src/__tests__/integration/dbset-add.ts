@@ -1,4 +1,4 @@
-import { BooksWithTwoDefaultContext, DbContextFactory, PouchDbDataContext } from "../../../test-helpers/context";
+import { BooksWithTwoDefaultContext, DbContextFactory, ExperimentalPouchDbDataContext, PouchDbDataContext } from "../../../test-helpers/context";
 import { DocumentTypes } from "../../../test-helpers/types";
 import { parseDocumentReference } from "../../common/LinkedDatabase";
 import PouchDB from 'pouchdb';
@@ -189,7 +189,7 @@ describe('DbSet Add Tests', () => {
 
     it('should add entity, exlude a property and set the default on the add event', async () => {
         const context = contextFactory.createContext(PouchDbDataContext);
-        debugger;
+
         const [book] = await context.books.add({
             author: "James DeMeuse",
             publishDate: new Date()
@@ -482,7 +482,7 @@ describe('DbSet Add Tests', () => {
 
     it('should create split record and have no reference', async () => {
         const dbName = contextFactory.getRandomDbName();
-        const context = contextFactory.createContext(PouchDbDataContext, dbName);
+        const context = contextFactory.createExperimentalContext(ExperimentalPouchDbDataContext, dbName);
 
         const [added] = await context.splitComputers.add({
             cores: 1,
@@ -515,7 +515,7 @@ describe('DbSet Add Tests', () => {
 
     it('should create split record and the unmanaged record should not have a reference to it', async () => {
         const dbName = contextFactory.getRandomDbName();
-        const context = contextFactory.createContext(PouchDbDataContext, dbName);
+        const context = contextFactory.createExperimentalContext(ExperimentalPouchDbDataContext, dbName);
 
         const [added] = await context.splitComputers.add({
             cores: 1,
@@ -563,7 +563,7 @@ describe('DbSet Add Tests', () => {
 
     it('should create split record and the unmanaged record should not have a reference to it and should save properly', async () => {
         const dbName = contextFactory.getRandomDbName();
-        const context = contextFactory.createContext(PouchDbDataContext, dbName);
+        const context = contextFactory.createExperimentalContext(ExperimentalPouchDbDataContext, dbName);
 
         const [added] = await context.splitComputers.add({
             cores: 1,

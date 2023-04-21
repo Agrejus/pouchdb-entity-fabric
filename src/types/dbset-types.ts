@@ -1,24 +1,7 @@
-import { IQueryParams, DeepPartial, DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional } from "./common-types";
+import { IQueryParams, DeepPartial, DbSetPickDefaultActionRequired } from "./common-types";
 import { ITrackedData, IDataContext } from "./context-types";
-import { DbSetKeyType, IChainIdBuilder, IIdBuilderBase, ISplitDbSetOptions, ITerminateIdBuilder, PropertyMap } from "./dbset-builder-types";
+import { DbSetKeyType, ISplitDbSetOptions, PropertyMap } from "./dbset-builder-types";
 import { IDbRecord, OmittedEntity, IDbRecordBase, EntityIdKeys } from "./entity-types";
-
-// export interface IDbSetBuilderBase<
-//     TDocumentType extends string,
-//     TEntity extends IDbRecord<TDocumentType>,
-//     TExtraExclusions extends string,
-//     TResult extends IDbSet<TDocumentType, TEntity, TExtraExclusions>
-// > {
-//     readonly<T extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(): IDbSetBuilderBase<TDocumentType, TEntity, TExtraExclusions, T>;
-//     keys(builder: (b: IIdBuilderBase<TDocumentType, TEntity>) => (IChainIdBuilder<TDocumentType, TEntity> | ITerminateIdBuilder<TDocumentType, TEntity>)): IDbSetBuilderBase<TDocumentType, TEntity, TExtraExclusions, TResult>;
-//     defaults(value: DbSetPickDefaultActionOptional<TDocumentType, TEntity>): IDbSetBuilderBase<TDocumentType, TEntity, TExtraExclusions, TResult>;
-//     defaults(value: DeepPartial<OmittedEntity<TEntity>>): IDbSetBuilderBase<TDocumentType, TEntity, TExtraExclusions, TResult>;
-//     exclude<T extends string>(...exclusions: T[]): IDbSetBuilderBase<TDocumentType, TEntity, T | TExtraExclusions, IDbSet<TDocumentType, TEntity, T | TExtraExclusions>>;
-//     map<T extends keyof TEntity>(propertyMap: PropertyMap<TDocumentType, TEntity, T>): IDbSetBuilderBase<TDocumentType, TEntity, TExtraExclusions, TResult>;
-//     useIndex(name: string): IDbSetBuilderBase<TDocumentType, TEntity, TExtraExclusions, TResult>;
-//     extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult, args: IDbSetProps<TDocumentType, TEntity>) => TExtension): IDbSetBuilderBase<TDocumentType, TEntity, TExtraExclusions, TExtension>;
-//     create(): TResult;
-// }
 
 export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> extends IDbSetBase<TDocumentType> {
     /**
@@ -54,6 +37,8 @@ export interface ISplitDbSet<
     TExtraExclusions extends string = never,
 > extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
     withoutReference(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    endTransaction(): Promise<void>;
+    startTransaction(transactionId: string): Promise<void>;
 }
 
 export interface IDbSet<
@@ -61,6 +46,10 @@ export interface IDbSet<
     TEntity extends IDbRecord<TDocumentType>,
     TExtraExclusions extends string = never,
 > extends IDbSetEnumerable<TDocumentType, TEntity> {
+
+    get types(): { modify: OmittedEntity<TEntity, TExtraExclusions>, result: TEntity };
+
+    query(request: DeepPartial<PouchDB.Find.FindRequest<TEntity>>): Promise<PouchDB.Find.FindResponse<TEntity>>;
 
     /**
      * Direct pouchDB to use an index with your request.  Index will only be used with the single request, all subsequent requests will use the default index if any
@@ -167,6 +156,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (payload?: IQueryParams<TDocumentType>) => Promise<IDbRecordBase[]>;
     find: (selector: PouchDB.Find.FindRequest<{}>) => Promise<IDbRecordBase[]>;
+    query<TEntity extends IDbRecord<TDocumentType>>(selector: PouchDB.Find.FindRequest<TEntity>): Promise<PouchDB.Find.FindResponse<TEntity>>
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[]) => void;
@@ -196,7 +186,7 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     readonly: boolean;
     keyType: DbSetKeyType;
     map: PropertyMap<TDocumentType, TEntity, any>[];
-    index: string | null;
+    index: string | undefined;
     splitDbSetOptions: ISplitDbSetOptions;
 }
 

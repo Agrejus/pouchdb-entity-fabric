@@ -16,6 +16,11 @@ class DbSetFetchAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
         super(props);
         this.indexAdapter = indexAdapter;
     }
+    query(request) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.api.query(request);
+        });
+    }
     filter(selector) {
         return __awaiter(this, void 0, void 0, function* () {
             const getIndex = this.indexAdapter.get.bind(this.indexAdapter);

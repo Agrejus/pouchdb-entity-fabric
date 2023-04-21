@@ -1,4 +1,3 @@
-import { cache } from '../../cache/ContextCache';
 import { DeepOmit } from '../../types/common-types';
 import { IDbSetProps } from '../../types/dbset-types';
 import { IDbRecord, IDbRecordBase, IIndexableEntity, SplitDocumentDocumentPropertyName, SplitDocumentPathPropertyName } from '../../types/entity-types';
@@ -6,10 +5,13 @@ import { DbSetModificationAdapter } from '../DbSetModificationAdapter';
 import { v4 as uuidv4 } from 'uuid';
 import { createDocumentReference } from '../../common/LinkedDatabase';
 import { IDbSetIndexAdapter } from '../../types/adapter-types';
+import { AsyncCache } from '../../cache/AsyncCache';
 
-interface Transaction { transactionId: string, isUse: boolean }
+interface Transaction { transactionId: string, _id: string }
 
 export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>  {
+
+    private _asyncCache: AsyncCache = new AsyncCache();
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>, indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>) {
         super(props, indexAdapter);
@@ -19,37 +21,35 @@ export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEn
         return `${this.documentType}_TransactionId`;
     }
 
-    private _getTransactionId() {
-        const currentTransaction = cache.get<Transaction>(this._getCacheKey);
+    private async _getTransactionId() {
+
+        const currentTransaction = await this._asyncCache.get<Transaction>(this._getCacheKey);
 
         if (currentTransaction != null) {
-
-            // mark as in use if started by externally
-            cache.upsert(this._getCacheKey, { transactionId: currentTransaction.transactionId, isUse: true });
 
             return currentTransaction.transactionId;
         }
 
-        return this._getAndStoreAndCreateTransactionId();
+        return await this._createAndSaveTransactionId();
     }
 
     private _formatTransactionId(id: string) {
-        return `${this.documentType}_${id}`;
+        return `${this.documentType}_PEF-REFERENCE_${id}`;
     }
 
-    private _getAndStoreAndCreateTransactionId() {
+    private async _createAndSaveTransactionId() {
         const id = uuidv4();
         const newTransactionId = this._formatTransactionId(id);
-        cache.upsert(this._getCacheKey, { transactionId: newTransactionId, isUse: true });
+        await this._asyncCache.set<Transaction>({ _id: this._getCacheKey, transactionId: newTransactionId });
         return newTransactionId;
     }
 
-    endTransaction() {
-        cache.remove(this._getCacheKey);
+    async endTransaction() {
+        await this._asyncCache.remove(this._getCacheKey);
     }
 
-    startTransaction(transactionId: string) {
-        cache.upsert(this._getCacheKey, { transactionId, isUse: false });
+    async startTransaction(transactionId: string) {
+        await this._asyncCache.set<Transaction>({ _id: this._getCacheKey, transactionId });
     }
 
     private get _getReferenceDocumentType() {
@@ -62,13 +62,13 @@ export class DbSetReferenceModificationAdapter<TDocumentType extends string, TEn
     }
 
     protected override async onRemove() {
-        this.endTransaction();
+        await this.endTransaction();
     }
 
     override async add(...entities: DeepOmit<TEntity, TExtraExclusions | '_id' | '_rev' | 'DocumentType'>[]) {
         // Removing data should also end the current transaction, otherwise we might delete a db that has remove all of its data
         // We only need to start a new transaction if the current transaction has added data, we will need to increment this
-        const currentTransaction = this._getTransactionId();
+        const currentTransaction = await this._getTransactionId();
         const data = this.api.getTrackedData();
         const { add } = data;
 

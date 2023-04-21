@@ -1,6 +1,6 @@
 import { AdapterFactory } from '../../adapters/AdapterFactory';
 import { IDbSetFetchAdapter, IDbSetGeneralAdapter, IDbSetIndexAdapter, IDbSetModificationAdapter } from '../../types/adapter-types';
-import { EntitySelector } from '../../types/common-types';
+import { DeepPartial, EntitySelector } from '../../types/common-types';
 import { IDbSetProps, IDbSetEnumerable, IDbSet } from '../../types/dbset-types';
 import { IDbRecord, OmittedEntity, IDbRecordBase } from '../../types/entity-types';
 
@@ -13,6 +13,13 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     protected readonly _generalAdapter: IDbSetGeneralAdapter<TDocumentType, TEntity, TExtraExclusions>;
     protected readonly _indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>;
     protected readonly _modificationAdapter: IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions>;
+
+    get types() {
+        return {
+            modify: {} as OmittedEntity<TEntity, TExtraExclusions>,
+            result: {} as TEntity
+        }
+    }
 
     /**
      * Constructor
@@ -96,5 +103,33 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     async first() {
         return await this._fetchAdapter.first();
+    }
+
+    async query(request: DeepPartial<PouchDB.Find.FindRequest<TEntity>>) {
+
+        const defaultRequest: PouchDB.Find.FindRequest<TEntity> = {
+            selector: {
+                DocumentType: this.info().DocumentType
+            }
+        }
+
+        const mergedRequest = this.merge(request as PouchDB.Find.FindRequest<TEntity>, defaultRequest)
+
+        return await this._fetchAdapter.query(mergedRequest);
+    }
+
+    private merge(target: PouchDB.Find.FindRequest<TEntity>, source: PouchDB.Find.FindRequest<TEntity>) {
+
+         // Iterate through `source` properties and if an `Object` set property to merge of `target` and `source` properties
+         // https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6
+        for (const key of Object.keys(source)) {
+            if ((source as any)[key] instanceof Object) {
+                Object.assign((source as any)[key], this.merge((target as any)[key], (source as any)[key]))
+            }
+        }
+
+        // Join `target` and modified `source`
+        Object.assign(target || {}, source)
+        return target
     }
 }

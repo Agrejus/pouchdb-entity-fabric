@@ -14,7 +14,7 @@ export declare class SplitDbSetBuilder<TDocumentType extends string, TEntity ext
     protected _extend: DbSetExtenderCreator<TDocumentType, TEntity, TExtraExclusions, TResult>[];
     protected _onCreate: (dbset: IDbSetBase<string>) => void;
     protected _map: PropertyMap<TDocumentType, TEntity, any>[];
-    protected _index: string | null;
+    protected _index: string | undefined;
     protected _isSplitDbSet: ISplitDbSetOptions;
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>);

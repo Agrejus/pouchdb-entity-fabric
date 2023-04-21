@@ -1,14 +1,11 @@
-/// <reference types="pouchdb-find" />
-/// <reference types="pouchdb-core" />
-/// <reference types="pouchdb-mapreduce" />
-/// <reference types="pouchdb-replication" />
 import { AdvancedDictionary } from "../common/AdvancedDictionary";
 import { IIndexApi } from "../indexing/IndexApi";
 import { IPreviewChanges, IPurgeResponse } from "../types/common-types";
 import { IDataContext, DataContextOptions } from "../types/context-types";
-import { IDbSetBase } from "../types/dbset-types";
-import { IDbRecordBase, IDbRecord } from "../types/entity-types";
+import { IDbSet } from "../types/dbset-types";
+import { IDbRecordBase, IIndexableEntity } from "../types/entity-types";
 import { PouchDbInteractionBase } from "./PouchDbInteractionBase";
+import { AsyncCache } from '../cache/AsyncCache';
 import { DbSetInitializer } from './dbset/builders/DbSetInitializer';
 export declare class DataContext<TDocumentType extends string> extends PouchDbInteractionBase<TDocumentType> implements IDataContext {
     protected readonly PRISTINE_ENTITY_KEY = "__pristine_entity__";
@@ -19,10 +16,11 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     protected _attachments: AdvancedDictionary<IDbRecordBase>;
     protected _removeById: string[];
     private _configuration;
-    private _asyncCache;
-    private _hasSplitDbSet;
+    protected asyncCache: AsyncCache;
     $indexes: IIndexApi;
-    private _dbSets;
+    protected dbSets: {
+        [key: string]: IDbSet<string, any>;
+    };
     constructor(name?: string, options?: DataContextOptions);
     getAllDocs(): Promise<IDbRecordBase[]>;
     /**
@@ -39,7 +37,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns IData
      */
     private _getApi;
-    private _addDbSet;
+    protected addDbSet(dbset: IDbSet<string, any>): void;
     /**
      * Used by the context api
      * @param data
@@ -62,18 +60,16 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns boolean
      */
     private areEqual;
-    private _map;
+    private _mapInstance;
+    private _mapAndSetDefaults;
     private _makeTrackable;
     private _getPendingChanges;
     previewChanges(): Promise<IPreviewChanges>;
     private _makePristine;
     private _getModifications;
-    private _getCachedTempDbs;
-    private _setCachedTempDbs;
-    validateCache(): Promise<void>;
-    private _tryDestroyDatabase;
-    private _getHasSplitDbSet;
     saveChanges(): Promise<number>;
+    protected onBeforeSaveChanges(modifications: IDbRecordBase[]): Promise<void>;
+    protected onAfterSetRev(entity: IIndexableEntity): void;
     protected onAfterSaveChanges(modifications: {
         adds: number;
         removes: number;
@@ -84,7 +80,6 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns {DbSetInitializer}
      */
     protected dbset(): DbSetInitializer<TDocumentType>;
-    query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>): Promise<TEntity[]>;
     hasPendingChanges(): boolean;
     empty(): Promise<void>;
     destroyDatabase(): Promise<void>;
@@ -97,7 +92,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     }): void;
     [Symbol.iterator](): {
         next: () => {
-            value: IDbSetBase<string>;
+            value: IDbSet<string, any, never>;
             done: boolean;
         };
     };

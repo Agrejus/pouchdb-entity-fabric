@@ -1,4 +1,5 @@
 export { DataContext } from './context/DataContext';
+export { ExperimentalDataContext } from './context/ExperimentalDataContext';
 export { DbSet } from './context/dbset/DbSet';
 export { DbSetExtender } from './types/dbset-builder-types';
 export { DefaultDbSetBuilder } from './context/dbset/builders/DefaultDbSetBuilder';

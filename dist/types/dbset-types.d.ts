@@ -29,8 +29,15 @@ export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends 
 }
 export interface ISplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
     withoutReference(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    endTransaction(): Promise<void>;
+    startTransaction(transactionId: string): Promise<void>;
 }
 export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends IDbSetEnumerable<TDocumentType, TEntity> {
+    get types(): {
+        modify: OmittedEntity<TEntity, TExtraExclusions>;
+        result: TEntity;
+    };
+    query(request: DeepPartial<PouchDB.Find.FindRequest<TEntity>>): Promise<PouchDB.Find.FindResponse<TEntity>>;
     /**
      * Direct pouchDB to use an index with your request.  Index will only be used with the single request, all subsequent requests will use the default index if any
      * @param name Name of the index
@@ -121,6 +128,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     getTrackedData: () => ITrackedData;
     getAllData: (payload?: IQueryParams<TDocumentType>) => Promise<IDbRecordBase[]>;
     find: (selector: PouchDB.Find.FindRequest<{}>) => Promise<IDbRecordBase[]>;
+    query<TEntity extends IDbRecord<TDocumentType>>(selector: PouchDB.Find.FindRequest<TEntity>): Promise<PouchDB.Find.FindResponse<TEntity>>;
     get: (...ids: string[]) => Promise<IDbRecordBase[]>;
     getStrict: (...ids: string[]) => Promise<IDbRecordBase[]>;
     send: (data: IDbRecordBase[]) => void;
@@ -148,7 +156,7 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     readonly: boolean;
     keyType: DbSetKeyType;
     map: PropertyMap<TDocumentType, TEntity, any>[];
-    index: string | null;
+    index: string | undefined;
     splitDbSetOptions: ISplitDbSetOptions;
 }
 export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity) => void;

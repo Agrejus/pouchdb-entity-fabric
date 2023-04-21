@@ -13,6 +13,10 @@ export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDb
         this.indexAdapter = indexAdapter;
     }
 
+    async query(request: PouchDB.Find.FindRequest<TEntity>) {
+        return this.api.query(request);
+    }
+
     async filter(selector: EntitySelector<TDocumentType, TEntity>) {
         const getIndex = this.indexAdapter.get.bind(this.indexAdapter);
         const data = await this.allDataAndMakeTrackable(getIndex);

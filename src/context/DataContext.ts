@@ -7,10 +7,9 @@ import { IIndexApi, IndexApi } from "../indexing/IndexApi";
 import { CacheKeys } from "../types/cache-types";
 import { DeepPartial, IPreviewChanges, IPurgeResponse } from "../types/common-types";
 import { IDataContext, DatabaseConfigurationAdditionalConfiguration, DataContextOptions, ITrackedData } from "../types/context-types";
-import { IDbSetBase, IDbSet, IDbSetApi } from "../types/dbset-types";
-import { IDbRecordBase, OmittedEntity, IIndexableEntity, IDbRecord, ISplitDbRecord, SplitDocumentDocumentPropertyName, SplitDocumentPathPropertyName, ICachedDatabases } from "../types/entity-types";
+import { IDbSet, IDbSetApi } from "../types/dbset-types";
+import { IDbRecordBase, OmittedEntity, IIndexableEntity, SplitDocumentDocumentPropertyName, SplitDocumentPathPropertyName } from "../types/entity-types";
 import { PouchDbInteractionBase } from "./PouchDbInteractionBase";
-import { parseDocumentReference } from '../common/LinkedDatabase';
 import { AsyncCache } from '../cache/AsyncCache';
 import { PropertyMap } from '../types/dbset-builder-types';
 import { DbSetInitializer } from './dbset/builders/DbSetInitializer';
@@ -30,12 +29,11 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
-    private _asyncCache: AsyncCache = new AsyncCache();
-    private _hasSplitDbSet: boolean | null = null;
+    protected asyncCache: AsyncCache = new AsyncCache();
 
     $indexes: IIndexApi;
 
-    private _dbSets: { [key: string]: IDbSetBase<string> } = {} as { [key: string]: IDbSetBase<string> };
+    protected dbSets: { [key: string]: IDbSet<string, any> } = {} as { [key: string]: IDbSet<string, any> };
 
     constructor(name?: string, options?: DataContextOptions) {
         const { ...pouchDb } = options ?? {};
@@ -54,7 +52,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
         return all.map(w => {
 
-            const dbSet = this._dbSets[w.DocumentType] as (IDbSet<any, any, any> | undefined);
+            const dbSet = this.dbSets[w.DocumentType] as (IDbSet<any, any, any> | undefined);
 
             if (dbSet) {
                 const info = dbSet.info();
@@ -100,23 +98,24 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             makeTrackable: this._makeTrackable.bind(this),
             get: this.get.bind(this),
             getStrict: this.getStrict.bind(this),
-            map: this._map.bind(this),
+            map: this._mapAndSetDefaults.bind(this),
             DIRTY_ENTITY_MARKER: this.DIRTY_ENTITY_MARKER,
             PRISTINE_ENTITY_KEY: this.PRISTINE_ENTITY_KEY,
             makePristine: this._makePristine.bind(this),
-            find: this.find.bind(this)
+            find: this.find.bind(this),
+            query: this.query.bind(this)
         }
     }
 
-    private _addDbSet(dbset: IDbSetBase<string>) {
+    protected addDbSet(dbset: IDbSet<string, any>) {
 
         const info = (dbset as IDbSet<any, any, any>).info();
 
-        if (this._dbSets[info.DocumentType] != null) {
+        if (this.dbSets[info.DocumentType] != null) {
             throw new Error(`Can only have one DbSet per document type in a context, please create a new context instead`)
         }
 
-        this._dbSets[info.DocumentType] = dbset;
+        this.dbSets[info.DocumentType] = dbset;
     }
 
     /**
@@ -189,14 +188,25 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }) === false;
     }
 
-    private _map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults: DeepPartial<OmittedEntity<T>> = {} as any) {
+    private _mapInstance<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[]) {
+
+        const result: IIndexableEntity = entity;
+
+        for (const map of maps) {
+            result[map.property] = map.map(result[map.property], entity)
+        }
+
+        return result as T
+    }
+
+    private _mapAndSetDefaults<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults: DeepPartial<OmittedEntity<T>> = {} as any) {
         const mergedInstance = { ...defaults, ...entity };
         let mappedInstance = {};
 
         if (maps.length > 0) {
             mappedInstance = maps.reduce((a, v) => {
                 const preTransformValue = (mergedInstance as any)[v.property];
-                return { ...a, [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) }
+                return { ...a, [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue, entity) }
             }, {});
         }
 
@@ -246,7 +256,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
         }
 
-        const instance = this._map(entity, maps, defaults);
+        const instance = this._mapAndSetDefaults(entity, maps, defaults);
         const result = readonly ? Object.freeze(instance) : instance;
 
         return new Proxy(result, proxyHandler) as T
@@ -271,7 +281,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             }
 
             return false;
-        });
+        }).map(w => this._mapInstance(w, this.dbSets[w.DocumentType].info().Map));
 
         return {
             add,
@@ -327,147 +337,16 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
-    private async _getCachedTempDbs() {
-        let dblistEntity = await this._asyncCache.get<ICachedDatabases>("temp-db-list");
-
-        if (dblistEntity == null) {
-            dblistEntity = {
-                _id: "temp-db-list",
-                list: []
-            };
-        }
-
-        return dblistEntity;
-    }
-
-    private async _setCachedTempDbs(list: string[]) {
-        const dblistEntity = await this._getCachedTempDbs();
-
-        dblistEntity.list.push(...list);
-
-        await this._asyncCache.set(dblistEntity);
-    }
-
-    async validateCache() {
-        const cachedDbListDocument = await this._getCachedTempDbs();
-
-        await Promise.all(cachedDbListDocument.list.map(w => this._tryDestroyDatabase(new PouchDB(w))))
-    }
-
-    private async _tryDestroyDatabase(db: PouchDB.Database<{}>) {
-        const all = await db.allDocs({ include_docs: false });
-        if (all.rows.length === 0) {
-
-            await db.destroy();
-            return true;
-        }
-
-        return false;
-    }
-
-    private _getHasSplitDbSet() {
-
-        if (this._hasSplitDbSet != null) {
-            return this._hasSplitDbSet;
-        }
-
-        for (const dbset of this) {
-            if ((dbset as IDbSet<TDocumentType, any>).info().SplitDbSetOptions.enabled === true) {
-                this._hasSplitDbSet = true;
-                return true
-            }
-        }
-
-        this._hasSplitDbSet = false;
-
-        return false;
-    }
-
     async saveChanges() {
         try {
+
             const { add, remove, updated } = await this._getModifications();
 
             // Process removals first, so we can remove items first and then add.  Just
             // in case are are trying to remove and add the same Id
             const modifications = [...remove, ...add, ...updated];
-            const remappings: { [key: string]: { reference: IDbRecordBase, parent: IDbRecordBase } } = {}
 
-            if (this._getHasSplitDbSet() === true) {
-
-                const referenceModifications: { [key: string]: { hasRemovals: boolean, documents: IDbRecordBase[] } } = {};
-
-                if (modifications.length > 0) {
-                    // keep the path and tear off the references
-                    for (const item of modifications) {
-
-                        const dbSet = this._dbSets[item.DocumentType] as IDbSet<TDocumentType, any>;
-
-                        if (dbSet.info().SplitDbSetOptions.enabled === false) {
-                            // Skip changes on disabled db sets
-                            continue;
-                        }
-
-                        const castedItem = (item as ISplitDbRecord<TDocumentType, any, any>);
-                        const document = castedItem[SplitDocumentDocumentPropertyName] as IDbRecordBase;
-                        const referencePath = castedItem[SplitDocumentPathPropertyName] as string;
-
-                        remappings[item._id] = { parent: item, reference: document }
-
-                        const reference = parseDocumentReference(referencePath)
-                        const isDeletion = "_deleted" in castedItem
-
-                        if (dbSet.info().SplitDbSetOptions.isManaged === false) {
-                            // Skip changes on dbset if unmanaged
-                            delete castedItem[SplitDocumentDocumentPropertyName];
-                            continue;
-                        }
-
-                        if (isDeletion) {
-                            delete castedItem[SplitDocumentPathPropertyName];
-                        }
-
-                        delete castedItem[SplitDocumentDocumentPropertyName];
-
-                        if (!referenceModifications[reference.databaseName]) {
-                            referenceModifications[reference.databaseName] = {
-                                documents: [],
-                                hasRemovals: false
-                            }
-                        }
-
-                        if (referenceModifications[reference.databaseName].hasRemovals === false && "_deleted" in item) {
-                            referenceModifications[reference.databaseName].hasRemovals = true;
-                        }
-
-                        // mark reference document for removal or not below
-                        referenceModifications[reference.databaseName].documents.push(isDeletion === true ? { ...document, _deleted: true } as any : document);
-                    }
-                }
-
-                const cachedDbListDocument = await this._getCachedTempDbs();
-                const dbList: Set<string> = new Set<string>(cachedDbListDocument.list);
-
-                for (const group in referenceModifications) {
-                    try {
-                        const documents = referenceModifications[group].documents;
-                        const referenceDb = new PouchDB(group);
-                        dbList.add(group)
-                        await referenceDb.bulkDocs(documents);
-
-                        if (referenceModifications[group].hasRemovals === true) {
-                            const result = await this._tryDestroyDatabase(referenceDb);
-
-                            if (result) {
-                                dbList.delete(group)
-                            }
-                        }
-                    } catch (e: any) {
-                        // Swallow error
-                    }
-                }
-
-                await this._setCachedTempDbs([...dbList]);
-            }
+            await this.onBeforeSaveChanges(modifications);
 
             // remove pristine entity before we send to bulk docs
             this._makePristine(...modifications);
@@ -483,10 +362,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                     const indexableEntity = modification as IIndexableEntity;
                     indexableEntity._rev = found.rev;
 
-                    // Remap Reference because we deleted it on save
-                    if (remappings[indexableEntity._id]) {
-                        (remappings[indexableEntity._id].parent as ISplitDbRecord<any, any, any>).reference = remappings[indexableEntity._id].reference
-                    }
+                    this.onAfterSetRev(indexableEntity);
 
                     // make pristine again because we set the _rev above
                     this._makePristine(modification);
@@ -504,6 +380,14 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    protected async onBeforeSaveChanges(modifications: IDbRecordBase[]) {
+     
+    }
+
+    protected onAfterSetRev(entity: IIndexableEntity) {
+     
+    }
+
     protected async onAfterSaveChanges(modifications: { adds: number, removes: number, updates: number }) {
 
     }
@@ -513,11 +397,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      * @returns {DbSetInitializer}
      */
     protected dbset(): DbSetInitializer<TDocumentType> {
-        return new DbSetInitializer<TDocumentType>(this._addDbSet.bind(this), this);
-    }
-
-    async query<TEntity extends IDbRecord<TDocumentType>>(callback: (provider: PouchDB.Database) => Promise<TEntity[]>) {
-        return await this.doWork(w => callback(w))
+        return new DbSetInitializer<TDocumentType>(this.addDbSet.bind(this), this);
     }
 
     hasPendingChanges() {
@@ -620,7 +500,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
     [Symbol.iterator]() {
         let index = -1;
-        const data = Object.keys(this._dbSets).map(w => this._dbSets[w]);
+        const data = Object.keys(this.dbSets).map(w => this.dbSets[w]);
 
         return {
             next: () => ({ value: data[++index], done: !(index in data) })

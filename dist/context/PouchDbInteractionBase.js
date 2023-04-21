@@ -15,6 +15,38 @@ class PouchDbInteractionBase extends PouchDbBase_1.PouchDbBase {
     constructor(name, options) {
         super(name, options);
     }
+    formatBulkDocsResponse(response) {
+        const result = {
+            errors: {},
+            successes: {},
+            errors_count: 0,
+            successes_count: 0
+        };
+        for (let item of response) {
+            if ('error' in item) {
+                const error = item;
+                if (!error.id) {
+                    continue;
+                }
+                result.errors_count += 1;
+                result.errors[error.id] = {
+                    id: error.id,
+                    ok: false,
+                    error: error.message,
+                    rev: error.rev
+                };
+                continue;
+            }
+            const success = item;
+            result.successes_count += 1;
+            result.successes[success.id] = {
+                id: success.id,
+                ok: success.ok,
+                rev: success.rev
+            };
+        }
+        return result;
+    }
     /**
      * Does a bulk operation in the data store
      * @param entities
@@ -22,36 +54,7 @@ class PouchDbInteractionBase extends PouchDbBase_1.PouchDbBase {
     bulkDocs(entities) {
         return __awaiter(this, void 0, void 0, function* () {
             const response = yield this.doWork(w => w.bulkDocs(entities));
-            const result = {
-                errors: {},
-                successes: {},
-                errors_count: 0,
-                successes_count: 0
-            };
-            for (let item of response) {
-                if ('error' in item) {
-                    const error = item;
-                    if (!error.id) {
-                        continue;
-                    }
-                    result.errors_count += 1;
-                    result.errors[error.id] = {
-                        id: error.id,
-                        ok: false,
-                        error: error.message,
-                        rev: error.rev
-                    };
-                    continue;
-                }
-                const success = item;
-                result.successes_count += 1;
-                result.successes[success.id] = {
-                    id: success.id,
-                    ok: success.ok,
-                    rev: success.rev
-                };
-            }
-            return result;
+            return this.formatBulkDocsResponse(response);
         });
     }
     /**
@@ -97,18 +100,26 @@ class PouchDbInteractionBase extends PouchDbBase_1.PouchDbBase {
             }
         });
     }
-    find(selector) {
+    query(selector) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const result = yield this.doWork(w => w.find(selector));
-                return result.docs;
+                return yield this.doWork(w => w.find(selector));
             }
             catch (e) {
                 if ('message' in e && e.message.includes("database is closed")) {
                     throw e;
                 }
-                return [];
+                return {
+                    docs: [],
+                    warning: JSON.stringify(e, Object.getOwnPropertyNames(e))
+                };
             }
+        });
+    }
+    find(selector) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const result = yield this.query(selector);
+            return result.docs;
         });
     }
     /**

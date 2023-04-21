@@ -33,7 +33,6 @@ const IndexApi_1 = require("../indexing/IndexApi");
 const cache_types_1 = require("../types/cache-types");
 const entity_types_1 = require("../types/entity-types");
 const PouchDbInteractionBase_1 = require("./PouchDbInteractionBase");
-const LinkedDatabase_1 = require("../common/LinkedDatabase");
 const AsyncCache_1 = require("../cache/AsyncCache");
 const DbSetInitializer_1 = require("./dbset/builders/DbSetInitializer");
 pouchdb_1.default.plugin(pouchdb_find_1.default);
@@ -48,9 +47,8 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
         this._additions = [];
         this._attachments = new AdvancedDictionary_1.AdvancedDictionary("_id");
         this._removeById = [];
-        this._asyncCache = new AsyncCache_1.AsyncCache();
-        this._hasSplitDbSet = null;
-        this._dbSets = {};
+        this.asyncCache = new AsyncCache_1.AsyncCache();
+        this.dbSets = {};
         this._configuration = {};
         this.$indexes = new IndexApi_1.IndexApi(this.doWork.bind(this));
     }
@@ -58,7 +56,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
         return __awaiter(this, void 0, void 0, function* () {
             const all = yield this.getAllData();
             return all.map(w => {
-                const dbSet = this._dbSets[w.DocumentType];
+                const dbSet = this.dbSets[w.DocumentType];
                 if (dbSet) {
                     const info = dbSet.info();
                     return this._makeTrackable(w, info.Defaults.retrieve, info.Readonly, info.Map);
@@ -98,19 +96,20 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             makeTrackable: this._makeTrackable.bind(this),
             get: this.get.bind(this),
             getStrict: this.getStrict.bind(this),
-            map: this._map.bind(this),
+            map: this._mapAndSetDefaults.bind(this),
             DIRTY_ENTITY_MARKER: this.DIRTY_ENTITY_MARKER,
             PRISTINE_ENTITY_KEY: this.PRISTINE_ENTITY_KEY,
             makePristine: this._makePristine.bind(this),
-            find: this.find.bind(this)
+            find: this.find.bind(this),
+            query: this.query.bind(this)
         };
     }
-    _addDbSet(dbset) {
+    addDbSet(dbset) {
         const info = dbset.info();
-        if (this._dbSets[info.DocumentType] != null) {
+        if (this.dbSets[info.DocumentType] != null) {
             throw new Error(`Can only have one DbSet per document type in a context, please create a new context instead`);
         }
-        this._dbSets[info.DocumentType] = dbset;
+        this.dbSets[info.DocumentType] = dbset;
     }
     /**
      * Used by the context api
@@ -169,13 +168,20 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             return first[w] != second[w];
         }) === false;
     }
-    _map(entity, maps, defaults = {}) {
+    _mapInstance(entity, maps) {
+        const result = entity;
+        for (const map of maps) {
+            result[map.property] = map.map(result[map.property], entity);
+        }
+        return result;
+    }
+    _mapAndSetDefaults(entity, maps, defaults = {}) {
         const mergedInstance = Object.assign(Object.assign({}, defaults), entity);
         let mappedInstance = {};
         if (maps.length > 0) {
             mappedInstance = maps.reduce((a, v) => {
                 const preTransformValue = mergedInstance[v.property];
-                return Object.assign(Object.assign({}, a), { [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue) });
+                return Object.assign(Object.assign({}, a), { [v.property]: Object.prototype.toString.call(preTransformValue) === '[object Date]' ? preTransformValue : v.map(preTransformValue, entity) });
             }, {});
         }
         return Object.assign(Object.assign({}, mergedInstance), mappedInstance);
@@ -211,7 +217,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
                 return Reflect.get(target, property, receiver);
             }
         };
-        const instance = this._map(entity, maps, defaults);
+        const instance = this._mapAndSetDefaults(entity, maps, defaults);
         const result = readonly ? Object.freeze(instance) : instance;
         return new Proxy(result, proxyHandler);
     }
@@ -229,7 +235,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
                 }
             }
             return false;
-        });
+        }).map(w => this._mapInstance(w, this.dbSets[w.DocumentType].info().Map));
         return {
             add,
             remove,
@@ -275,54 +281,6 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             };
         });
     }
-    _getCachedTempDbs() {
-        return __awaiter(this, void 0, void 0, function* () {
-            let dblistEntity = yield this._asyncCache.get("temp-db-list");
-            if (dblistEntity == null) {
-                dblistEntity = {
-                    _id: "temp-db-list",
-                    list: []
-                };
-            }
-            return dblistEntity;
-        });
-    }
-    _setCachedTempDbs(list) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const dblistEntity = yield this._getCachedTempDbs();
-            dblistEntity.list.push(...list);
-            yield this._asyncCache.set(dblistEntity);
-        });
-    }
-    validateCache() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const cachedDbListDocument = yield this._getCachedTempDbs();
-            yield Promise.all(cachedDbListDocument.list.map(w => this._tryDestroyDatabase(new pouchdb_1.default(w))));
-        });
-    }
-    _tryDestroyDatabase(db) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const all = yield db.allDocs({ include_docs: false });
-            if (all.rows.length === 0) {
-                yield db.destroy();
-                return true;
-            }
-            return false;
-        });
-    }
-    _getHasSplitDbSet() {
-        if (this._hasSplitDbSet != null) {
-            return this._hasSplitDbSet;
-        }
-        for (const dbset of this) {
-            if (dbset.info().SplitDbSetOptions.enabled === true) {
-                this._hasSplitDbSet = true;
-                return true;
-            }
-        }
-        this._hasSplitDbSet = false;
-        return false;
-    }
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
@@ -330,66 +288,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
                 // Process removals first, so we can remove items first and then add.  Just
                 // in case are are trying to remove and add the same Id
                 const modifications = [...remove, ...add, ...updated];
-                const remappings = {};
-                if (this._getHasSplitDbSet() === true) {
-                    const referenceModifications = {};
-                    if (modifications.length > 0) {
-                        // keep the path and tear off the references
-                        for (const item of modifications) {
-                            const dbSet = this._dbSets[item.DocumentType];
-                            if (dbSet.info().SplitDbSetOptions.enabled === false) {
-                                // Skip changes on disabled db sets
-                                continue;
-                            }
-                            const castedItem = item;
-                            const document = castedItem[entity_types_1.SplitDocumentDocumentPropertyName];
-                            const referencePath = castedItem[entity_types_1.SplitDocumentPathPropertyName];
-                            remappings[item._id] = { parent: item, reference: document };
-                            const reference = (0, LinkedDatabase_1.parseDocumentReference)(referencePath);
-                            const isDeletion = "_deleted" in castedItem;
-                            if (dbSet.info().SplitDbSetOptions.isManaged === false) {
-                                // Skip changes on dbset if unmanaged
-                                delete castedItem[entity_types_1.SplitDocumentDocumentPropertyName];
-                                continue;
-                            }
-                            if (isDeletion) {
-                                delete castedItem[entity_types_1.SplitDocumentPathPropertyName];
-                            }
-                            delete castedItem[entity_types_1.SplitDocumentDocumentPropertyName];
-                            if (!referenceModifications[reference.databaseName]) {
-                                referenceModifications[reference.databaseName] = {
-                                    documents: [],
-                                    hasRemovals: false
-                                };
-                            }
-                            if (referenceModifications[reference.databaseName].hasRemovals === false && "_deleted" in item) {
-                                referenceModifications[reference.databaseName].hasRemovals = true;
-                            }
-                            // mark reference document for removal or not below
-                            referenceModifications[reference.databaseName].documents.push(isDeletion === true ? Object.assign(Object.assign({}, document), { _deleted: true }) : document);
-                        }
-                    }
-                    const cachedDbListDocument = yield this._getCachedTempDbs();
-                    const dbList = new Set(cachedDbListDocument.list);
-                    for (const group in referenceModifications) {
-                        try {
-                            const documents = referenceModifications[group].documents;
-                            const referenceDb = new pouchdb_1.default(group);
-                            dbList.add(group);
-                            yield referenceDb.bulkDocs(documents);
-                            if (referenceModifications[group].hasRemovals === true) {
-                                const result = yield this._tryDestroyDatabase(referenceDb);
-                                if (result) {
-                                    dbList.delete(group);
-                                }
-                            }
-                        }
-                        catch (e) {
-                            // Swallow error
-                        }
-                    }
-                    yield this._setCachedTempDbs([...dbList]);
-                }
+                yield this.onBeforeSaveChanges(modifications);
                 // remove pristine entity before we send to bulk docs
                 this._makePristine(...modifications);
                 const modificationResult = yield this.bulkDocs(modifications);
@@ -400,10 +299,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
                     if (found && found.ok === true) {
                         const indexableEntity = modification;
                         indexableEntity._rev = found.rev;
-                        // Remap Reference because we deleted it on save
-                        if (remappings[indexableEntity._id]) {
-                            remappings[indexableEntity._id].parent.reference = remappings[indexableEntity._id].reference;
-                        }
+                        this.onAfterSetRev(indexableEntity);
                         // make pristine again because we set the _rev above
                         this._makePristine(modification);
                     }
@@ -418,6 +314,12 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             }
         });
     }
+    onBeforeSaveChanges(modifications) {
+        return __awaiter(this, void 0, void 0, function* () {
+        });
+    }
+    onAfterSetRev(entity) {
+    }
     onAfterSaveChanges(modifications) {
         return __awaiter(this, void 0, void 0, function* () {
         });
@@ -427,12 +329,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
      * @returns {DbSetInitializer}
      */
     dbset() {
-        return new DbSetInitializer_1.DbSetInitializer(this._addDbSet.bind(this), this);
-    }
-    query(callback) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return yield this.doWork(w => callback(w));
-        });
+        return new DbSetInitializer_1.DbSetInitializer(this.addDbSet.bind(this), this);
     }
     hasPendingChanges() {
         const { add, remove, removeById, updated } = this._getPendingChanges();
@@ -520,7 +417,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
     }
     [Symbol.iterator]() {
         let index = -1;
-        const data = Object.keys(this._dbSets).map(w => this._dbSets[w]);
+        const data = Object.keys(this.dbSets).map(w => this.dbSets[w]);
         return {
             next: () => ({ value: data[++index], done: !(index in data) })
         };

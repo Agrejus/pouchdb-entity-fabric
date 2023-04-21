@@ -41,7 +41,6 @@ const generateData = async (context: PerformanceDbDataContext, count: number, sh
 
         await context.optimize();
     } catch (e) {
-        debugger;
         console.log(e);
     }
 }

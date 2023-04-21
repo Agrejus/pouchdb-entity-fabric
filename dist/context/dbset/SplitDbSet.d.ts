@@ -6,4 +6,6 @@ import { DbSet } from './DbSet';
  */
 export declare class SplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSet<TDocumentType, TEntity, TExtraExclusions> implements ISplitDbSet<TDocumentType, TEntity, TExtraExclusions> {
     withoutReference(): this;
+    endTransaction(): Promise<void>;
+    startTransaction(transactionId: string): Promise<void>;
 }

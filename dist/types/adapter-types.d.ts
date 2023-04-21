@@ -1,3 +1,4 @@
+/// <reference types="pouchdb-find" />
 import { IDbRecord, IDbRecordBase, OmittedEntity } from './entity-types';
 import { IDbSetInfo } from './dbset-types';
 export interface IDbSetFetchAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> {
@@ -6,6 +7,7 @@ export interface IDbSetFetchAdapter<TDocumentType extends string, TEntity extend
     first(): Promise<TEntity | undefined>;
     all(): Promise<TEntity[]>;
     get(...ids: string[]): Promise<TEntity[]>;
+    query(request: PouchDB.Find.FindRequest<TEntity>): Promise<PouchDB.Find.FindResponse<TEntity>>;
 }
 export interface IDbSetGeneralAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> {
     isMatch(first: TEntity, second: any): boolean;
