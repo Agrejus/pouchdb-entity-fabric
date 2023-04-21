@@ -41,7 +41,6 @@ const generateData = async (context: PerformanceDbDataContext, count: number, sh
 
         await context.optimize();
     } catch (e) {
-        debugger;
         console.log(e);
     }
 }
@@ -302,7 +301,7 @@ const shouldUpdateOneEntity = async () => {
 
     const item = await context.test1.first();
 
-    item.test1 = "Test";
+    item!.test1 = "Test";
 
     await context.saveChanges();
 

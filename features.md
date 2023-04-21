@@ -40,3 +40,6 @@ predicateBuilder
     .and(w => w.one).equals(1)
     .and(w => w.two).lessThan(1)
         or();
+
+        publish beta
+        npm publish --tag beta
