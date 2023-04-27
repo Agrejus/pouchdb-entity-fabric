@@ -28,8 +28,9 @@ export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends 
     first(): Promise<TEntity | undefined>;
 }
 export interface ISplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-    withoutReference(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
-    withOnlyFromReference(...properties: string[]): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    lazy(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions> & {
+        include(...properties: string[]): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    };
     endTransaction(): Promise<void>;
     startTransaction(transactionId: string): Promise<void>;
 }
@@ -164,3 +165,4 @@ export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDb
 export type DbSetIdOnlyEventCallback = (entity: string) => void;
 export type DbSetEventCallbackAsync<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entities: TEntity[]) => Promise<void>;
 export type DbSetIdOnlyEventCallbackAsync = (entities: string[]) => Promise<void>;
+export type IncludeType = "all" | string[];

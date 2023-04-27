@@ -5,8 +5,8 @@ import { DbSet } from './DbSet';
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
 export declare class SplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSet<TDocumentType, TEntity, TExtraExclusions> implements ISplitDbSet<TDocumentType, TEntity, TExtraExclusions> {
-    withoutReference(): this;
-    withOnlyFromReference(...properties: string[]): this;
+    lazy(): this;
+    include(...properties: string[]): this;
     endTransaction(): Promise<void>;
     startTransaction(transactionId: string): Promise<void>;
 }
