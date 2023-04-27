@@ -21,18 +21,26 @@ class DbSetReferenceFetchAdapter extends DbSetFetchAdapter_1.DbSetFetchAdapter {
     constructor(props, indexAdapter) {
         super(props, indexAdapter);
         this._withoutReference = false;
+        this._withOnlyFromReference = [];
     }
-    _getMany(databaseName, ...ids) {
+    _getMany(databaseName, fields, ...ids) {
         return __awaiter(this, void 0, void 0, function* () {
             const database = new pouchdb_1.default(databaseName);
-            const response = yield database.find({
+            const request = {
                 selector: { _id: { $in: ids } }
-            });
+            };
+            if (fields.length > 0) {
+                request.fields = ["_id", "_rev", "DocumentType", ...fields];
+            }
+            const response = yield database.find(request);
             return response.docs;
         });
     }
     setNextWithoutReference() {
         this._withoutReference = true;
+    }
+    setNextWithOnlyFromReference(...properties) {
+        this._withOnlyFromReference = properties;
     }
     onAfterDataFetched(data) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -59,11 +67,12 @@ class DbSetReferenceFetchAdapter extends DbSetFetchAdapter_1.DbSetFetchAdapter {
             for (const referenceModification in referenceModifications) {
                 mods.push({ databaseName: referenceModification, ids: referenceModifications[referenceModification] });
             }
-            const referencedDocuments = yield Promise.all(mods.map((w) => __awaiter(this, void 0, void 0, function* () { return yield this._getMany(w.databaseName, ...w.ids); })));
+            const referencedDocuments = yield Promise.all(mods.map((w) => __awaiter(this, void 0, void 0, function* () { return yield this._getMany(w.databaseName, this._withOnlyFromReference, ...w.ids); })));
             for (const referencedDocument of referencedDocuments.reduce((a, v) => a.concat(v), [])) {
                 referenceIdToMainIdLinks[referencedDocument._id].reference = referencedDocument;
                 this.api.makePristine(referenceIdToMainIdLinks[referencedDocument._id]);
             }
+            this._withOnlyFromReference = [];
         });
     }
 }

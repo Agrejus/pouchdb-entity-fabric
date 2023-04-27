@@ -19,6 +19,10 @@ class SplitDbSet extends DbSet_1.DbSet {
         this._fetchAdapter.setNextWithoutReference();
         return this;
     }
+    withOnlyFromReference(...properties) {
+        this._fetchAdapter.setNextWithOnlyFromReference(...properties);
+        return this;
+    }
     endTransaction() {
         return __awaiter(this, void 0, void 0, function* () {
             yield this._modificationAdapter.endTransaction();

@@ -432,44 +432,47 @@ export const run = async () => {
 
         const context = new PouchDbDataContext();
         const [added] = await context.books.add({
-    author: "James",
-    reference: {
-        contents: "Note Contents",
-        createdDate: "some date",
-        userId: "some user id"
-    },
-    rejectedCount: 1,
-    status: "pending",
-    syncStatus: "approved"
+            author: "James",
+            reference: {
+                contents: "Note Contents",
+                createdDate: "some date",
+                userId: "some user id"
+            },
+            rejectedCount: 1,
+            status: "pending",
+            syncStatus: "approved"
         });
 
+        await context.saveChanges();
 
-        // await context.saveChanges();
 
-        // await context.books.remove(added._id);
+        const found = await context.books.lazy().include("contents", "createdDate").find(w => w._id === added._id)
 
-        // await context.saveChanges();
-
-        const db = new PouchDB('test-size-db');
-        const docs: { _id: string, content: string }[] = [];
-        for (let i = 0; i < 100; i++) {
-            docs.push({
-                _id: `some_id-${i}`,
-                content: loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum
-            })
-        }
-
-        await db.bulkDocs(docs);
         debugger;
-        const allDocs = await db.find({
-            selector: {
-                _id: { $in: docs.map(w => w._id) }
-            }
-        })
-        debugger
-        for(const doc of allDocs.docs) {
-            await (db as any).purge(doc._id, doc._rev)
-        }
+        // // await context.books.remove(added._id);
+
+        // // await context.saveChanges();
+
+        // const db = new PouchDB('test-size-db');
+        // const docs: { _id: string, content: string }[] = [];
+        // for (let i = 0; i < 100; i++) {
+        //     docs.push({
+        //         _id: `some_id-${i}`,
+        //         content: loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum
+        //     })
+        // }
+
+        // await db.bulkDocs(docs);
+        // debugger;
+        // const allDocs = await db.find({
+        //     selector: {
+        //         _id: { $in: docs.map(w => w._id) }
+        //     }
+        // })
+        // debugger
+        // for (const doc of allDocs.docs) {
+        //     await (db as any).purge(doc._id, doc._rev)
+        // }
 
         // const [f] = await context.books.withoutReference().get(added._id)
         // await context.books.remove(f)

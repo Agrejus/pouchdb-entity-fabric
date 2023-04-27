@@ -9,10 +9,15 @@ import { DbSet } from './DbSet';
  */
 export class SplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSet<TDocumentType, TEntity, TExtraExclusions> implements ISplitDbSet<TDocumentType, TEntity, TExtraExclusions> {
     
-    withoutReference() {
-        (this._fetchAdapter as DbSetReferenceFetchAdapter<TDocumentType, TEntity, TExtraExclusions>).setNextWithoutReference();
+    lazy() {
+        (this._fetchAdapter as DbSetReferenceFetchAdapter<TDocumentType, TEntity, TExtraExclusions>).setLazy();
         return this;
     }  
+
+    include(...properties: string[]) {
+        (this._fetchAdapter as DbSetReferenceFetchAdapter<TDocumentType, TEntity, TExtraExclusions>).setInclude(...properties);
+        return this;
+    }
 
     async endTransaction() {
         await (this._modificationAdapter as DbSetReferenceModificationAdapter<TDocumentType, TEntity, TExtraExclusions>).endTransaction();

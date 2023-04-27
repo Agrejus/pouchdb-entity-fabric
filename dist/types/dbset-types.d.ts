@@ -29,6 +29,7 @@ export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends 
 }
 export interface ISplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
     withoutReference(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    withOnlyFromReference(...properties: string[]): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
     endTransaction(): Promise<void>;
     startTransaction(transactionId: string): Promise<void>;
 }
