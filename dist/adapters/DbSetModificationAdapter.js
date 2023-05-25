@@ -42,7 +42,8 @@ class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
                 if (indexableEntity["_rev"] !== undefined) {
                     throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity');
                 }
-                const trackableEntity = this.processAdditionAndMakeTrackable(entity);
+                const mappedEntity = this.api.map(entity, this.map, this.defaults.add);
+                const trackableEntity = this.processAdditionAndMakeTrackable(mappedEntity);
                 add.push(trackableEntity);
                 return trackableEntity;
             });

@@ -13,11 +13,14 @@ export declare abstract class DbSetBaseAdapter<TDocumentType extends string, TEn
     protected keyType: DbSetKeyType;
     protected map: PropertyMap<TDocumentType, TEntity, any>[];
     protected splitDbSetOptions: ISplitDbSetOptions;
+    protected filterSelector: EntitySelector<TDocumentType, TEntity> | null;
     constructor(props: IDbSetProps<TDocumentType, TEntity>);
     protected allDataAndMakeTrackable(getIndex: () => string | null): Promise<TEntity[]>;
-    protected convertFilterSelector(selector: EntitySelector<TDocumentType, TEntity>): Promise<void>;
     protected onAfterDataFetched(data: TEntity[]): Promise<void>;
+    private deconstructQuery;
+    protected convertFilterSelector(selector: EntitySelector<TDocumentType, TEntity>): Promise<void>;
     protected _all(getIndex: () => string | null): Promise<TEntity[]>;
+    protected filterResult(result: TEntity[]): TEntity[];
     protected getAllData(getIndex: () => string | null): Promise<import("../types/entity-types").IDbRecordBase[]>;
     protected getKeyFromEntity(entity: TEntity): string;
 }

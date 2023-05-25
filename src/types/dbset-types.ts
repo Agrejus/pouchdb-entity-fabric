@@ -1,4 +1,4 @@
-import { IQueryParams, DeepPartial, DbSetPickDefaultActionRequired } from "./common-types";
+import { IQueryParams, DeepPartial, DbSetPickDefaultActionRequired, EntitySelector } from "./common-types";
 import { ITrackedData, IDataContext } from "./context-types";
 import { DbSetKeyType, ISplitDbSetOptions, PropertyMap } from "./dbset-builder-types";
 import { IDbRecord, OmittedEntity, IDbRecordBase, EntityIdKeys } from "./entity-types";
@@ -190,6 +190,7 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     map: PropertyMap<TDocumentType, TEntity, any>[];
     index: string | undefined;
     splitDbSetOptions: ISplitDbSetOptions;
+    filterSelector: EntitySelector<TDocumentType, TEntity> | null;
 }
 
 export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity) => void;

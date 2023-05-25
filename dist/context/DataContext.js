@@ -268,7 +268,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             return {
                 add,
                 remove: [...remove, ...extraRemovals].map(w => {
-                    let result = { _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true };
+                    let result = Object.assign(Object.assign({}, w), { _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true });
                     if (w[entity_types_1.SplitDocumentPathPropertyName] != null) {
                         result = Object.assign(Object.assign({}, result), { [entity_types_1.SplitDocumentPathPropertyName]: w[entity_types_1.SplitDocumentPathPropertyName] });
                     }
@@ -304,7 +304,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
                         this._makePristine(modification);
                     }
                 }
-                yield this.onAfterSaveChanges({ adds: add.length, removes: remove.length, updates: updated.length });
+                yield this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated })));
                 this._reinitialize(remove, add);
                 return modificationResult.successes_count;
             }
@@ -320,7 +320,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
     }
     onAfterSetRev(entity) {
     }
-    onAfterSaveChanges(modifications) {
+    onAfterSaveChanges(getChanges) {
         return __awaiter(this, void 0, void 0, function* () {
         });
     }

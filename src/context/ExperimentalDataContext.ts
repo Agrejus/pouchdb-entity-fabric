@@ -229,7 +229,8 @@ export class ExperimentalDataContext<TDocumentType extends string> extends DataC
         }
     }
 
-    protected override async onAfterSaveChanges(modifications: { adds: number; removes: number; updates: number; }) {
+
+    protected override async onAfterSaveChanges(getChanges: () => { adds: IDbRecordBase[]; removes: IDbRecordBase[]; updates: IDbRecordBase[]; }) {
         this._remappings = {};
         this._referencesToAddBack = {}
 

@@ -8,7 +8,7 @@ class SplitDbSetBuilder {
         this._readonly = false;
         this._map = [];
         this._defaultExtend = (Instance, a) => new Instance(a);
-        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet } = params;
+        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet, filterSelector } = params;
         this._extend = extend !== null && extend !== void 0 ? extend : [];
         this._documentType = documentType;
         this._context = context;
@@ -20,6 +20,7 @@ class SplitDbSetBuilder {
         this._map = map !== null && map !== void 0 ? map : [];
         this._index = index;
         this._isSplitDbSet = isSplitDbSet;
+        this._filterSelector = filterSelector !== null && filterSelector !== void 0 ? filterSelector : null;
         this._onCreate = onCreate;
     }
     _buildParams() {
@@ -115,7 +116,8 @@ class SplitDbSetBuilder {
             keyType: this._keyType,
             map: this._map,
             index: this._index,
-            splitDbSetOptions: this._isSplitDbSet
+            splitDbSetOptions: this._isSplitDbSet,
+            filterSelector: this._filterSelector
         }), SplitDbSet_1.SplitDbSet);
         this._onCreate(result);
         return result;

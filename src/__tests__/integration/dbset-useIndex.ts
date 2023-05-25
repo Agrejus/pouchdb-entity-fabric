@@ -1,5 +1,5 @@
-import { DbContextFactory, PouchDbDataContext } from "../../../test-helpers/context";
-import { DocumentTypes } from "../../../test-helpers/types";
+import { DbContextFactory, PouchDbDataContext } from "./shared/context";
+import { DocumentTypes } from "./shared/types";
 
 describe('DbSet useIndex Tests', () => {
 

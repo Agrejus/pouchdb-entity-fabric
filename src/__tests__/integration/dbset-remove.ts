@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker";
-import { DbContextFactory, PouchDbDataContext } from "../../../test-helpers/context";
-import { DocumentTypes, IContact } from "../../../test-helpers/types";
+import { DbContextFactory, PouchDbDataContext } from "./shared/context";
+import { IContact } from "./shared/types";
 
 describe('DbSet Remove Tests', () => {
 

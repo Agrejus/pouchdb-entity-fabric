@@ -18,6 +18,8 @@ export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDb
     }
 
     async filter(selector: EntitySelector<TDocumentType, TEntity>) {
+        const test = this.convertFilterSelector(selector);
+        console.log(test);
         const getIndex = this.indexAdapter.get.bind(this.indexAdapter);
         const data = await this.allDataAndMakeTrackable(getIndex);
 
@@ -38,14 +40,14 @@ export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDb
     async get(...ids: string[]) {
         const entities = await this.api.getStrict(...ids);
         const result = entities.map(w => this.api.makeTrackable(w, this.defaults.retrieve, this.isReadonly, this.map) as TEntity);
+        const filteredResult = this.filterResult(result)
+        await this.onAfterDataFetched(filteredResult);
 
-        await this.onAfterDataFetched(result);
-
-        if (result.length > 0) {
-            this.api.send(result)
+        if (filteredResult.length > 0) {
+            this.api.send(filteredResult)
         }
 
-        return result;
+        return filteredResult;
     }
 
 

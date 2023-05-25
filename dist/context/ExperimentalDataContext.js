@@ -195,7 +195,7 @@ class ExperimentalDataContext extends DataContext_1.DataContext {
             }
         });
     }
-    onAfterSaveChanges(modifications) {
+    onAfterSaveChanges(getChanges) {
         return __awaiter(this, void 0, void 0, function* () {
             this._remappings = {};
             this._referencesToAddBack = {};

@@ -13,10 +13,10 @@ export declare class ExperimentalDataContext<TDocumentType extends string> exten
     private _getHasSplitDbSet;
     protected onAfterSetRev(indexableEntity: IIndexableEntity<any>): void;
     protected onBeforeSaveChanges(modifications: IDbRecordBase[]): Promise<void>;
-    protected onAfterSaveChanges(modifications: {
-        adds: number;
-        removes: number;
-        updates: number;
+    protected onAfterSaveChanges(getChanges: () => {
+        adds: IDbRecordBase[];
+        removes: IDbRecordBase[];
+        updates: IDbRecordBase[];
     }): Promise<void>;
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional

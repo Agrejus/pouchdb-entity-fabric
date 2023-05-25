@@ -1,4 +1,4 @@
-import { DbSetPickDefaultActionRequired } from './common-types';
+import { DbSetPickDefaultActionRequired, EntitySelector } from './common-types';
 import { EntityIdKey, EntityIdKeys, IDbRecord } from './entity-types';
 import { IDbSet, IDbSetProps } from './dbset-types';
 import { DbSet } from '../context/dbset/DbSet';
@@ -21,6 +21,7 @@ export interface IDbSetBuilderParams<TDocumentType extends string, TEntity exten
     keyType?: DbSetKeyType;
     map?: PropertyMap<TDocumentType, TEntity, any>[];
     index?: string;
+    filterSelector?: EntitySelector<TDocumentType, TEntity>
 }
 
 export type ConvertDateToString<T> = T extends Date ? string : T;

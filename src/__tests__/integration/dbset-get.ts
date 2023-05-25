@@ -1,4 +1,5 @@
-import { DbContextFactory, PouchDbDataContext } from "../../../test-helpers/context";
+import { shouldFilterEntitiesWithDefaults, shouldFilterEntitiesWithDefaultsAndNotMatchOnSecondQuery } from "./shared/common-tests";
+import { DbContextFactory, PouchDbDataContext } from "./shared/context";
 
 describe('DbSet Get Tests', () => {
 
@@ -51,5 +52,45 @@ describe('DbSet Get Tests', () => {
         } catch (e) {
             expect(e).toBeDefined()
         }
+    });
+
+    it('should get entities with no defaults', async () => {
+
+        await shouldFilterEntitiesWithDefaults(
+            () => contextFactory.createContextWithParams("", "my-db0"),
+            (dbSet, _, added) => dbSet.get(added._id),
+            w => expect(w.length).toBe(1))
+    });
+
+    it('should get entities with defaults', async () => {
+
+        await shouldFilterEntitiesWithDefaults(
+            () => contextFactory.createContextWithParams("CouchDB", "my-db"),
+            (dbSet, _, added) => dbSet.get(added._id),
+            w => expect(w.length).toBe(1))
+    });
+
+    it('should get entities and not find result when base filter does not match - with default', async () => {
+
+        await shouldFilterEntitiesWithDefaultsAndNotMatchOnSecondQuery(
+            () => contextFactory.createContextWithParams("CouchDB", "my-db1"),
+            () => contextFactory.createContextWithParams("", "my-db1"),
+            (dbSet, _, added) => dbSet.get(added._id),
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(0),
+            w => expect(w.length).toBe(1))
+    });
+
+    it('should get entities and not find result when base filter does not match - with no default', async () => {
+
+        await shouldFilterEntitiesWithDefaultsAndNotMatchOnSecondQuery(
+            () => contextFactory.createContextWithParams("", "my-db2"),
+            () => contextFactory.createContextWithParams("CouchDB", "my-db2"),
+            (dbSet, _, added) => dbSet.get(added._id),
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(0),
+            w => expect(w.length).toBe(1))
     });
 });

@@ -94,12 +94,13 @@ interface INote extends IDbRecord<DocumentTypes> {
     userId: string;
 }
 
-interface IBook extends ISplitDbRecord<DocumentTypes, DocumentTypes, INote> {
+interface IBook extends IDbRecord<DocumentTypes> {
     author: string;
     publishDate?: string;
     rejectedCount: number;
     status: "pending" | "approved" | "rejected";
     syncStatus: "pending" | "approved" | "rejected";
+    test?: string
 }
 
 interface ICar extends IUnmanagedSplitDbRecord<DocumentTypes, DocumentTypes, INote> {
@@ -418,8 +419,10 @@ class PouchDbDataContext extends ExperimentalDataContext<DocumentTypes> {
         super(`test-db`);
     }
 
-    books = this.experimentalDbset().split<DocumentTypes, INote, IBook>(DocumentTypes.Books)
-        .keys(w => w.auto())
+    books = this.dbset().default<IBook>(DocumentTypes.Books)
+        .defaults({ test: "Winner" })
+        .keys(w => w.add("author").add("test"))
+        .filter(w => w.test == "Winner")
         .create();
 
     cars = this.experimentalDbset().unmanagedSplit<DocumentTypes, INote, ICar>(DocumentTypes.Cars)
@@ -431,13 +434,12 @@ export const run = async () => {
     try {
 
         const context = new PouchDbDataContext();
+        // const deletes = await context.books.filter(w => w.author === "James");
+        // await context.books.remove(...deletes);
+        await context.saveChanges();
+
         const [added] = await context.books.add({
             author: "James",
-            reference: {
-                contents: "Note Contents",
-                createdDate: "some date",
-                userId: "some user id"
-            },
             rejectedCount: 1,
             status: "pending",
             syncStatus: "approved"
@@ -445,8 +447,8 @@ export const run = async () => {
 
         await context.saveChanges();
 
-
-        const found = await context.books.lazy().include("contents", "createdDate").find(w => w._id === added._id)
+        debugger;
+        const found = await context.books.filter(w => w._id === added._id && (w.DocumentType == DocumentTypes.Books && (w.rejectedCount === 0 || w.author == "James")) && w._rev === "1");
 
         debugger;
         // // await context.books.remove(added._id);

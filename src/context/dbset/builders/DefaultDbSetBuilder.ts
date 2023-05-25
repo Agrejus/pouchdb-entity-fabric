@@ -1,4 +1,4 @@
-import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial } from "../../../types/common-types";
+import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial, EntitySelector } from "../../../types/common-types";
 import { IDataContext } from "../../../types/context-types";
 import { IDbSet, IDbSetProps, IDbSetBase } from "../../../types/dbset-types";
 import { IDbRecord, EntityIdKeys, OmittedEntity } from "../../../types/entity-types";
@@ -23,11 +23,12 @@ export class DefaultDbSetBuilder<
     protected _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
     protected _index: string | null;
     protected _isSplitDbSet: ISplitDbSetOptions;
+    protected _filterSelector: EntitySelector<TDocumentType, TEntity> | null;
 
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
-        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet } = params;
+        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet, filterSelector } = params;
         this._extend = extend ?? [];
         this._documentType = documentType;
         this._context = context;
@@ -39,6 +40,7 @@ export class DefaultDbSetBuilder<
         this._map = map ?? [];
         this._index = index;
         this._isSplitDbSet = isSplitDbSet;
+        this._filterSelector = filterSelector ?? null
 
         this._onCreate = onCreate;
     }
@@ -56,13 +58,14 @@ export class DefaultDbSetBuilder<
             keyType: this._keyType,
             map: this._map,
             index: this._index,
-            isSplitDbSet: this._isSplitDbSet
+            isSplitDbSet: this._isSplitDbSet,
+            filterSelector: this._filterSelector
         }
         return params
     }
 
     /**
-     * Makes all entities returned from the underlying database readonly.  Entities cannot be updates, only adding or removing is available.
+     * Makes all entities returned from the underlying database readonly.  Entities cannot be updated, only adding or removing is available.
      * @returns DbSetBuilder
      */
     readonly() {
@@ -164,6 +167,11 @@ export class DefaultDbSetBuilder<
         return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>(this._onCreate, this._buildParams<TExtraExclusions>());
     }
 
+    filter(selector: EntitySelector<TDocumentType, TEntity>) {
+        this._filterSelector = selector;
+        return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());
+    }
+
     /**
      * Must call to fully create the DbSet.
      * @returns new DbSet
@@ -183,7 +191,8 @@ export class DefaultDbSetBuilder<
             keyType: this._keyType,
             map: this._map,
             index: this._index,
-            splitDbSetOptions: this._isSplitDbSet
+            splitDbSetOptions: this._isSplitDbSet,
+            filterSelector: this._filterSelector
         }), DbSet);
 
         this._onCreate(result);

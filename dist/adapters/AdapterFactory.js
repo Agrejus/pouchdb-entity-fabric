@@ -12,7 +12,7 @@ class AdapterFactory {
         this._props = props;
     }
     createFetchAdapter(indexAdapter) {
-        if (this._props.splitDbSetOptions) {
+        if (this._props.splitDbSetOptions.enabled === true) {
             return new DbSetReferenceFetchAdapter_1.DbSetReferenceFetchAdapter(this._props, indexAdapter);
         }
         return new DbSetFetchAdapter_1.DbSetFetchAdapter(this._props, indexAdapter);
@@ -24,7 +24,7 @@ class AdapterFactory {
         return new DbSetIndexAdapter_1.DbSetIndexAdapter(this._props);
     }
     createModificationAdapter(indexAdapter) {
-        if (this._props.splitDbSetOptions) {
+        if (this._props.splitDbSetOptions.enabled === true) {
             return new DbSetReferenceModificationAdapter_1.DbSetReferenceModificationAdapter(this._props, indexAdapter);
         }
         return new DbSetModificationAdapter_1.DbSetModificationAdapter(this._props, indexAdapter);

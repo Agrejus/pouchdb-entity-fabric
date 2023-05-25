@@ -1,4 +1,4 @@
-import { DbContextFactory, PouchDbDataContext } from "../../../test-helpers/context";
+import { DbContextFactory, PouchDbDataContext } from "./shared/context";
 
 describe('DbSet markDirty Tests', () => {
 
