@@ -23,8 +23,6 @@ class DbSetFetchAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
     }
     filter(selector) {
         return __awaiter(this, void 0, void 0, function* () {
-            const test = this.convertFilterSelector(selector);
-            console.log(test);
             const getIndex = this.indexAdapter.get.bind(this.indexAdapter);
             const data = yield this.allDataAndMakeTrackable(getIndex);
             const result = [...data].filter(selector);

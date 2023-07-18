@@ -369,9 +369,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 }
             }
 
-            await this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated  })));
-
             this._reinitialize(remove, add);
+
+            await this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated  })));
 
             return modificationResult.successes_count;
         } catch (e) {

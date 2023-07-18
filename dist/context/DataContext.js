@@ -304,8 +304,8 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
                         this._makePristine(modification);
                     }
                 }
-                yield this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated })));
                 this._reinitialize(remove, add);
+                yield this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated })));
                 return modificationResult.successes_count;
             }
             catch (e) {
