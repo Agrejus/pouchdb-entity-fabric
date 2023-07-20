@@ -9,3 +9,8 @@ PouchDB Entity Fabric is an abstraction layer that wraps [PouchDB](https://pouch
 
 ## Documentation
 https://github.com/Agrejus/pouchdb-entity-fabric/wiki
+
+## Releases
+2.0.5
+- Changed call order of data reinitialization and onSaveChanges in case SaveChanges is called within onSaveChanges
+- Added documentType and map to types on a DbSet.  Can be used to get the document type that is mapped to the document
