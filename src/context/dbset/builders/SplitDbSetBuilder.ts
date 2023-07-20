@@ -2,7 +2,7 @@ import { IDbSet, IDbSetBase, IDbSetProps, ISplitDbSet } from "../../../types/dbs
 import { EntityIdKeys, IDbRecord, OmittedEntity } from "../../../types/entity-types";
 import { DefaultDbSetBuilder } from "./DefaultDbSetBuilder";
 import { SplitDbSet } from '../SplitDbSet';
-import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial } from "../../../types/common-types";
+import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial, EntitySelector } from "../../../types/common-types";
 import { IDataContext } from "../../../types/context-types";
 import { DbSetKeyType, DbSetExtenderCreator, PropertyMap, ISplitDbSetOptions, DbSetExtender, IDbSetBuilderParams, IIdBuilderBase, IChainIdBuilder, ITerminateIdBuilder, IdBuilder } from "../../../types/dbset-builder-types";
 
@@ -24,11 +24,12 @@ export class SplitDbSetBuilder<
     protected _map: PropertyMap<TDocumentType, TEntity, any>[] = [];
     protected _index: string | undefined;
     protected _isSplitDbSet: ISplitDbSetOptions;
-
+    protected _filterSelector: EntitySelector<TDocumentType, TEntity> | null;
+    
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult = (Instance, a) => new Instance(a) as any;
 
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>) {
-        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet } = params;
+        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet, filterSelector } = params;
         this._extend = extend ?? [];
         this._documentType = documentType;
         this._context = context;
@@ -40,6 +41,7 @@ export class SplitDbSetBuilder<
         this._map = map ?? [];
         this._index = index;
         this._isSplitDbSet = isSplitDbSet;
+        this._filterSelector = filterSelector ?? null
 
         this._onCreate = onCreate;
     }
@@ -184,7 +186,8 @@ export class SplitDbSetBuilder<
             keyType: this._keyType,
             map: this._map,
             index: this._index,
-            splitDbSetOptions: this._isSplitDbSet
+            splitDbSetOptions: this._isSplitDbSet,
+            filterSelector: this._filterSelector
         }), SplitDbSet);
 
         this._onCreate(result);

@@ -15,8 +15,12 @@ const DbSet_1 = require("./DbSet");
  * Data Collection for set of documents with the same type.  To be used inside of the DbContext
  */
 class SplitDbSet extends DbSet_1.DbSet {
-    withoutReference() {
-        this._fetchAdapter.setNextWithoutReference();
+    lazy() {
+        this._fetchAdapter.setLazy();
+        return this;
+    }
+    include(...properties) {
+        this._fetchAdapter.setInclude(...properties);
         return this;
     }
     endTransaction() {

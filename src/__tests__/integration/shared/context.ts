@@ -1,14 +1,31 @@
 import PouchDB from "pouchdb";
-import { DataContext } from "../src/context/DataContext";
-import { IDbSet } from "../src/types/dbset-types";
-import { IDbRecordBase } from "../src/types/entity-types";
+import { DataContext } from "../../../context/DataContext";
+import { IDbSet } from "../../../types/dbset-types";
+import { IDbRecordBase } from "../../../types/entity-types";
 import { DocumentTypes, ISyncDocument, ISetStatus, IComputer, IBook, IBookV4, INote, IContact, IBookV3, ICar, IPreference, ISplitComputer, ISplitBook, INoteV2 } from "./types";
 import { v4 as uuidv4 } from 'uuid';
 import memoryAdapter from 'pouchdb-adapter-memory';
-import { DefaultDbSetBuilder } from "../src/context/dbset/builders/DefaultDbSetBuilder";
-import { ExperimentalDataContext } from "../src/context/ExperimentalDataContext";
+import { DefaultDbSetBuilder } from "../../../context/dbset/builders/DefaultDbSetBuilder";
+import { ExperimentalDataContext } from "../../../context/ExperimentalDataContext";
 
 PouchDB.plugin(memoryAdapter);
+
+const dataContextWithParamsCreator = (type: string, name?: string) => new class extends DataContext<DocumentTypes> {
+   
+    constructor() {
+        super(name ?? `${uuidv4()}-db`);
+    }
+
+    carsWithDefault = this.dbset().default<ICar>(DocumentTypes.CarsWithDefault)
+        .defaults({ make: type })
+        .exclude("make")
+        .keys(w => w.add("model").add("make"))
+        .filter(w => w.make === type)
+        .create();
+}
+
+const context = dataContextWithParamsCreator("");
+export const PouchDbDataContextWithDefaults = context;
 
 export class PouchDbDataContext extends DataContext<DocumentTypes> {
 
@@ -77,7 +94,7 @@ export class PouchDbDataContext extends DataContext<DocumentTypes> {
             }
         }
     }).create();
-    cars = this.dbset().default<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create()
+    cars = this.dbset().default<ICar>(DocumentTypes.Cars).keys(w => w.add(x => x.manufactureDate.toISOString()).add(x => x.make).add("model")).create();
     preference = this.dbset().default<IPreference>(DocumentTypes.Preference).keys(w => w.add(_ => "static")).create();
     preferencev2 = this.dbset().default<IPreference>(DocumentTypes.PreferenceV2).keys(w => w.add(() => "")).create();
     readonlyPreference = this.dbset().default<IPreference>(DocumentTypes.ReadonlyPreference).keys(w => w.add(_ => "static")).readonly().create();
@@ -178,7 +195,11 @@ export class DbContextFactory {
         return uuidv4();
     }
 
-    createContext<T extends typeof PouchDbDataContext>(Context: T, dbname?: string) {
+    createContextWithParams(type: string, name?: string) {
+        return dataContextWithParamsCreator(type, name)
+    }
+
+    createContext<T extends typeof PouchDbDataContext>(Context: T, dbname?: string, type?: string) {
         const name = dbname ?? `${uuidv4()}-db`;
         const result = new Context(name);
         this._dbs[name] = result;
@@ -196,11 +217,11 @@ export class DbContextFactory {
     createDbContexts<T extends DataContext<DocumentTypes>>(factory: (name: string) => T[]) {
         const name = `${uuidv4()}-db`;
         const contexts = factory(name);
-    
+
         for (const context of contexts) {
             this._dbs[name] = context;
         }
-    
+
         return contexts;
     }
 

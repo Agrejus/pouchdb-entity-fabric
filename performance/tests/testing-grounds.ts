@@ -94,15 +94,16 @@ interface INote extends IDbRecord<DocumentTypes> {
     userId: string;
 }
 
-interface IBook extends ISplitDbRecord<DocumentTypes, DocumentTypes, INote> {
+interface IBook extends IDbRecord<DocumentTypes.Books> {
     author: string;
     publishDate?: string;
     rejectedCount: number;
     status: "pending" | "approved" | "rejected";
     syncStatus: "pending" | "approved" | "rejected";
+    test?: string
 }
 
-interface ICar extends IUnmanagedSplitDbRecord<DocumentTypes, DocumentTypes, INote> {
+interface ICar extends IDbRecord<DocumentTypes.Cars> {
     make: string;
     model: string;
     year: number;
@@ -414,15 +415,40 @@ class PouchDbDataContext extends ExperimentalDataContext<DocumentTypes> {
     // constructor() {
     //     super(`${uuidv4()}-db`);
     // }
-    constructor() {
-        super(`test-db`);
+
+    map: typeof this.cars.types.map & typeof this.book2s.types.map = {
+        Cars: {} as any,
+        Books: {} as any
     }
 
-    books = this.experimentalDbset().split<DocumentTypes, INote, IBook>(DocumentTypes.Books)
-        .keys(w => w.auto())
+    constructor() {
+        super(`test-db`);
+
+        this.onChange(DocumentTypes.Cars, data => {
+
+        })
+    }
+
+    types = {
+        map: {} as typeof this.cars.types.map & typeof this.book2s.types.map
+    }
+
+    onChange<TDocumentType extends keyof typeof this.types.map, TEntity extends typeof this.types.map[TDocumentType]>(documentType: TDocumentType, callback: (data: TEntity[]) => void) {
+
+    }
+
+    book2s = this.dbset().default<IBook>(DocumentTypes.Books)
+        .defaults({ test: "Winner" })
+        .keys(w => w.add("author").add("test"))
         .create();
 
-    cars = this.experimentalDbset().unmanagedSplit<DocumentTypes, INote, ICar>(DocumentTypes.Cars)
+    books = this.dbset().default<IBook>(DocumentTypes.Books)
+        .defaults({ test: "Winner" })
+        .keys(w => w.add("author").add("test"))
+        .filter(w => w.test == "Winner")
+        .create();
+
+    cars = this.dbset().default<ICar>(DocumentTypes.Cars)
         .keys(w => w.auto())
         .create();
 }
@@ -431,45 +457,47 @@ export const run = async () => {
     try {
 
         const context = new PouchDbDataContext();
+        // const deletes = await context.books.filter(w => w.author === "James");
+        // await context.books.remove(...deletes);
+        await context.saveChanges();
+
         const [added] = await context.books.add({
-    author: "James",
-    reference: {
-        contents: "Note Contents",
-        createdDate: "some date",
-        userId: "some user id"
-    },
-    rejectedCount: 1,
-    status: "pending",
-    syncStatus: "approved"
+            author: "James",
+            rejectedCount: 1,
+            status: "pending",
+            syncStatus: "approved"
         });
 
+        await context.saveChanges();
 
-        // await context.saveChanges();
-
-        // await context.books.remove(added._id);
-
-        // await context.saveChanges();
-
-        const db = new PouchDB('test-size-db');
-        const docs: { _id: string, content: string }[] = [];
-        for (let i = 0; i < 100; i++) {
-            docs.push({
-                _id: `some_id-${i}`,
-                content: loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum
-            })
-        }
-
-        await db.bulkDocs(docs);
         debugger;
-        const allDocs = await db.find({
-            selector: {
-                _id: { $in: docs.map(w => w._id) }
-            }
-        })
-        debugger
-        for(const doc of allDocs.docs) {
-            await (db as any).purge(doc._id, doc._rev)
-        }
+        const found = await context.books.filter(w => w._id === added._id && (w.DocumentType == DocumentTypes.Books && (w.rejectedCount === 0 || w.author == "James")) && w._rev === "1");
+
+        debugger;
+        // // await context.books.remove(added._id);
+
+        // // await context.saveChanges();
+
+        // const db = new PouchDB('test-size-db');
+        // const docs: { _id: string, content: string }[] = [];
+        // for (let i = 0; i < 100; i++) {
+        //     docs.push({
+        //         _id: `some_id-${i}`,
+        //         content: loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum + loremIpsum
+        //     })
+        // }
+
+        // await db.bulkDocs(docs);
+        // debugger;
+        // const allDocs = await db.find({
+        //     selector: {
+        //         _id: { $in: docs.map(w => w._id) }
+        //     }
+        // })
+        // debugger
+        // for (const doc of allDocs.docs) {
+        //     await (db as any).purge(doc._id, doc._rev)
+        // }
 
         // const [f] = await context.books.withoutReference().get(added._id)
         // await context.books.remove(f)

@@ -8,7 +8,7 @@ class DefaultDbSetBuilder {
         this._readonly = false;
         this._map = [];
         this._defaultExtend = (Instance, a) => new Instance(a);
-        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet } = params;
+        const { context, documentType, idKeys, defaults, exclusions, readonly, extend, keyType, map, index, isSplitDbSet, filterSelector } = params;
         this._extend = extend !== null && extend !== void 0 ? extend : [];
         this._documentType = documentType;
         this._context = context;
@@ -20,6 +20,7 @@ class DefaultDbSetBuilder {
         this._map = map !== null && map !== void 0 ? map : [];
         this._index = index;
         this._isSplitDbSet = isSplitDbSet;
+        this._filterSelector = filterSelector !== null && filterSelector !== void 0 ? filterSelector : null;
         this._onCreate = onCreate;
     }
     _buildParams() {
@@ -34,12 +35,13 @@ class DefaultDbSetBuilder {
             keyType: this._keyType,
             map: this._map,
             index: this._index,
-            isSplitDbSet: this._isSplitDbSet
+            isSplitDbSet: this._isSplitDbSet,
+            filterSelector: this._filterSelector
         };
         return params;
     }
     /**
-     * Makes all entities returned from the underlying database readonly.  Entities cannot be updates, only adding or removing is available.
+     * Makes all entities returned from the underlying database readonly.  Entities cannot be updated, only adding or removing is available.
      * @returns DbSetBuilder
      */
     readonly() {
@@ -99,6 +101,15 @@ class DefaultDbSetBuilder {
         return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
     /**
+     * Set a filter to be used on all queries
+     * @param selector
+     * @returns DbSetBuilder
+     */
+    filter(selector) {
+        this._filterSelector = selector;
+        return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
+    }
+    /**
      * Must call to fully create the DbSet.
      * @returns new DbSet
      */
@@ -115,7 +126,8 @@ class DefaultDbSetBuilder {
             keyType: this._keyType,
             map: this._map,
             index: this._index,
-            splitDbSetOptions: this._isSplitDbSet
+            splitDbSetOptions: this._isSplitDbSet,
+            filterSelector: this._filterSelector
         }), DbSet_1.DbSet);
         this._onCreate(result);
         return result;

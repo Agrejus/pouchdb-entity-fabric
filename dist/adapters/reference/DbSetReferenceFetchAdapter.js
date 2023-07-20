@@ -20,24 +20,31 @@ const LinkedDatabase_1 = require("../../common/LinkedDatabase");
 class DbSetReferenceFetchAdapter extends DbSetFetchAdapter_1.DbSetFetchAdapter {
     constructor(props, indexAdapter) {
         super(props, indexAdapter);
-        this._withoutReference = false;
+        this._include = "all";
     }
-    _getMany(databaseName, ...ids) {
+    _getMany(databaseName, fields, ...ids) {
         return __awaiter(this, void 0, void 0, function* () {
             const database = new pouchdb_1.default(databaseName);
-            const response = yield database.find({
+            const request = {
                 selector: { _id: { $in: ids } }
-            });
+            };
+            if (fields !== "all" && fields.length > 0) {
+                request.fields = ["_id", "_rev", "DocumentType", ...fields];
+            }
+            const response = yield database.find(request);
             return response.docs;
         });
     }
-    setNextWithoutReference() {
-        this._withoutReference = true;
+    setLazy() {
+        this._include = [];
+    }
+    setInclude(...properties) {
+        this._include = properties;
     }
     onAfterDataFetched(data) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (this._withoutReference === true) {
-                this._withoutReference = false;
+            if (this._include.length === 0) {
+                this._include = "all";
                 return;
             }
             const documentsWithReferences = data.filter(w => !!w[entity_types_1.SplitDocumentPathPropertyName]);
@@ -59,11 +66,12 @@ class DbSetReferenceFetchAdapter extends DbSetFetchAdapter_1.DbSetFetchAdapter {
             for (const referenceModification in referenceModifications) {
                 mods.push({ databaseName: referenceModification, ids: referenceModifications[referenceModification] });
             }
-            const referencedDocuments = yield Promise.all(mods.map((w) => __awaiter(this, void 0, void 0, function* () { return yield this._getMany(w.databaseName, ...w.ids); })));
+            const referencedDocuments = yield Promise.all(mods.map((w) => __awaiter(this, void 0, void 0, function* () { return yield this._getMany(w.databaseName, this._include, ...w.ids); })));
             for (const referencedDocument of referencedDocuments.reduce((a, v) => a.concat(v), [])) {
                 referenceIdToMainIdLinks[referencedDocument._id].reference = referencedDocument;
                 this.api.makePristine(referenceIdToMainIdLinks[referencedDocument._id]);
             }
+            this._include = [];
         });
     }
 }

@@ -1,4 +1,4 @@
-import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial } from "../../../types/common-types";
+import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial, EntitySelector } from "../../../types/common-types";
 import { IDataContext } from "../../../types/context-types";
 import { IDbSet, IDbSetProps, IDbSetBase } from "../../../types/dbset-types";
 import { IDbRecord, EntityIdKeys, OmittedEntity } from "../../../types/entity-types";
@@ -16,11 +16,12 @@ export declare class DefaultDbSetBuilder<TDocumentType extends string, TEntity e
     protected _map: PropertyMap<TDocumentType, TEntity, any>[];
     protected _index: string | null;
     protected _isSplitDbSet: ISplitDbSetOptions;
+    protected _filterSelector: EntitySelector<TDocumentType, TEntity> | null;
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>);
     protected _buildParams<T extends string>(): IDbSetBuilderParams<TDocumentType, TEntity, T, any>;
     /**
-     * Makes all entities returned from the underlying database readonly.  Entities cannot be updates, only adding or removing is available.
+     * Makes all entities returned from the underlying database readonly.  Entities cannot be updated, only adding or removing is available.
      * @returns DbSetBuilder
      */
     readonly(): DefaultDbSetBuilder<TDocumentType, Readonly<TEntity>, TExtraExclusions, IDbSet<TDocumentType, Readonly<TEntity>, TExtraExclusions>>;
@@ -63,6 +64,12 @@ export declare class DefaultDbSetBuilder<TDocumentType extends string, TEntity e
      */
     useIndex(name: string): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult, args: IDbSetProps<TDocumentType, TEntity>) => TExtension): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>;
+    /**
+     * Set a filter to be used on all queries
+     * @param selector
+     * @returns DbSetBuilder
+     */
+    filter(selector: EntitySelector<TDocumentType, TEntity>): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     /**
      * Must call to fully create the DbSet.
      * @returns new DbSet

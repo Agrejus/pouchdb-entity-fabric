@@ -18,7 +18,7 @@ export class AdapterFactory<TDocumentType extends string, TEntity extends IDbRec
 
     createFetchAdapter(indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>): IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
-        if (this._props.splitDbSetOptions) {
+        if (this._props.splitDbSetOptions.enabled === true) {
             return new DbSetReferenceFetchAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props, indexAdapter)
         }
 
@@ -34,7 +34,7 @@ export class AdapterFactory<TDocumentType extends string, TEntity extends IDbRec
     }
 
     createModificationAdapter(indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>): IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
-        if (this._props.splitDbSetOptions) {
+        if (this._props.splitDbSetOptions.enabled === true) {
             return new DbSetReferenceModificationAdapter<TDocumentType, TEntity, TExtraExclusions>(this._props, indexAdapter)
         }
 

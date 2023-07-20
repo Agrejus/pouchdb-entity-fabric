@@ -321,7 +321,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             add,
             remove: [...remove, ...extraRemovals].map(w => {
 
-                let result = { _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true } as IIndexableEntity;
+                let result = { ...w, _id: w._id, _rev: w._rev, DocumentType: w.DocumentType, _deleted: true } as IIndexableEntity;
 
                 if ((w as IIndexableEntity)[SplitDocumentPathPropertyName] != null) {
                     result = { ...result, [SplitDocumentPathPropertyName]: (w as IIndexableEntity)[SplitDocumentPathPropertyName] }
@@ -369,9 +369,9 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
                 }
             }
 
-            await this.onAfterSaveChanges({ adds: add.length, removes: remove.length, updates: updated.length })
-
             this._reinitialize(remove, add);
+
+            await this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated  })));
 
             return modificationResult.successes_count;
         } catch (e) {
@@ -388,7 +388,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
      
     }
 
-    protected async onAfterSaveChanges(modifications: { adds: number, removes: number, updates: number }) {
+    protected async onAfterSaveChanges(getChanges: () => { adds: IDbRecordBase[], removes: IDbRecordBase[], updates: IDbRecordBase[] }) {
 
     }
 

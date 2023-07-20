@@ -41,11 +41,12 @@ class DbSetFetchAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
         return __awaiter(this, void 0, void 0, function* () {
             const entities = yield this.api.getStrict(...ids);
             const result = entities.map(w => this.api.makeTrackable(w, this.defaults.retrieve, this.isReadonly, this.map));
-            yield this.onAfterDataFetched(result);
-            if (result.length > 0) {
-                this.api.send(result);
+            const filteredResult = this.filterResult(result);
+            yield this.onAfterDataFetched(filteredResult);
+            if (filteredResult.length > 0) {
+                this.api.send(filteredResult);
             }
-            return result;
+            return filteredResult;
         });
     }
     find(selector) {

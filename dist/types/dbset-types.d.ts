@@ -1,5 +1,5 @@
 /// <reference types="pouchdb-find" />
-import { IQueryParams, DeepPartial, DbSetPickDefaultActionRequired } from "./common-types";
+import { IQueryParams, DeepPartial, DbSetPickDefaultActionRequired, EntitySelector } from "./common-types";
 import { ITrackedData, IDataContext } from "./context-types";
 import { DbSetKeyType, ISplitDbSetOptions, PropertyMap } from "./dbset-builder-types";
 import { IDbRecord, OmittedEntity, IDbRecordBase, EntityIdKeys } from "./entity-types";
@@ -28,7 +28,9 @@ export interface IDbSetEnumerable<TDocumentType extends string, TEntity extends 
     first(): Promise<TEntity | undefined>;
 }
 export interface ISplitDbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends IDbSet<TDocumentType, TEntity, TExtraExclusions> {
-    withoutReference(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    lazy(): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions> & {
+        include(...properties: string[]): ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>;
+    };
     endTransaction(): Promise<void>;
     startTransaction(transactionId: string): Promise<void>;
 }
@@ -36,6 +38,10 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     get types(): {
         modify: OmittedEntity<TEntity, TExtraExclusions>;
         result: TEntity;
+        documentType: TEntity["DocumentType"];
+        map: {
+            [DocumentType in TEntity["DocumentType"]]: TEntity;
+        };
     };
     query(request: DeepPartial<PouchDB.Find.FindRequest<TEntity>>): Promise<PouchDB.Find.FindResponse<TEntity>>;
     /**
@@ -158,8 +164,10 @@ export interface IDbSetProps<TDocumentType extends string, TEntity extends IDbRe
     map: PropertyMap<TDocumentType, TEntity, any>[];
     index: string | undefined;
     splitDbSetOptions: ISplitDbSetOptions;
+    filterSelector: EntitySelector<TDocumentType, TEntity> | null;
 }
 export type DbSetEventCallback<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entity: TEntity) => void;
 export type DbSetIdOnlyEventCallback = (entity: string) => void;
 export type DbSetEventCallbackAsync<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>> = (entities: TEntity[]) => Promise<void>;
 export type DbSetIdOnlyEventCallbackAsync = (entities: string[]) => Promise<void>;
+export type IncludeType = "all" | string[];

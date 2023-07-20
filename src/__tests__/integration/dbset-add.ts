@@ -1,7 +1,7 @@
-import { BooksWithTwoDefaultContext, DbContextFactory, ExperimentalPouchDbDataContext, PouchDbDataContext } from "../../../test-helpers/context";
-import { DocumentTypes } from "../../../test-helpers/types";
 import { parseDocumentReference } from "../../common/LinkedDatabase";
 import PouchDB from 'pouchdb';
+import { DbContextFactory, PouchDbDataContext, BooksWithTwoDefaultContext, ExperimentalPouchDbDataContext } from "./shared/context";
+import { DocumentTypes } from "./shared/types";
 
 describe('DbSet Add Tests', () => {
 
@@ -78,7 +78,7 @@ describe('DbSet Add Tests', () => {
         });
 
         expect(preference.DocumentType).toBe(DocumentTypes.PreferenceV2);
-        expect(preference._id).toBe(`${DocumentTypes.PreferenceV2}/`);
+        expect(preference._id).toBe(`${DocumentTypes.PreferenceV2}`);
         expect(preference._rev).not.toBeDefined();
 
         expect(preference.isOtherPropertyOn).toBe(true);

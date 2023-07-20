@@ -1,5 +1,5 @@
 import PouchDB from 'pouchdb';
-import { IDbSetProps } from '../../types/dbset-types';
+import { IDbSetProps, IncludeType } from '../../types/dbset-types';
 import { IDbRecord, IDbRecordBase, SplitDocumentPathPropertyName } from '../../types/entity-types';
 import { DbSetFetchAdapter } from '../DbSetFetchAdapter';
 import { IDbSetFetchAdapter, IDbSetIndexAdapter } from '../../types/adapter-types';
@@ -8,34 +8,43 @@ import { DocumentReference } from '../../types/common-types';
 
 export class DbSetReferenceFetchAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetFetchAdapter<TDocumentType, TEntity, TExtraExclusions>  {
 
-    private _withoutReference: boolean = false;
+    private _include: IncludeType = "all";
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>, indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>) {
         super(props, indexAdapter);
     }
 
-    
-    private async _getMany(databaseName: string, ...ids: string[]) {
+    private async _getMany(databaseName: string, fields: IncludeType, ...ids: string[]) {
         const database = new PouchDB(databaseName);
 
-        const response = await database.find({
+        const request: PouchDB.Find.FindRequest<{}> = {
             selector: { _id: { $in: ids } }
-        });
+        }
+
+        if (fields !== "all" && fields.length > 0) {
+            request.fields = ["_id", "_rev", "DocumentType", ...fields]
+        }
+
+        const response = await database.find(request);
 
         return response.docs as IDbRecordBase[];
     }
 
-    setNextWithoutReference() {
-        this._withoutReference = true;
+    setLazy() {
+        this._include = [];
+    }
+
+    setInclude(...properties: string[]) {
+        this._include = properties;
     }
 
     protected override async onAfterDataFetched(data: TEntity[]) {
 
-        if (this._withoutReference === true) {
-            this._withoutReference = false;
+        if (this._include.length === 0) {
+            this._include = "all";
             return;
         }
-        
+
         const documentsWithReferences = data.filter(w => !!(w as any)[SplitDocumentPathPropertyName]);
         const documentReferenceMap: { [key: string]: DocumentReference } = {};
         const referenceModifications: { [key: string]: string[] } = {};
@@ -62,10 +71,12 @@ export class DbSetReferenceFetchAdapter<TDocumentType extends string, TEntity ex
             mods.push({ databaseName: referenceModification, ids: referenceModifications[referenceModification] })
         }
 
-        const referencedDocuments = await Promise.all(mods.map(async w => await this._getMany(w.databaseName, ...w.ids)))
-        for(const referencedDocument of referencedDocuments.reduce((a, v) => a.concat(v), [])) {
+        const referencedDocuments = await Promise.all(mods.map(async w => await this._getMany(w.databaseName, this._include, ...w.ids)))
+        for (const referencedDocument of referencedDocuments.reduce((a, v) => a.concat(v), [])) {
             referenceIdToMainIdLinks[referencedDocument._id].reference = referencedDocument;
             this.api.makePristine(referenceIdToMainIdLinks[referencedDocument._id]);
         }
+
+        this._include = [];
     }
 }

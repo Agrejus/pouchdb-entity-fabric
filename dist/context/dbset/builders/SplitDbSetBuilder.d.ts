@@ -1,6 +1,6 @@
 import { IDbSetBase, IDbSetProps, ISplitDbSet } from "../../../types/dbset-types";
 import { EntityIdKeys, IDbRecord, OmittedEntity } from "../../../types/entity-types";
-import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial } from "../../../types/common-types";
+import { DbSetPickDefaultActionRequired, DbSetPickDefaultActionOptional, DeepPartial, EntitySelector } from "../../../types/common-types";
 import { IDataContext } from "../../../types/context-types";
 import { DbSetKeyType, DbSetExtenderCreator, PropertyMap, ISplitDbSetOptions, DbSetExtender, IDbSetBuilderParams, IIdBuilderBase, IChainIdBuilder, ITerminateIdBuilder } from "../../../types/dbset-builder-types";
 export declare class SplitDbSetBuilder<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string, TResult extends ISplitDbSet<TDocumentType, TEntity, TExtraExclusions>> {
@@ -16,6 +16,7 @@ export declare class SplitDbSetBuilder<TDocumentType extends string, TEntity ext
     protected _map: PropertyMap<TDocumentType, TEntity, any>[];
     protected _index: string | undefined;
     protected _isSplitDbSet: ISplitDbSetOptions;
+    protected _filterSelector: EntitySelector<TDocumentType, TEntity> | null;
     protected _defaultExtend: (i: DbSetExtender<TDocumentType, TEntity, TExtraExclusions>, args: IDbSetProps<TDocumentType, TEntity>) => TResult;
     constructor(onCreate: (dbset: IDbSetBase<string>) => void, params: IDbSetBuilderParams<TDocumentType, TEntity, TExtraExclusions, TResult>);
     protected _buildParams<T extends string>(): IDbSetBuilderParams<TDocumentType, TEntity, T, any>;

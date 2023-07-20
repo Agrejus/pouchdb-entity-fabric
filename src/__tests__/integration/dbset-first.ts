@@ -1,5 +1,6 @@
-import { BooksWithOneDefaultContext, DbContextFactory, PouchDbDataContext } from "../../../test-helpers/context";
-import { DocumentTypes } from "../../../test-helpers/types";
+import { shouldFilterEntitiesWithDefaults, shouldFilterEntitiesWithDefaultsAndNotMatchOnSecondQuery } from "./shared/common-tests";
+import { DbContextFactory, PouchDbDataContext, BooksWithOneDefaultContext } from "./shared/context";
+import { DocumentTypes } from "./shared/types";
 
 describe('DbSet First Tests', () => {
 
@@ -73,5 +74,45 @@ describe('DbSet First Tests', () => {
         expect(book?.publishDate).toBe(date.toISOString());
         expect(book?._id).toBeDefined();
         expect(book?._rev).toBeDefined();
+    });
+
+    it('should find first entities with no defaults', async () => {
+
+        await shouldFilterEntitiesWithDefaults(
+            () => contextFactory.createContextWithParams("", "my-db0"),
+            async (dbSet, _) => { const response = await dbSet.first(); if (response) { return [response] } return [] },
+            w => expect(w.length).toBe(1))
+    });
+
+    it('should find first entities with defaults', async () => {
+
+        await shouldFilterEntitiesWithDefaults(
+            () => contextFactory.createContextWithParams("CouchDB", "my-db"),
+            async (dbSet, _) => { const response = await dbSet.first(); if (response) { return [response] } return [] },
+            w => expect(w.length).toBe(1))
+    });
+
+    it('should find first entities and not find result when base filter does not match - with default', async () => {
+
+        await shouldFilterEntitiesWithDefaultsAndNotMatchOnSecondQuery(
+            () => contextFactory.createContextWithParams("CouchDB", "my-db1"),
+            () => contextFactory.createContextWithParams("", "my-db1"),
+            async (dbSet, _) => { const response = await dbSet.first(); if (response) { return [response] } return [] },
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(0),
+            w => expect(w.length).toBe(1))
+    });
+
+    it('should find first entities and not find result when base filter does not match - with no default', async () => {
+
+        await shouldFilterEntitiesWithDefaultsAndNotMatchOnSecondQuery(
+            () => contextFactory.createContextWithParams("", "my-db2"),
+            () => contextFactory.createContextWithParams("CouchDB", "my-db2"),
+            async (dbSet, _) => { const response = await dbSet.first(); if (response) { return [response] } return [] },
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(1),
+            w => expect(w.length).toBe(0),
+            w => expect(w.length).toBe(1))
     });
 });

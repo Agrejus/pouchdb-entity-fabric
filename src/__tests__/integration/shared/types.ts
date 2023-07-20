@@ -1,4 +1,4 @@
-import { IDbRecord, ISplitDbRecord, IUnmanagedSplitDbRecord } from "../src/types/entity-types";
+import { IDbRecord, ISplitDbRecord, IUnmanagedSplitDbRecord } from "../../../../src/types/entity-types";
 
 export enum DocumentTypes {
     Notes = "Notes",
@@ -18,6 +18,7 @@ export enum DocumentTypes {
     BooksWithNoDefaults = "BooksWithNoDefaults",
     BooksWithTwoDefaults = "BooksWithTwoDefaults",
     Cars = "Cars",
+    CarsWithDefault = "CarsWithDefault",
     Preference = "Preference",
     PreferenceV2 = "PreferenceV2",
     ReadonlyPreference = "ReadonlyPreference",

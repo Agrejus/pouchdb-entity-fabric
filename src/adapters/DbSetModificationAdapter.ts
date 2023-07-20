@@ -46,7 +46,8 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
                 throw new Error('Cannot add entity that is already in the database, please modify entites by reference or attach an existing entity')
             }
 
-            const trackableEntity = this.processAdditionAndMakeTrackable(entity);
+            const mappedEntity = this.api.map(entity, this.map, this.defaults.add);
+            const trackableEntity = this.processAdditionAndMakeTrackable(mappedEntity);
 
             add.push(trackableEntity);
 

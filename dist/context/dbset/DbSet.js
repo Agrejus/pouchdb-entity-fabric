@@ -18,7 +18,9 @@ class DbSet {
     get types() {
         return {
             modify: {},
-            result: {}
+            result: {},
+            documentType: {},
+            map: {}
         };
     }
     /**
