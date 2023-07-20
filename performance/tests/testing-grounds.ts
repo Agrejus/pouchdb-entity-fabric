@@ -94,7 +94,7 @@ interface INote extends IDbRecord<DocumentTypes> {
     userId: string;
 }
 
-interface IBook extends IDbRecord<DocumentTypes> {
+interface IBook extends IDbRecord<DocumentTypes.Books> {
     author: string;
     publishDate?: string;
     rejectedCount: number;
@@ -103,7 +103,7 @@ interface IBook extends IDbRecord<DocumentTypes> {
     test?: string
 }
 
-interface ICar extends IUnmanagedSplitDbRecord<DocumentTypes, DocumentTypes, INote> {
+interface ICar extends IDbRecord<DocumentTypes.Cars> {
     make: string;
     model: string;
     year: number;
@@ -415,9 +415,32 @@ class PouchDbDataContext extends ExperimentalDataContext<DocumentTypes> {
     // constructor() {
     //     super(`${uuidv4()}-db`);
     // }
+
+    map: typeof this.cars.types.map & typeof this.book2s.types.map = {
+        Cars: {} as any,
+        Books: {} as any
+    }
+
     constructor() {
         super(`test-db`);
+
+        this.onChange(DocumentTypes.Cars, data => {
+
+        })
     }
+
+    types = {
+        map: {} as typeof this.cars.types.map & typeof this.book2s.types.map
+    }
+
+    onChange<TDocumentType extends keyof typeof this.types.map, TEntity extends typeof this.types.map[TDocumentType]>(documentType: TDocumentType, callback: (data: TEntity[]) => void) {
+
+    }
+
+    book2s = this.dbset().default<IBook>(DocumentTypes.Books)
+        .defaults({ test: "Winner" })
+        .keys(w => w.add("author").add("test"))
+        .create();
 
     books = this.dbset().default<IBook>(DocumentTypes.Books)
         .defaults({ test: "Winner" })
@@ -425,7 +448,7 @@ class PouchDbDataContext extends ExperimentalDataContext<DocumentTypes> {
         .filter(w => w.test == "Winner")
         .create();
 
-    cars = this.experimentalDbset().unmanagedSplit<DocumentTypes, INote, ICar>(DocumentTypes.Cars)
+    cars = this.dbset().default<ICar>(DocumentTypes.Cars)
         .keys(w => w.auto())
         .create();
 }

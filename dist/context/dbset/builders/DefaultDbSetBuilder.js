@@ -100,6 +100,11 @@ class DefaultDbSetBuilder {
         this._extend.push(extend);
         return new DefaultDbSetBuilder(this._onCreate, this._buildParams());
     }
+    /**
+     * Set a filter to be used on all queries
+     * @param selector
+     * @returns DbSetBuilder
+     */
     filter(selector) {
         this._filterSelector = selector;
         return new DefaultDbSetBuilder(this._onCreate, this._buildParams());

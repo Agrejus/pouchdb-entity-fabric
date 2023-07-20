@@ -64,6 +64,11 @@ export declare class DefaultDbSetBuilder<TDocumentType extends string, TEntity e
      */
     useIndex(name: string): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     extend<TExtension extends IDbSet<TDocumentType, TEntity, TExtraExclusions>>(extend: (i: new (props: IDbSetProps<TDocumentType, TEntity>) => TResult, args: IDbSetProps<TDocumentType, TEntity>) => TExtension): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>;
+    /**
+     * Set a filter to be used on all queries
+     * @param selector
+     * @returns DbSetBuilder
+     */
     filter(selector: EntitySelector<TDocumentType, TEntity>): DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>;
     /**
      * Must call to fully create the DbSet.

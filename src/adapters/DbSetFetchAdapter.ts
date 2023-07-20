@@ -18,8 +18,6 @@ export class DbSetFetchAdapter<TDocumentType extends string, TEntity extends IDb
     }
 
     async filter(selector: EntitySelector<TDocumentType, TEntity>) {
-        const test = this.convertFilterSelector(selector);
-        console.log(test);
         const getIndex = this.indexAdapter.get.bind(this.indexAdapter);
         const data = await this.allDataAndMakeTrackable(getIndex);
 

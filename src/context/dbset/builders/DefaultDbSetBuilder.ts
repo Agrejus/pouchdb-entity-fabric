@@ -167,6 +167,11 @@ export class DefaultDbSetBuilder<
         return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TExtension>(this._onCreate, this._buildParams<TExtraExclusions>());
     }
 
+    /**
+     * Set a filter to be used on all queries
+     * @param selector 
+     * @returns DbSetBuilder
+     */
     filter(selector: EntitySelector<TDocumentType, TEntity>) {
         this._filterSelector = selector;
         return new DefaultDbSetBuilder<TDocumentType, TEntity, TExtraExclusions, TResult>(this._onCreate, this._buildParams());

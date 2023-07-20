@@ -38,6 +38,10 @@ export interface IDbSet<TDocumentType extends string, TEntity extends IDbRecord<
     get types(): {
         modify: OmittedEntity<TEntity, TExtraExclusions>;
         result: TEntity;
+        documentType: TEntity["DocumentType"];
+        map: {
+            [DocumentType in TEntity["DocumentType"]]: TEntity;
+        };
     };
     query(request: DeepPartial<PouchDB.Find.FindRequest<TEntity>>): Promise<PouchDB.Find.FindResponse<TEntity>>;
     /**

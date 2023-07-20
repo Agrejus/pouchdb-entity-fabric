@@ -17,7 +17,9 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
     get types() {
         return {
             modify: {} as OmittedEntity<TEntity, TExtraExclusions>,
-            result: {} as TEntity
+            result: {} as TEntity,
+            documentType: {} as TEntity["DocumentType"],
+            map: {} as { [DocumentType in TEntity["DocumentType"]]: TEntity }
         }
     }
 
@@ -120,8 +122,8 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
 
     private merge(target: PouchDB.Find.FindRequest<TEntity>, source: PouchDB.Find.FindRequest<TEntity>) {
 
-         // Iterate through `source` properties and if an `Object` set property to merge of `target` and `source` properties
-         // https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6
+        // Iterate through `source` properties and if an `Object` set property to merge of `target` and `source` properties
+        // https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6
         for (const key of Object.keys(source)) {
             if ((source as any)[key] instanceof Object) {
                 Object.assign((source as any)[key], this.merge((target as any)[key], (source as any)[key]))

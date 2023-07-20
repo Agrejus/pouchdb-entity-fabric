@@ -14,6 +14,8 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
     get types(): {
         modify: import("../../types/common-types").DeepOmit<TEntity, "_id" | "_rev" | "DocumentType" | TExtraExclusions>;
         result: TEntity;
+        documentType: TEntity["DocumentType"];
+        map: { [DocumentType_1 in TEntity["DocumentType"]]: TEntity; };
     };
     /**
      * Constructor
