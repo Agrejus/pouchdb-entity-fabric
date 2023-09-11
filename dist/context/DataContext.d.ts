@@ -2,7 +2,7 @@ import { AdvancedDictionary } from "../common/AdvancedDictionary";
 import { IIndexApi } from "../indexing/IndexApi";
 import { IPreviewChanges, IPurgeResponse } from "../types/common-types";
 import { IDataContext, DataContextOptions } from "../types/context-types";
-import { IDbSet } from "../types/dbset-types";
+import { EntityAndTag, IDbSet } from "../types/dbset-types";
 import { IDbRecordBase, IIndexableEntity } from "../types/entity-types";
 import { PouchDbInteractionBase } from "./PouchDbInteractionBase";
 import { AsyncCache } from '../cache/AsyncCache';
@@ -14,6 +14,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     protected _removals: IDbRecordBase[];
     protected _additions: IDbRecordBase[];
     protected _attachments: AdvancedDictionary<IDbRecordBase>;
+    private _tags;
     protected _removeById: string[];
     private _configuration;
     protected asyncCache: AsyncCache;
@@ -37,6 +38,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
      * @returns IData
      */
     private _getApi;
+    private _tag;
     protected addDbSet(dbset: IDbSet<string, any>): void;
     /**
      * Used by the context api
@@ -68,12 +70,22 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     private _makePristine;
     private _getModifications;
     saveChanges(): Promise<number>;
-    protected onBeforeSaveChanges(modifications: IDbRecordBase[]): Promise<void>;
+    private _getTagsForTransaction;
+    /**
+     * Called before changes are persisted to the database.  Any modificaitons to entities made here will be persisted to the database
+     * If you do not want your changes in the database, consider spreading or cloning the entities
+     * @param getChanges
+     */
+    protected onBeforeSaveChanges(getChanges: () => {
+        adds: EntityAndTag[];
+        removes: EntityAndTag[];
+        updates: EntityAndTag[];
+    }): Promise<void>;
     protected onAfterSetRev(entity: IIndexableEntity): void;
     protected onAfterSaveChanges(getChanges: () => {
-        adds: IDbRecordBase[];
-        removes: IDbRecordBase[];
-        updates: IDbRecordBase[];
+        adds: EntityAndTag[];
+        removes: EntityAndTag[];
+        updates: EntityAndTag[];
     }): Promise<void>;
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional

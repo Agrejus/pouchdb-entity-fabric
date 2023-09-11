@@ -15,6 +15,7 @@ const DbSetBaseAdapter_1 = require("./DbSetBaseAdapter");
 class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
     constructor(props, indexAdapter) {
         super(props);
+        this._tag = null;
         this.indexAdapter = indexAdapter;
     }
     processAddition(entity) {
@@ -30,10 +31,13 @@ class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
         const addItem = this.processAddition(entity);
         return this.api.makeTrackable(addItem, this.defaults.add, this.isReadonly, this.map);
     }
+    tag(value) {
+        this._tag = value;
+    }
     instance(...entities) {
         return entities.map(entity => (Object.assign({}, this.processAdditionAndMakeTrackable(entity))));
     }
-    add(...entities) {
+    _add(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
             const data = this.api.getTrackedData();
             const { add } = data;
@@ -44,11 +48,27 @@ class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
                 }
                 const mappedEntity = this.api.map(entity, this.map, this.defaults.add);
                 const trackableEntity = this.processAdditionAndMakeTrackable(mappedEntity);
+                this._tryAddMetaData(trackableEntity._id);
                 add.push(trackableEntity);
                 return trackableEntity;
             });
             return result;
         });
+    }
+    add(...entities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const result = yield this._add(...entities);
+            this._disposeMetaData();
+            return result;
+        });
+    }
+    _tryAddMetaData(id) {
+        if (this._tag != null) {
+            this.api.tag(id, this._tag);
+        }
+    }
+    _disposeMetaData() {
+        this._tag = null;
     }
     upsert(...entities) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -64,12 +84,14 @@ class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
                     const mergedAndTrackable = this.api.makeTrackable(found, this.defaults.add, this.isReadonly, this.map);
                     DataContext_1.DataContext.merge(mergedAndTrackable, entity, { skip: [this.api.PRISTINE_ENTITY_KEY] });
                     this.api.send([mergedAndTrackable]);
+                    this._tryAddMetaData(mergedAndTrackable._id);
                     result.push(mergedAndTrackable);
                     continue;
                 }
-                const [added] = yield this.add(entity);
+                const [added] = yield this._add(entity);
                 result.push(added);
             }
+            this._disposeMetaData();
             return result;
         });
     }
@@ -78,9 +100,11 @@ class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
             yield this.onRemove();
             if (entities.some(w => typeof w === "string")) {
                 yield Promise.all(entities.map(w => this._removeById(w)));
+                this._disposeMetaData();
                 return;
             }
             yield Promise.all(entities.map(w => this._remove(w)));
+            this._disposeMetaData();
         });
     }
     onRemove() {
@@ -103,6 +127,7 @@ class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
             if (ids.includes(indexableEntity._id)) {
                 throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`);
             }
+            this._tryAddMetaData(entity._id);
             remove.push(entity);
         });
     }
@@ -113,6 +138,7 @@ class DbSetModificationAdapter extends DbSetBaseAdapter_1.DbSetBaseAdapter {
             if (removeById.includes(id)) {
                 throw new Error(`Cannot remove entity with same id more than once.  _id: ${id}`);
             }
+            this._tryAddMetaData(id);
             removeById.push(id);
         });
     }

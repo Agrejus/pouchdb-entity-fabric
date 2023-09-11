@@ -40,6 +40,11 @@ export class DbSet<TDocumentType extends string, TEntity extends IDbRecord<TDocu
         return this._generalAdapter.info();
     }
 
+    tag(value: unknown) {
+        this._modificationAdapter.tag(value);
+        return this;
+    }
+
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
         return this._modificationAdapter.instance(...entities);
     }

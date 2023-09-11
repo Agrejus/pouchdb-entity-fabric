@@ -59,6 +59,13 @@ export interface IDbSet<
     query(request: DeepPartial<PouchDB.Find.FindRequest<TEntity>>): Promise<PouchDB.Find.FindResponse<TEntity>>;
 
     /**
+     * Add a tag to the transaction (one or more entites from add/remove/upsert) and make available for onAfterSaveChanges or onBeforeSaveChanges.
+     * Data is not persisted to the database and is cleared on saveChanges or when context is disposed in memory
+     * @param value Any value
+     */
+    tag(value: unknown): this;
+
+    /**
      * Direct pouchDB to use an index with your request.  Index will only be used with the single request, all subsequent requests will use the default index if any
      * @param name Name of the index
      * @returns {Promise<TEntity[]>}
@@ -171,6 +178,7 @@ export interface IDbSetApi<TDocumentType extends string> {
     makeTrackable<T extends Object>(entity: T, defaults: DeepPartial<OmittedEntity<T>>, readonly: boolean, maps: PropertyMap<any, any, any>[]): T;
     makePristine(...entities: IDbRecordBase[]): void;
     map<T extends Object>(entity: T, maps: PropertyMap<any, any, any>[], defaults?: DeepPartial<OmittedEntity<T, never>>): T
+    tag(id: string, value: unknown): void;
     readonly DIRTY_ENTITY_MARKER: string;
     readonly PRISTINE_ENTITY_KEY: string;
 }
@@ -205,3 +213,4 @@ export type DbSetEventCallbackAsync<TDocumentType extends string, TEntity extend
 export type DbSetIdOnlyEventCallbackAsync = (entities: string[]) => Promise<void>;
 
 export type IncludeType = "all" | string[];
+export type EntityAndTag<T extends IDbRecordBase = IDbRecordBase> = { entity: T, tag?: unknown }

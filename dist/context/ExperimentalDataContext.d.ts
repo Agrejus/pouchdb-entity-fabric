@@ -1,4 +1,5 @@
-import { IDbRecordBase, IIndexableEntity } from '../types/entity-types';
+import { EntityAndTag } from '../types/dbset-types';
+import { IIndexableEntity } from '../types/entity-types';
 import { DataContext } from './DataContext';
 import { ExperimentalDbSetInitializer } from './dbset/builders/ExperimentalDbSetInitializer';
 import { DataContextOptions } from '../types/context-types';
@@ -12,11 +13,15 @@ export declare class ExperimentalDataContext<TDocumentType extends string> exten
     private _tryDestroyDatabase;
     private _getHasSplitDbSet;
     protected onAfterSetRev(indexableEntity: IIndexableEntity<any>): void;
-    protected onBeforeSaveChanges(modifications: IDbRecordBase[]): Promise<void>;
+    protected onBeforeSaveChanges(getChanges: () => {
+        adds: EntityAndTag[];
+        removes: EntityAndTag[];
+        updates: EntityAndTag[];
+    }): Promise<void>;
     protected onAfterSaveChanges(getChanges: () => {
-        adds: IDbRecordBase[];
-        removes: IDbRecordBase[];
-        updates: IDbRecordBase[];
+        adds: EntityAndTag[];
+        removes: EntityAndTag[];
+        updates: EntityAndTag[];
     }): Promise<void>;
     /**
      * Starts the dbset fluent API.  Only required function call is create(), all others are optional

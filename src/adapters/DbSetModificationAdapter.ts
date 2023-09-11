@@ -7,6 +7,7 @@ import { DbSetBaseAdapter } from './DbSetBaseAdapter';
 export class DbSetModificationAdapter<TDocumentType extends string, TEntity extends IDbRecord<TDocumentType>, TExtraExclusions extends string = never> extends DbSetBaseAdapter<TDocumentType, TEntity, TExtraExclusions> implements IDbSetModificationAdapter<TDocumentType, TEntity, TExtraExclusions> {
 
     protected indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>;
+    private _tag: unknown | null = null; 
 
     constructor(props: IDbSetProps<TDocumentType, TEntity>, indexAdapter: IDbSetIndexAdapter<TDocumentType, TEntity, TExtraExclusions>) {
         super(props);
@@ -31,11 +32,15 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
         return this.api.makeTrackable(addItem, this.defaults.add, this.isReadonly, this.map) as TEntity;
     }
 
+    tag(value: unknown) {
+        this._tag = value;
+    }
+
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
         return entities.map(entity => ({ ...this.processAdditionAndMakeTrackable(entity) }));
     }
 
-    async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
+    private async _add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
         const data = this.api.getTrackedData();
         const { add } = data;
 
@@ -48,6 +53,8 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
 
             const mappedEntity = this.api.map(entity, this.map, this.defaults.add);
             const trackableEntity = this.processAdditionAndMakeTrackable(mappedEntity);
+            
+            this._tryAddMetaData(trackableEntity._id);
 
             add.push(trackableEntity);
 
@@ -55,6 +62,25 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
         });
 
         return result
+    }
+
+    async add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]) {
+
+        const result = await this._add(...entities);
+
+        this._disposeMetaData();
+
+        return result
+    }
+
+    private _tryAddMetaData(id: string) {
+        if (this._tag != null) {
+            this.api.tag(id, this._tag)
+        }
+    }
+
+    private _disposeMetaData() {
+        this._tag = null;
     }
 
     async upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]) {
@@ -74,14 +100,19 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
                 DataContext.merge(mergedAndTrackable, entity, { skip: [this.api.PRISTINE_ENTITY_KEY] });
 
                 this.api.send([mergedAndTrackable]);
+
+                this._tryAddMetaData(mergedAndTrackable._id);
+
                 result.push(mergedAndTrackable)
                 continue;
             }
 
-            const [added] = await this.add(entity);
+            const [added] = await this._add(entity);
 
             result.push(added)
         }
+
+        this._disposeMetaData();
 
         return result;
     }
@@ -93,11 +124,15 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
         await this.onRemove();
 
         if (entities.some(w => typeof w === "string")) {
-            await Promise.all(entities.map(w => this._removeById(w)))
+            await Promise.all(entities.map(w => this._removeById(w)));
+
+            this._disposeMetaData();
             return;
         }
 
         await Promise.all(entities.map(w => this._remove(w)))
+
+        this._disposeMetaData();
     }
 
     protected async onRemove() {
@@ -121,6 +156,7 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${indexableEntity._id}`)
         }
 
+        this._tryAddMetaData(entity._id);
         remove.push(entity as any);
     }
 
@@ -132,6 +168,7 @@ export class DbSetModificationAdapter<TDocumentType extends string, TEntity exte
             throw new Error(`Cannot remove entity with same id more than once.  _id: ${id}`)
         }
 
+        this._tryAddMetaData(id);
         removeById.push(id);
     }
 }

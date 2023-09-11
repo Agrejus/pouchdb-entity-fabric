@@ -1,6 +1,6 @@
 {
   "name": "pouchdb-entity-fabric",
-  "version": "2.0.5",
+  "version": "2.1.0",
   "description": "PouchDB abstraction layer modeled after .net's Entity Framework",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -49,7 +49,7 @@
     "semver": "^7.3.7",
     "ts-jest": "^28.0.2",
     "ts-node": "^10.8.0",
-    "typescript": "^5.0.2"
+    "typescript": "5.0.2"
   },
   "peerDependencies": {
     "pouchdb": ">=8.0.1",
