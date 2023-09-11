@@ -14,3 +14,8 @@ https://github.com/Agrejus/pouchdb-entity-fabric/wiki
 2.0.5
 - Changed call order of data reinitialization and onSaveChanges in case SaveChanges is called within onSaveChanges
 - Added documentType and map to types on a DbSet.  Can be used to get the document type that is mapped to the document
+
+2.1.0
+- Added ability to tag entities with meta data.  Tags can be retrieved in onSaveChanges and onBeforeSaveChanges to detect different scenarios.  
+    - Use Case: Developers want to know if an entity was removed by a user action or programatic action.  A Tag can be added before the `.remove()` call to indicate which part of code initiated the action
+- onBeforeSaveChanges and onAfterSaveChanges calls were altered to include tags
