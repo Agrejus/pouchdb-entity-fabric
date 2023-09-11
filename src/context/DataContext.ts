@@ -7,7 +7,7 @@ import { IIndexApi, IndexApi } from "../indexing/IndexApi";
 import { CacheKeys } from "../types/cache-types";
 import { DeepPartial, IPreviewChanges, IPurgeResponse } from "../types/common-types";
 import { IDataContext, DatabaseConfigurationAdditionalConfiguration, DataContextOptions, ITrackedData } from "../types/context-types";
-import { IDbSet, IDbSetApi } from "../types/dbset-types";
+import { EntityAndTag, IDbSet, IDbSetApi } from "../types/dbset-types";
 import { IDbRecordBase, OmittedEntity, IIndexableEntity, SplitDocumentDocumentPropertyName, SplitDocumentPathPropertyName } from "../types/entity-types";
 import { PouchDbInteractionBase } from "./PouchDbInteractionBase";
 import { AsyncCache } from '../cache/AsyncCache';
@@ -26,6 +26,7 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     protected _removals: IDbRecordBase[] = [];
     protected _additions: IDbRecordBase[] = [];
     protected _attachments: AdvancedDictionary<IDbRecordBase> = new AdvancedDictionary<IDbRecordBase>("_id");
+    private _tags: { [id: string]: unknown } = {}
 
     protected _removeById: string[] = [];
     private _configuration: DatabaseConfigurationAdditionalConfiguration;
@@ -103,8 +104,13 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
             PRISTINE_ENTITY_KEY: this.PRISTINE_ENTITY_KEY,
             makePristine: this._makePristine.bind(this),
             find: this.find.bind(this),
-            query: this.query.bind(this)
+            query: this.query.bind(this),
+            tag: this._tag.bind(this)
         }
+    }
+
+    private _tag(id: string, value: unknown) {
+        this._tags[id] = value;
     }
 
     protected addDbSet(dbset: IDbSet<string, any>) {
@@ -340,13 +346,19 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
     async saveChanges() {
         try {
 
+            const tags = this._getTagsForTransaction();
+
             const { add, remove, updated } = await this._getModifications();
 
             // Process removals first, so we can remove items first and then add.  Just
             // in case are are trying to remove and add the same Id
             const modifications = [...remove, ...add, ...updated];
 
-            await this.onBeforeSaveChanges(modifications);
+            await this.onBeforeSaveChanges(() => ({ 
+                adds: add.map(w => ({ entity: w, meta: this._tags[w._id] })), 
+                removes: remove.map(w => ({ entity: w, meta: this._tags[w._id] })), 
+                updates: updated .map(w => ({ entity: w, meta: this._tags[w._id] }))
+            }));
 
             // remove pristine entity before we send to bulk docs
             this._makePristine(...modifications);
@@ -371,24 +383,39 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
             this._reinitialize(remove, add);
 
-            await this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated  })));
+            await this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ 
+                adds: add.map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag)), 
+                removes: remove.map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag)), 
+                updates: updated .map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag))
+            })));
 
             return modificationResult.successes_count;
         } catch (e) {
-            this._reinitialize()
+            this._reinitialize();
             throw e;
         }
     }
 
-    protected async onBeforeSaveChanges(modifications: IDbRecordBase[]) {
-     
+    private _getTagsForTransaction() {
+        const tags = this._tags;
+        this._tags = {}
+        return tags;
+    }
+
+    /**
+     * Called before changes are persisted to the database.  Any modificaitons to entities made here will be persisted to the database
+     * If you do not want your changes in the database, consider spreading or cloning the entities
+     * @param getChanges 
+     */
+    protected async onBeforeSaveChanges(getChanges: () => { adds: EntityAndTag[], removes: EntityAndTag[], updates: EntityAndTag[] }) {
+
     }
 
     protected onAfterSetRev(entity: IIndexableEntity) {
-     
+
     }
 
-    protected async onAfterSaveChanges(getChanges: () => { adds: IDbRecordBase[], removes: IDbRecordBase[], updates: IDbRecordBase[] }) {
+    protected async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[], removes: EntityAndTag[], updates: EntityAndTag[] }) {
 
     }
 

@@ -3,8 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { performance } from "perf_hooks";
 import PouchDB from "pouchdb";
 import { DataContext } from "../../src/context/DataContext";
-import { IDbRecord, ISplitDbRecord, IUnmanagedSplitDbRecord, SplitDocumentPathPropertyName } from "../../src/types/entity-types";
+import { IDbRecord, IDbRecordBase, ISplitDbRecord, IUnmanagedSplitDbRecord, SplitDocumentPathPropertyName } from "../../src/types/entity-types";
 import { ExperimentalDataContext } from "../../src/context/ExperimentalDataContext";
+import { EntityAndTag } from "../../src/types/dbset-types";
 
 enum DocumentTypes {
     Notes = "Notes",
@@ -410,13 +411,13 @@ Donec ut erat id felis porttitor venenatis sit amet vel lacus. Pellentesque habi
 
 Nullam ullamcorper justo ipsum, non tincidunt mauris fermentum ut. Vivamus lacinia turpis nec libero maximus sodales. Etiam non justo tristique, aliquam velit eu, viverra velit. Vivamus faucibus blandit neque, sed tincidunt turpis. Donec ante sapien, porttitor sit amet mi ut, dapibus cursus felis. Nam vehicula accumsan tortor, ac lobortis mauris posuere et. Nunc maximus mi diam, at pharetra erat venenatis dictum.`;
 
-class PouchDbDataContext extends ExperimentalDataContext<DocumentTypes> {
+class PouchDbDataContext extends DataContext<DocumentTypes> {
 
     // constructor() {
     //     super(`${uuidv4()}-db`);
     // }
 
-    map: typeof this.cars.types.map & typeof this.book2s.types.map = {
+    map: typeof this.cars.types.map & typeof this.books.types.map = {
         Cars: {} as any,
         Books: {} as any
     }
@@ -430,17 +431,18 @@ class PouchDbDataContext extends ExperimentalDataContext<DocumentTypes> {
     }
 
     types = {
-        map: {} as typeof this.cars.types.map & typeof this.book2s.types.map
+        map: {} as typeof this.cars.types.map & typeof this.books.types.map
     }
 
     onChange<TDocumentType extends keyof typeof this.types.map, TEntity extends typeof this.types.map[TDocumentType]>(documentType: TDocumentType, callback: (data: TEntity[]) => void) {
 
     }
 
-    book2s = this.dbset().default<IBook>(DocumentTypes.Books)
-        .defaults({ test: "Winner" })
-        .keys(w => w.add("author").add("test"))
-        .create();
+    protected async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[]; removes: EntityAndTag[]; updates: EntityAndTag[]; }) {
+        const changes = getChanges();
+        debugger;
+        console.log(changes);
+    }
 
     books = this.dbset().default<IBook>(DocumentTypes.Books)
         .defaults({ test: "Winner" })
@@ -461,9 +463,15 @@ export const run = async () => {
         // await context.books.remove(...deletes);
         await context.saveChanges();
 
-        const [added] = await context.books.add({
+        const [added] = await context.books.tag('added by user').add({
             author: "James",
             rejectedCount: 1,
+            status: "pending",
+            syncStatus: "approved"
+        },
+        {
+            author: "James1",
+            rejectedCount: 2,
             status: "pending",
             syncStatus: "approved"
         });

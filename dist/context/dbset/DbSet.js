@@ -37,6 +37,10 @@ class DbSet {
     info() {
         return this._generalAdapter.info();
     }
+    tag(value) {
+        this._modificationAdapter.tag(value);
+        return this;
+    }
     instance(...entities) {
         return this._modificationAdapter.instance(...entities);
     }

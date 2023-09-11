@@ -2,6 +2,7 @@ import { parseDocumentReference } from "../../common/LinkedDatabase";
 import PouchDB from 'pouchdb';
 import { DbContextFactory, PouchDbDataContext, BooksWithTwoDefaultContext, ExperimentalPouchDbDataContext } from "./shared/context";
 import { DocumentTypes } from "./shared/types";
+import { EntityAndTag } from "../../types/dbset-types";
 
 describe('DbSet Add Tests', () => {
 
@@ -608,5 +609,160 @@ describe('DbSet Add Tests', () => {
         const refDoc = await refDb.get(reference?.selector?.value ?? "");
 
         expect(refDoc._id).toBe(reference?.selector?.value)
+    });
+
+    it('should append meta data to one entity', (done) => {
+        const metaData = "Some Meta"
+        const dbName = contextFactory.getRandomDbName();
+        let calls = 0;
+        const context = contextFactory.createContext(class extends PouchDbDataContext {
+   
+            async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[]; removes: EntityAndTag[]; updates: EntityAndTag[]; }): Promise<void> {
+                calls++;
+                const changes = getChanges();
+                expect(changes.adds.length).toBe(1);
+                expect(changes.adds[0].entity).toBeTruthy();
+                expect(changes.adds[0].tag).toBe(metaData);
+                expect(calls).toBe(1)
+                done();
+            }
+
+        }, dbName);
+
+        context.books.tag(metaData).add({
+            author: "James"
+        }).then(() => context.saveChanges());
+    });
+
+    it('should not append meta data to one entity', (done) => {
+        const dbName = contextFactory.getRandomDbName();
+        let calls = 0;
+        const context = contextFactory.createContext(class extends PouchDbDataContext {
+   
+            async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[]; removes: EntityAndTag[]; updates: EntityAndTag[]; }): Promise<void> {
+                calls++;
+                const changes = getChanges();
+                expect(changes.adds.length).toBe(1);
+                expect(changes.adds[0].entity).toBeTruthy();
+                expect(changes.adds[0].tag).toBeFalsy();
+                expect(calls).toBe(1)
+                done();
+            }
+
+        }, dbName);
+
+        context.books.add({
+            author: "James"
+        }).then(() => context.saveChanges());
+    });
+
+    it('should append meta data to many entities', (done) => {
+        const tag = "Some Meta"
+        const dbName = contextFactory.getRandomDbName();
+        let calls = 0;
+        const context = contextFactory.createContext(class extends PouchDbDataContext {
+   
+            async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[]; removes: EntityAndTag[]; updates: EntityAndTag[]; }): Promise<void> {
+                calls++;
+                const changes = getChanges();
+                expect(changes.adds.length).toBe(2);
+                expect(changes.adds[0].entity).toBeTruthy();
+                expect(changes.adds[0].tag).toBe(tag);
+
+                expect(changes.adds[1].entity).toBeTruthy();
+                expect(changes.adds[1].tag).toBe(tag);
+
+                expect(calls).toBe(1)
+                done();
+            }
+
+        }, dbName);
+
+        context.books.tag(tag).add({
+            author: "James"
+        },{
+            author: "Megan"
+        }).then(() => context.saveChanges());
+    });
+
+    it('should append meta data to many entities in different transactions', (done) => {
+        const tag = "Some Meta"
+        const dbName = contextFactory.getRandomDbName();
+        let calls = 0;
+        const context = contextFactory.createContext(class extends PouchDbDataContext {
+   
+            async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[]; removes: EntityAndTag[]; updates: EntityAndTag[]; }): Promise<void> {
+                calls++;
+                const changes = getChanges();
+                
+                expect(changes.adds.length).toBe(2);
+                expect(changes.adds[0].entity).toBeTruthy();
+                expect(changes.adds[0].tag).toBe(tag);
+
+                expect(changes.adds[1].entity).toBeTruthy();
+                expect(changes.adds[1].tag).toBe(tag);
+
+                expect(calls).toBe(1)
+                done();
+            }
+
+        }, dbName);
+
+        context.books.tag(tag).add({
+            author: "James"
+        }).then(() => {
+
+            context.books.tag(tag).add({
+                author: "Megan"
+            }).then(() => {
+
+                context.saveChanges();
+            })
+
+        });
+    });
+
+    it('should append meta to first transaction and not the second', (done) => {
+        const tag = "Some Meta"
+        const dbName = contextFactory.getRandomDbName();
+        let calls = 0;
+        const context = contextFactory.createContext(class extends PouchDbDataContext {
+   
+            async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[]; removes: EntityAndTag[]; updates: EntityAndTag[]; }): Promise<void> {
+                calls++;
+                const changes = getChanges();
+
+                if (calls === 1) {
+                    expect(changes.adds.length).toBe(1);
+                    expect(changes.adds[0].entity).toBeTruthy();
+                    expect(changes.adds[0].tag).toBe(tag);
+                }
+
+                if (calls === 2) {
+                    expect(changes.adds.length).toBe(1);
+                    expect(changes.adds[0].entity).toBeTruthy();
+                    expect(changes.adds[0].tag).toBeFalsy();
+                }
+
+                if (calls === 2) {
+                    done();
+                }
+            }
+
+        }, dbName);
+
+        context.books.tag(tag).add({
+            author: "James"
+        }).then(() => {
+
+            context.saveChanges().then(() => {
+
+                context.books.add({
+                    author: "Megan"
+                }).then(() => {
+                    context.saveChanges();
+                })
+            })
+        });
     });
 });

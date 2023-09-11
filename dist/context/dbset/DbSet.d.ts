@@ -23,6 +23,7 @@ export declare class DbSet<TDocumentType extends string, TEntity extends IDbReco
      */
     constructor(props: IDbSetProps<TDocumentType, TEntity>);
     info(): import("../../types/dbset-types").IDbSetInfo<TDocumentType, TEntity>;
+    tag(value: unknown): this;
     instance(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): TEntity[];
     add(...entities: OmittedEntity<TEntity, TExtraExclusions>[]): Promise<TEntity[]>;
     upsert(...entities: (OmittedEntity<TEntity, TExtraExclusions> | Omit<TEntity, "DocumentType">)[]): Promise<TEntity[]>;

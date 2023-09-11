@@ -43,3 +43,5 @@ predicateBuilder
 
         publish beta
         npm publish --tag beta
+
+        3.1.0-beta.0

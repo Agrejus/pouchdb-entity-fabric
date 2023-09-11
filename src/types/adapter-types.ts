@@ -32,4 +32,5 @@ export interface IDbSetModificationAdapter<TDocumentType extends string, TEntity
     remove(...ids: string[]): Promise<void>;
     remove(...entities: TEntity[]): Promise<void>;
     empty(): Promise<void>;
+    tag(value: unknown): void;
 }

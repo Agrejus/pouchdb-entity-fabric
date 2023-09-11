@@ -46,6 +46,7 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
         this._removals = [];
         this._additions = [];
         this._attachments = new AdvancedDictionary_1.AdvancedDictionary("_id");
+        this._tags = {};
         this._removeById = [];
         this.asyncCache = new AsyncCache_1.AsyncCache();
         this.dbSets = {};
@@ -101,8 +102,12 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             PRISTINE_ENTITY_KEY: this.PRISTINE_ENTITY_KEY,
             makePristine: this._makePristine.bind(this),
             find: this.find.bind(this),
-            query: this.query.bind(this)
+            query: this.query.bind(this),
+            tag: this._tag.bind(this)
         };
+    }
+    _tag(id, value) {
+        this._tags[id] = value;
     }
     addDbSet(dbset) {
         const info = dbset.info();
@@ -284,11 +289,16 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
+                const tags = this._getTagsForTransaction();
                 const { add, remove, updated } = yield this._getModifications();
                 // Process removals first, so we can remove items first and then add.  Just
                 // in case are are trying to remove and add the same Id
                 const modifications = [...remove, ...add, ...updated];
-                yield this.onBeforeSaveChanges(modifications);
+                yield this.onBeforeSaveChanges(() => ({
+                    adds: add.map(w => ({ entity: w, meta: this._tags[w._id] })),
+                    removes: remove.map(w => ({ entity: w, meta: this._tags[w._id] })),
+                    updates: updated.map(w => ({ entity: w, meta: this._tags[w._id] }))
+                }));
                 // remove pristine entity before we send to bulk docs
                 this._makePristine(...modifications);
                 const modificationResult = yield this.bulkDocs(modifications);
@@ -305,7 +315,11 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
                     }
                 }
                 this._reinitialize(remove, add);
-                yield this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ adds: add, removes: remove, updates: updated })));
+                yield this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({
+                    adds: add.map(w => ({ entity: w, tag: tags[w._id] })),
+                    removes: remove.map(w => ({ entity: w, tag: tags[w._id] })),
+                    updates: updated.map(w => ({ entity: w, tag: tags[w._id] }))
+                })));
                 return modificationResult.successes_count;
             }
             catch (e) {
@@ -314,7 +328,17 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             }
         });
     }
-    onBeforeSaveChanges(modifications) {
+    _getTagsForTransaction() {
+        const tags = this._tags;
+        this._tags = {};
+        return tags;
+    }
+    /**
+     * Called before changes are persisted to the database.  Any modificaitons to entities made here will be persisted to the database
+     * If you do not want your changes in the database, consider spreading or cloning the entities
+     * @param getChanges
+     */
+    onBeforeSaveChanges(getChanges) {
         return __awaiter(this, void 0, void 0, function* () {
         });
     }

@@ -96,10 +96,17 @@ class ExperimentalDataContext extends DataContext_1.DataContext {
             }
         }
     }
-    onBeforeSaveChanges(modifications) {
+    onBeforeSaveChanges(getChanges) {
         var _a;
         return __awaiter(this, void 0, void 0, function* () {
             if (this._getHasSplitDbSet() === true) {
+                const changes = getChanges();
+                const { adds, removes, updates } = changes;
+                const modifications = [
+                    ...adds.map(w => w.entity),
+                    ...removes.map(w => w.entity),
+                    ...updates.map(w => w.entity)
+                ];
                 const referenceModifications = {};
                 if (modifications.length > 0) {
                     // keep the path and tear off the references
@@ -151,7 +158,7 @@ class ExperimentalDataContext extends DataContext_1.DataContext {
                         const documents = referenceModifications[group].documents;
                         const referenceDb = new pouchdb_1.default(group);
                         dbList.add(group);
-                        const deletions = documents.filter(w => '_deleted' in w && w._deleted === true);
+                        const deletions = documents.filter((w) => ('_deleted' in w) === true && w._deleted === true);
                         const upserts = documents.filter(w => ('_deleted' in w) === false);
                         const readyDeletions = deletions.filter(w => w._rev != null);
                         const deletionsWithNoRev = deletions.filter(w => w._rev == null);

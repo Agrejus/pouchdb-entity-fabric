@@ -1,6 +1,6 @@
 import PouchDB from 'pouchdb';
 import { parseDocumentReference } from '../common/LinkedDatabase';
-import { IDbSet } from '../types/dbset-types';
+import { EntityAndTag, IDbSet } from '../types/dbset-types';
 import { IDbRecordBase, IIndexableEntity, ISplitDbRecord, SplitDocumentDocumentPropertyName, SplitDocumentPathPropertyName } from '../types/entity-types';
 import { DataContext } from './DataContext';
 import { ExperimentalDbSetInitializer } from './dbset/builders/ExperimentalDbSetInitializer';
@@ -102,10 +102,17 @@ export class ExperimentalDataContext<TDocumentType extends string> extends DataC
         }
     }
 
-    protected override async onBeforeSaveChanges(modifications: IDbRecordBase[]) {
+    protected override async onBeforeSaveChanges(getChanges: () => { adds: EntityAndTag[], removes: EntityAndTag[], updates: EntityAndTag[] }) {
 
         if (this._getHasSplitDbSet() === true) {
 
+            const changes = getChanges();
+            const { adds, removes, updates } = changes;
+            const modifications = [
+                ...adds.map(w => w.entity),
+                ...removes.map(w => w.entity),
+                ...updates.map(w => w.entity)
+            ];
             const referenceModifications: { [key: string]: { hasRemovals: boolean, documents: IDbRecordBase[] } } = {};
 
             if (modifications.length > 0) {
@@ -175,7 +182,7 @@ export class ExperimentalDataContext<TDocumentType extends string> extends DataC
                     const referenceDb = new PouchDB(group);
                     dbList.add(group)
 
-                    const deletions: { _id: string, _rev: string, _deleted?: boolean }[] = documents.filter(w => '_deleted' in w && w._deleted === true);
+                    const deletions: { _id: string, _rev: string, _deleted?: boolean }[] = documents.filter((w: any) => ('_deleted' in w) === true && w._deleted === true);
                     const upserts = documents.filter(w => ('_deleted' in w) === false);
                     const readyDeletions = deletions.filter(w => w._rev != null);
                     const deletionsWithNoRev = deletions.filter(w => w._rev == null);
@@ -230,7 +237,7 @@ export class ExperimentalDataContext<TDocumentType extends string> extends DataC
     }
 
 
-    protected override async onAfterSaveChanges(getChanges: () => { adds: IDbRecordBase[]; removes: IDbRecordBase[]; updates: IDbRecordBase[]; }) {
+    protected override async onAfterSaveChanges(getChanges: () => { adds: EntityAndTag[]; removes: EntityAndTag[]; updates: EntityAndTag[]; }) {
         this._remappings = {};
         this._referencesToAddBack = {}
 
