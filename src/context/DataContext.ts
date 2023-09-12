@@ -343,22 +343,39 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
         }
     }
 
+    private async _beforeSaveChanges() {
+        const beforeOnBeforeSaveChangesTags = this._getTagsForTransaction();
+        const beforeSaveChanges = await this._getModifications();
+
+        // Devs are allowed to modify data/add data in onBeforeSaveChanges.  Useful for
+        // creating history dbset that tracks changes in another dbset
+        await this.onBeforeSaveChanges(() => ({
+            adds: beforeSaveChanges.add.map(w => ({ entity: w, tag: beforeOnBeforeSaveChangesTags[w._id] } as EntityAndTag)),
+            removes: beforeSaveChanges.remove.map(w => ({ entity: w, tag: beforeOnBeforeSaveChangesTags[w._id] } as EntityAndTag)),
+            updates: beforeSaveChanges.updated.map(w => ({ entity: w, tag: beforeOnBeforeSaveChangesTags[w._id] } as EntityAndTag))
+        }));
+
+        // get tags again in case more were added in onBeforeSaveChanges
+        const afterOnBeforeSaveChangesTags = this._getTagsForTransaction();
+        const changes = await this._getModifications();
+        const tags = { ...beforeOnBeforeSaveChangesTags, ...afterOnBeforeSaveChangesTags }
+
+        return {
+            tags,
+            changes
+        }
+    }
+
     async saveChanges() {
         try {
 
-            const tags = this._getTagsForTransaction();
+            const { tags, changes } = await this._beforeSaveChanges();
 
-            const { add, remove, updated } = await this._getModifications();
+            const { add, remove, updated } = changes;
 
             // Process removals first, so we can remove items first and then add.  Just
             // in case are are trying to remove and add the same Id
             const modifications = [...remove, ...add, ...updated];
-
-            await this.onBeforeSaveChanges(() => ({ 
-                adds: add.map(w => ({ entity: w, meta: this._tags[w._id] })), 
-                removes: remove.map(w => ({ entity: w, meta: this._tags[w._id] })), 
-                updates: updated .map(w => ({ entity: w, meta: this._tags[w._id] }))
-            }));
 
             // remove pristine entity before we send to bulk docs
             this._makePristine(...modifications);
@@ -383,10 +400,10 @@ export class DataContext<TDocumentType extends string> extends PouchDbInteractio
 
             this._reinitialize(remove, add);
 
-            await this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({ 
-                adds: add.map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag)), 
-                removes: remove.map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag)), 
-                updates: updated .map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag))
+            await this.onAfterSaveChanges(() => JSON.parse(JSON.stringify({
+                adds: add.map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag)),
+                removes: remove.map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag)),
+                updates: updated.map(w => ({ entity: w, tag: tags[w._id] } as EntityAndTag))
             })));
 
             return modificationResult.successes_count;
