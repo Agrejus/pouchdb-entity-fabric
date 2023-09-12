@@ -69,6 +69,7 @@ export declare class DataContext<TDocumentType extends string> extends PouchDbIn
     previewChanges(): Promise<IPreviewChanges>;
     private _makePristine;
     private _getModifications;
+    private _beforeSaveChanges;
     saveChanges(): Promise<number>;
     private _getTagsForTransaction;
     /**

@@ -286,19 +286,35 @@ class DataContext extends PouchDbInteractionBase_1.PouchDbInteractionBase {
             };
         });
     }
+    _beforeSaveChanges() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const beforeOnBeforeSaveChangesTags = this._getTagsForTransaction();
+            const beforeSaveChanges = yield this._getModifications();
+            // Devs are allowed to modify data/add data in onBeforeSaveChanges.  Useful for
+            // creating history dbset that tracks changes in another dbset
+            yield this.onBeforeSaveChanges(() => ({
+                adds: beforeSaveChanges.add.map(w => ({ entity: w, tag: beforeOnBeforeSaveChangesTags[w._id] })),
+                removes: beforeSaveChanges.remove.map(w => ({ entity: w, tag: beforeOnBeforeSaveChangesTags[w._id] })),
+                updates: beforeSaveChanges.updated.map(w => ({ entity: w, tag: beforeOnBeforeSaveChangesTags[w._id] }))
+            }));
+            // get tags again in case more were added in onBeforeSaveChanges
+            const afterOnBeforeSaveChangesTags = this._getTagsForTransaction();
+            const changes = yield this._getModifications();
+            const tags = Object.assign(Object.assign({}, beforeOnBeforeSaveChangesTags), afterOnBeforeSaveChangesTags);
+            return {
+                tags,
+                changes
+            };
+        });
+    }
     saveChanges() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const tags = this._getTagsForTransaction();
-                const { add, remove, updated } = yield this._getModifications();
+                const { tags, changes } = yield this._beforeSaveChanges();
+                const { add, remove, updated } = changes;
                 // Process removals first, so we can remove items first and then add.  Just
                 // in case are are trying to remove and add the same Id
                 const modifications = [...remove, ...add, ...updated];
-                yield this.onBeforeSaveChanges(() => ({
-                    adds: add.map(w => ({ entity: w, meta: this._tags[w._id] })),
-                    removes: remove.map(w => ({ entity: w, meta: this._tags[w._id] })),
-                    updates: updated.map(w => ({ entity: w, meta: this._tags[w._id] }))
-                }));
                 // remove pristine entity before we send to bulk docs
                 this._makePristine(...modifications);
                 const modificationResult = yield this.bulkDocs(modifications);
